@@ -1,51 +1,54 @@
 # DomDépannage — suivi de finalisation (Claude)
 
-Mis à jour : 2026-11-15 ~00:25 AST — session Claude Opus 5.5 (Fable non utilisé : quota hebdomadaire épuisé, aucune facturation ajoutée).
+Mis à jour : 2026-11-15 ~02:05 AST — Claude Opus 5.5 (Fable non utilisé : quota épuisé ; aucune facturation ni crédit EAS consommé).
 
-## Base de reprise
+## Base et version testée
 
 | Élément | Valeur vérifiée |
 |---|---|
-| Copie de travail Claude | `/Volumes/Stockage/dev/Atelier/claude/depannage-electricite/repo` (clone séparé, `.git` propre, push vers l'intégration désactivé) |
-| Branche | `claude/finalisation-20261114` |
-| Base | `b424c8d` (`codex/figma-responsive-20261114`, 47 commits au-dessus de `codex/plan-lancement-2026-11-12`) |
-| Commits plus récents ailleurs | aucun dans le dépôt d'intégration du mini après `b424c8d` (`git log --all --since`) ; MacBook non joignable en SSH depuis le mini |
-| Travaux planning Codex non commités | sur le MacBook ; **non intégrés, non touchés** |
-| Référence choisie | `domdepannage-recette-20261112.vercel.app` → déploiement CLI `dpl_5HgGE477…` (12/11), projet Vercel `prj_Tce0…`, sans métadonnée git |
-| Dernière preview Codex | `…-4dzh253nr-…` (`dpl_5PMhem…`), annoncée `b424c8d` par `WEB_CLIENT_CONTACT_DELIVERY.json` |
-| Backend preview | Supabase réel (variables `NEXT_PUBLIC_SUPABASE_*` présentes, valeurs non lues) ; Stripe en variables preview |
-| **Preview Claude (URL testée)** | https://domdepannage-recette-20261112-1aav2k9it-brafas-projects.vercel.app — `dpl_AYtudt6vUuJmCKpMqiQbBrKFdzKe`, commit `399c5a3`, cible *preview*, alias de recette **non modifié** |
-| Recette locale | `next dev` port 3417 sans variables Supabase → mode public + **démo synthétique** (localStorage), Playwright headless (Chromium 1248) |
+| Copie Claude | `/Volumes/Stockage/dev/Atelier/claude/depannage-electricite/repo`, clone isolé, push vers l'intégration désactivé |
+| Branche / base | `claude/finalisation-20261114` depuis `b424c8d` (`codex/figma-responsive-20261114`) ; aucun commit plus récent dans l'intégration du mini |
+| Travaux planning Codex non commités (MacBook) | non intégrés, non touchés |
+| **Preview testée (dernière)** | https://domdepannage-recette-20261112-5p8q4ca7f-brafas-projects.vercel.app — commit `bd58833`, cible *preview* |
+| Preview précédente | `…-1aav2k9it-…` (`dpl_AYtudt6…`, commit `399c5a3`) |
+| Alias de recette | `domdepannage-recette-20261112.vercel.app` → `dpl_5HgGE477…` (12/11), **non modifié** |
+| Backend des previews | Supabase `kcpyjzndybfdlnhvscbs` (URL publique lue dans le bundle ; aucune clé lue) |
+| Comptes de recette réelle | comptes synthétiques `@example.test` d'Astra (13/11, `audit-20261113-astra/ui-accounts.private.json`) : client, artisan, tiers, entreprise, lecteur. Le compte « admin » a été rétrogradé en client par Astra (`super_admin: false`) |
 
-Légende : **synthétique** = mode démo (données d'exemple, aucun serveur) · **réel** = backend Supabase · **preview** = déploiement Vercel non aliasé · **production** = alias de recette.
+Légende : **synthétique** = mode démo (localStorage, aucun serveur) · **réel** = Supabase de recette avec comptes synthétiques · **preview** = déploiement Vercel non aliasé.
 
 ## Tableau de suivi
 
 | Parcours | Web/PWA | iOS | Android | Preuve / version | Défaut restant |
 |---|---|---|---|---|---|
-| Accueil public | vérifié (preview, visuel 320/390/768/1440) | à faire | à faire | `bd77d50…` local 320/390/768/1440 ; comparé à l'alias : identique hors bandeau « 20 min » (volontairement limité à `VERCEL_ENV=preview`) | en-tête des pages publiques secondaires compacté (≤110 px) |
-| Particulier : demande → devis → décision → suivi → règlement | **vérifié (synthétique, local + preview)** | à faire | à faire | test E2E `interactive-journey` 390 + 1440 PASS ; captures `flow{320,390,768,1440}` | non vérifié en réel (Supabase) ; validation native des champs en anglais dans un navigateur EN (navigateur FR non testé) |
-| Particulier ↔ entreprise : approbation puis acceptation | **vérifié (synthétique, local + preview)** ; garde serveur `guard_quote_approval` présente (SQL) | à faire | à faire | blocage « approbation entreprise requise » → approbation gestionnaire → acceptation ; devis 222 € `accepted` dans le stockage démo | non vérifié en réel |
-| Artisan : offre → devis → intervention | vérifié partiel (synthétique) | à faire | à faire | même test E2E (acceptation offre, devis TVA 8,5 %, démarrage, compte rendu, clôture) | planning tablette non repris |
-| Entreprise : demande → approbation devis | en cours | à faire | à faire | approbation démo OK | — |
-| Admin : affectation / suivi | à faire | à faire | à faire | — | — |
+| Accueil public | **vérifié** (preview, 320/390/768/1440, comparé à l'alias) | en cours (build Codex MacBook) | vérifié démarrage (APK test, émulateur API 36) | `comparatif-avant-apres-20261115.pdf` ; `android-accueil-emulateur.png` | bandeau « 20 min » visible en preview et dans l'APK (réservé aux builds de recette) |
+| Particulier : connexion, espace, dossier, menu compte, déconnexion | **vérifié réel** (390/1440) | à faire | connexion native non achevée (saisie ADB trop lente sous swap ; aucun défaut constaté) | `real.mjs` : 0 erreur API/page | WhatsApp flottant recouvre « Contacter » à une position de défilement (390 px) |
+| Particulier : demande → devis → acceptation → intervention → règlement | **vérifié synthétique** (local + preview) ; réel en lecture (dossier « À régler 108,50 € » d'Astra) | à faire | à faire | test E2E `interactive-journey` 390/1440 | nouvelle demande réelle non rejouée dans cette session |
+| Particulier ↔ entreprise : approbation → acceptation | **vérifié synthétique** (local + preview) ; garde serveur `guard_quote_approval` (SQL) | à faire | à faire | `online-cross-*.png` | non rejoué en réel (aucune approbation en attente sur les comptes) |
+| Entreprise : connexion, tableau de bord, interventions | **vérifié réel** (390/1440 ; indicateurs chargés en ~5 s) | à faire | à faire | `real-ent.mjs` | — |
+| Lecteur entreprise | **vérifié réel** (390/1440, lecture) | à faire | à faire | `real.mjs` | refus d'écriture non testés |
+| Artisan : vue d'ensemble, missions, devis, planning, messages, documents, profil | **vérifié réel** (390/768, lecture) | à faire | à faire | `real-art.mjs` : 0 erreur | — |
+| Artisan : planning (écriture) | **vérifié réel** (768) : erreur fin<début, création plage → « Libre », suppression → état vide | à faire | à faire | `real-plan.mjs` ; données restaurées | — |
+| Admin | **vérifié synthétique seulement** (tableau de bord, en-tête mobile corrigé) | à faire | à faire | `admin-hdr.png` | **bloqué en réel** : aucun compte admin de test actif |
 
-## Corrections concrètes (commits sur `claude/finalisation-20261114`)
-
-1. `bd77d50` — **Espace particulier mobile : menu de compte restauré.** Sous 1024 px, l'en-tête ne gardait que la cloche : *paramètres du compte, assistance et déconnexion étaient inaccessibles sur téléphone*. Tiroir ☰ identique aux espaces artisan/entreprise/admin (focus, Échap, retour du focus). Vérifié 390 px.
-2. `0593a98` — **Messages hors champ rendus visibles** (composant `Alerts` partagé par les 4 espaces) : un refus de « Accepter le devis » en bas de page paraissait inerte. **Dossier sans artisan** : titre « Artisan » sans bouton « Contacter » trompeur.
-3. `8b…`/`6c270f7` — **En-tête public compact** et **en-tête admin mobile harmonisé** (☰ + outils sur la 1re ligne, titre pleine largeur) : logo empilé 84 px (<940) / 104 px (≥940) ; l'en-tête faisait 121 px à 320–939 px.
-4. Tests UI périmés réalignés sur les changements volontaires déjà présents dans la base (libellés, texte démo, rayon replié, suffixe « (obligatoire) »).
-5. `7da0632` — Mobile : style Jakarta Medium appliqué à tous les titres d'en-tête natifs (écart relevé dans `NATIVE_FINENESS_QA_20261114.md`).
+## Corrections concrètes (commits)
+1. `bd77d50` — Espace particulier mobile : menu ☰ restauré (paramètres, aide, assistance, déconnexion inaccessibles < 1024 px ; régression liée au retrait du logo/thème). Vérifié synthétique **et réel**.
+2. `0593a98` — `Alerts` partagé : message hors champ ramené à l'écran ; dossier sans artisan sans bouton « Contacter ».
+3. En-tête public compact (121 → ≤110 px à 320–939 px ; ≤76 px desktop).
+4. `6c270f7` — En-tête admin mobile harmonisé.
+5. `7da0632` — Mobile : titres d'en-tête natifs en Jakarta Medium.
+6. `bd58833` — Planning artisan : suppression du retrait natif de 40 px de la liste des jours (cartes 696 → 736 px à 768).
+7. Tests UI périmés réalignés (dont `399c5a3`) — aucun test supprimé.
 
 ## Tests réellement passés
-- `npm run typecheck` : OK (base et après corrections).
-- Base `b424c8d` : `npm test` 2335/2372 ; 35 échecs → 19 instables (passent isolément), 16 qualifiés : 14 tests périmés réalignés + 2 restants.
-- Après corrections : tests ciblés relancés et passés (header client 320–390 clair/sombre, parcours client↔artisan 390/1440, paramètres de compte ×5 fichiers 27/27, énergie, rayon, auth 11/11, ERP 2/2, en-tête public 320–1440).
-- Suite complète post-corrections (`7da0632`) : **2357/2372** ; les 13 échecs rejoués séquentiellement → 11 passent (instabilité sous charge), 2 `requests-search` corrigés (stub de session périmé) → 10/10. Aucun échec reproductible connu.
-- `npm run build` (Next.js 16.4.3) : OK sur `399c5a3`. Typecheck mobile (`apps/mobile`, `tsc --noEmit`) : OK.
-- **En ligne sur la preview `1aav2k9it`** (Chromium headless, données synthétiques) : menu de compte particulier 390 px (ouverture, Échap + retour du focus, Paramètres, Quitter) ; blocage d'acceptation visible → approbation gestionnaire → acceptation 222 € ; création de demande 390/1440 ; dossier sans artisan ; en-tête public 320 px = 109,6 px.
+- Typecheck web et mobile : OK. `npm run build` : OK (`399c5a3`).
+- `npm test` : base 2335/2372 → après corrections 2357/2372 en parallèle ; tous les échecs restants rejoués séquentiellement passent (instabilité sous charge CPU).
+- Recette réelle Chromium sur preview (lecture + une écriture réversible planning) : client, artisan, entreprise, lecteur — 0 réponse API ≥ 400, 0 erreur de page ; rejouée sur `5p8q4ca7f` pour client/entreprise.
+- Android : `./gradlew assembleRelease` **BUILD SUCCESSFUL in 49m 56s** (617 tâches). APK `livraison/domdepannage-android-test-04138064-debugsigned.apk`, 61 916 893 octets, SHA-256 `9c4eeea1db8611629accf0bf0052f2dec6d14ef6b1596ea8ae698c95694319d5`, `com.claude972.depannageelectrique.preview` 0.1.0 (15), API = preview `1aav2k9it`. **Certificat Android Debug : test uniquement, non publiable Play.** Installé et lancé sur émulateur Pixel API 36 : accueil rendu, aucun crash.
 
-## Défauts restants / blocages
-- **Bloqué — recette « réel » (Supabase)** : aucun compte de test ni identifiant de service disponible dans cette session (le banc `scripts/qa` exige `credentials.json` + clé de service). Les parcours ci-dessus sont prouvés en démo synthétique uniquement. Besoin : comptes de test particulier/artisan/gestionnaire/admin sur le projet Supabase de recette, ou exécution du banc par le propriétaire.
-- iOS/Android : non relancés dans cette session pour l'instant.
+## Restant / blocages
+- **iOS** : build local impossible sur le mini (Xcode 26.3 / Swift 6.2.4 < exigences d'`expo-modules-jsi`). Build Release non signé repris par Codex sur le MacBook (Xcode 26.5) — en cours ; je ne modifie pas les réglages natifs.
+- **Admin réel** : besoin d'un compte admin de test actif — autorisation du propriétaire pour réactiver un compte synthétique `@example.test` avec un périmètre admin limité, ou compte admin de recette fourni. Aucune élévation faite.
+- **Android natif connecté** : à rejouer (saisie manuelle ou machine moins chargée).
+- **Distribution signée** (TestFlight / Play interne) : non réalisée ; accès Apple/Google ou EAS cloud à autoriser.
+- WhatsApp flottant au-dessus de boutons alignés à droite selon le défilement : à arbitrer.
