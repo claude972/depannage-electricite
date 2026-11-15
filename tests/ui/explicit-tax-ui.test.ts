@@ -36,7 +36,8 @@ test("brouillon artisan : sans taux, enregistrable mais pas envoyable ; 2,1 / 8,
   assert.match(src, /useState<TaxRate \| null>\(null\)/);
   assert.match(src, /if \(!envelope \|\| !publishable\) return;/, "send refused before any command");
   assert.match(src, /const publishable = saveValid && missing\.length === 0;/);
-  assert.match(src, /lines: parsed,\n\s*tax_rate: taxRate,/, "save keeps a null rate as null");
+  assert.match(src, /lines: toSave,\n\s*tax_rate: taxRate,/, "save keeps a null rate as null");
+  assert.match(src, /const toSave = override \?\? parsed;/, "saved lines are the typed lines unless the send path trims unused template lines");
 });
 
 test("devis direct (QuoteEditor) : aucun taux initial, envoi refusé sans taux, 2,1 / 8,5 dans la charge utile", () => {
