@@ -232,3 +232,13 @@
 }
 
 .footer button, .footer a { min-width: 44px; }
+
+/* WhatsApp docked to the right of the floating menu (public-contact-actions, < 1024 px). */
+@media (max-width: 1023px) {
+  :global(body:has([data-whatsapp-dock])) .appChrome .appNav {
+    left: calc((100% - min(100% - 24px, 426px)) / 2);
+    right: auto;
+    width: calc(min(100% - 24px, 426px) - 56px);
+    margin-inline: 0;
+  }
+}

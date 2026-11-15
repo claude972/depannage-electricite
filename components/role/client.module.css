@@ -1926,3 +1926,13 @@
     display: none;
   }
 }
+
+/* WhatsApp docked to the right of the floating menu (public-contact-actions, < 1024 px). */
+@media (max-width: 1023px) {
+  .space .bottomNav {
+    left: calc((100% - min(100% - 24px, 426px)) / 2);
+    right: auto;
+    width: calc(min(100% - 24px, 426px) - 56px);
+    margin-inline: 0;
+  }
+}
