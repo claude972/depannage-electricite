@@ -661,10 +661,10 @@ export function RequestsView({ session, rows }: { session: Session; rows: Interv
         />
         <label className={styles.search}>
           <Icon name="search" size={18} />
-          <span className="sr-only">Rechercher une intervention</span>
+          <span className="sr-only">Rechercher une demande</span>
           <input
             type="search"
-            placeholder="Rechercher une intervention"
+            placeholder="Rechercher une demande"
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
