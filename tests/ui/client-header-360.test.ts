@@ -36,7 +36,7 @@ test("en-tête mobile client : 320 / 360 / 390 px, clair et sombre — aucun dé
         assert.ok(c.height >= 44 && c.width >= 44, `${where}: ${c.label} is ${c.width}×${c.height}`);
         assert.ok(c.left >= 0 && c.right <= m.vw + 0.5, `${where}: ${c.label} fully visible`);
       }
-      assert.equal(m.controls.length, 2, "thème et notifications seulement ; profil/messages restent dans la navigation basse");
+      assert.deepEqual(m.controls.map((c: { label: string }) => c.label.replace(/,.*/, "")), ["Ouvrir le menu", "Notifications"], "menu du compte et notifications seulement ; profil/messages restent dans la navigation basse");
       const nav = page.getByRole("navigation", { name: "Navigation principale", exact: true });
       assert.equal(await nav.getByRole("button", { name: "Profil", exact: true }).count(), 1);
       assert.equal(await nav.getByRole("button", { name: /Messages/ }).count(), 1);

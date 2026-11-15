@@ -59,7 +59,7 @@ test(`parcours interactif client ↔ artisan (démo) à ${width} px : demande �
     assert.ok(!job.artisan_id, "no artisan yet");
 
     // 2. Artisan: « Disponibles » → anonymized summary → accept → private demo dossier.
-    await page.getByLabel("Explorer un autre espace").selectOption("artisan");
+    await page.getByLabel("Rôle exploré").selectOption("artisan");
     await page.waitForTimeout(900);
     await goHash(page, "#missions");
     await page.locator(`[data-available-offer="${job.id}"]`).click();
@@ -123,7 +123,7 @@ test(`parcours interactif client ↔ artisan (démo) à ${width} px : demande �
     assert.equal(s.data.interventions.find((i) => i.id === job.id)!.status, "accepted");
 
     // 5. Artisan: start → compte rendu → complete.
-    await page.getByLabel("Explorer un autre espace").selectOption("artisan");
+    await page.getByLabel("Rôle exploré").selectOption("artisan");
     await page.waitForTimeout(900);
     await goHash(page, `#detail/${job.id}`);
     await click(page, "Démarrer l’intervention");

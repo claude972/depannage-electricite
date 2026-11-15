@@ -359,6 +359,129 @@ export function ClientSpace({ session }: { session: Session }) {
     }
   }
 
+  // Mobile (< 1024 px) account menu: same entries as the desktop sidebar (settings, help,
+  // assistance, logout) in a modal drawer, like the artisan, enterprise and admin spaces.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const drawerClose = useRef<HTMLButtonElement>(null);
+  const afterClose = useRef<"menu" | "main" | null>(null);
+  const closeMenu = () => {
+    afterClose.current = "menu";
+    setMenuOpen(false);
+  };
+  function goTo(next: View, param?: string) {
+    if (menuOpen) afterClose.current = "main";
+    setMenuOpen(false);
+    session.go(next, param);
+  }
+  useEffect(() => {
+    if (menuOpen) {
+      drawerClose.current?.focus();
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key === "Escape") closeMenu();
+      };
+      window.addEventListener("keydown", onKey);
+      return () => window.removeEventListener("keydown", onKey);
+    }
+    const target = afterClose.current;
+    afterClose.current = null;
+    if (target === "main") document.getElementById("main")?.focus();
+    else if (target === "menu") menuButton.current?.focus();
+  }, [menuOpen]);
+
+  const sideBody = (
+    <>
+          <div className={styles.workspaceBlock}>
+            <span>
+              <Icon name="person" size={18} />
+            </span>
+            <div>
+              <strong>{ROLE_NAMES.client}</strong>
+              <small>{demo ? "Espace de démonstration" : "Mon espace"}</small>
+            </div>
+          </div>
+          <span className={styles.navCaption}>Mon espace</span>
+          <nav className={styles.sideNav} aria-label="Navigation de l’espace">
+            {SIDE_NAV.map((n) => {
+              const current =
+                view === n.id ||
+                (n.id === "requests" && ["new", "detail", "quote"].includes(view));
+              return (
+                <button
+                  type="button"
+                  key={n.id}
+                  aria-current={current ? "page" : undefined}
+                  onClick={() => goTo(n.id)}
+                >
+                  <Icon name={n.icon} size={18} />
+                  <span>{n.label}</span>
+                  {n.id === "requests" && activeCount > 0 && (
+                    <span className={styles.sideCount}>
+                      <span aria-hidden="true">{activeCount}</span>
+                      <span className="sr-only">{`${activeCount} demandes en cours`}</span>
+                    </span>
+                  )}
+                  {n.id === "messages" && received > 0 && (
+                    <span className={styles.sideCount}>
+                      <span aria-hidden="true">{received}</span>
+                      <span className="sr-only">{`${received} message${received > 1 ? "s" : ""} reçu${received > 1 ? "s" : ""}`}</span>
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+          {platformEntries(session.platformAccess, (v) => canAccess(v, session.role, session.mode)).length > 0 && (
+            <>
+              <span className={styles.navCaption}>Opérateur de plateforme</span>
+              <nav className={styles.sideNav} aria-label="Back-office de la plateforme">
+                {platformEntries(session.platformAccess, (v) => canAccess(v, session.role, session.mode)).map((n) => (
+                  <button
+                    type="button"
+                    key={n.view}
+                    aria-current={view === n.view ? "page" : undefined}
+                    onClick={() => goTo(n.view)}
+                  >
+                    <Icon name={n.icon} size={18} />
+                    <span>{n.label}</span>
+                  </button>
+                ))}
+              </nav>
+            </>
+          )}
+          <div className={styles.sidebarBottom}>
+            <button
+              type="button"
+              aria-current={view === "help" ? "page" : undefined}
+              onClick={() => goTo("help")}
+            >
+              <Icon name="help" size={18} />
+              Aide
+            </button>
+            <button
+              type="button"
+              aria-current={view === "support" ? "page" : undefined}
+              onClick={() => goTo("support")}
+            >
+              <Icon name="shield" size={18} />
+              Assistance
+            </button>
+            <button
+              type="button"
+              aria-current={view === "profile" && session.param === "parametres" ? "page" : undefined}
+              onClick={() => goTo("profile", "parametres")}
+            >
+              <Icon name="settings" size={18} />
+              Paramètres du compte
+            </button>
+            <button type="button" disabled={session.busy} onClick={() => void session.logout()}>
+              <Icon name="logout" size={18} />
+              {demo ? "Quitter la démonstration" : "Se déconnecter"}
+            </button>
+          </div>
+    </>
+  );
+
   return (
     <ThemeSurface className={theme.clientSkin}>
     <div className={styles.space}>
@@ -371,89 +494,10 @@ export function ClientSpace({ session }: { session: Session }) {
         >
           <Brand />
         </button>
-        <div className={styles.workspaceBlock}>
-          <span>
-            <Icon name="person" size={18} />
-          </span>
-          <div>
-            <strong>{ROLE_NAMES.client}</strong>
-            <small>{demo ? "Espace de démonstration" : "Mon espace"}</small>
-          </div>
-        </div>
-        <span className={styles.navCaption}>Mon espace</span>
-        <nav className={styles.sideNav} aria-label="Navigation de l’espace">
-          {SIDE_NAV.map((n) => {
-            const current =
-              view === n.id ||
-              (n.id === "requests" && ["new", "detail", "quote"].includes(view));
-            return (
-              <button
-                type="button"
-                key={n.id}
-                aria-current={current ? "page" : undefined}
-                onClick={() => session.go(n.id)}
-              >
-                <Icon name={n.icon} size={18} />
-                <span>{n.label}</span>
-                {n.id === "requests" && activeCount > 0 && (
-                  <span className={styles.sideCount}>
-                    <span aria-hidden="true">{activeCount}</span>
-                    <span className="sr-only">{`${activeCount} demandes en cours`}</span>
-                  </span>
-                )}
-                {n.id === "messages" && received > 0 && (
-                  <span className={styles.sideCount}>
-                    <span aria-hidden="true">{received}</span>
-                    <span className="sr-only">{`${received} message${received > 1 ? "s" : ""} reçu${received > 1 ? "s" : ""}`}</span>
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </nav>
-        {platformEntries(session.platformAccess, (v) => canAccess(v, session.role, session.mode)).length > 0 && (
-          <>
-            <span className={styles.navCaption}>Opérateur de plateforme</span>
-            <nav className={styles.sideNav} aria-label="Back-office de la plateforme">
-              {platformEntries(session.platformAccess, (v) => canAccess(v, session.role, session.mode)).map((n) => (
-                <button
-                  type="button"
-                  key={n.view}
-                  aria-current={view === n.view ? "page" : undefined}
-                  onClick={() => session.go(n.view)}
-                >
-                  <Icon name={n.icon} size={18} />
-                  <span>{n.label}</span>
-                </button>
-              ))}
-            </nav>
-          </>
-        )}
-        <div className={styles.sidebarBottom}>
-          <button
-            type="button"
-            aria-current={view === "help" ? "page" : undefined}
-            onClick={() => session.go("help")}
-          >
-            <Icon name="help" size={18} />
-            Aide
-          </button>
-          <button
-            type="button"
-            aria-current={view === "support" ? "page" : undefined}
-            onClick={() => session.go("support")}
-          >
-            <Icon name="shield" size={18} />
-            Assistance
-          </button>
-          <button type="button" onClick={() => void session.logout()}>
-            <Icon name="logout" size={18} />
-            {demo ? "Quitter la démonstration" : "Se déconnecter"}
-          </button>
-        </div>
+        {sideBody}
       </aside>
 
-      <div className={styles.mainArea}>
+      <div className={styles.mainArea} inert={menuOpen}>
         <header className={styles.header}>
           <span className={styles.breadcrumb}>
             Espace particulier
@@ -504,6 +548,17 @@ export function ClientSpace({ session }: { session: Session }) {
         </header>
 
         <header className={styles.mobileHeader}>
+          <button
+            ref={menuButton}
+            type="button"
+            className={`${styles.bellButton} ${styles.menuButton}`}
+            aria-label="Ouvrir le menu"
+            aria-expanded={menuOpen}
+            aria-controls="client-drawer"
+            onClick={() => setMenuOpen(true)}
+          >
+            <Icon name="menu" size={22} />
+          </button>
           <strong className={styles.mobileHeading}>
             Mon espace
           </strong>
@@ -536,6 +591,28 @@ export function ClientSpace({ session }: { session: Session }) {
         </main>
       </div>
 
+      {menuOpen ? (
+        <div className={styles.drawerOverlay} onClick={closeMenu}>
+          <div
+            id="client-drawer"
+            className={styles.drawer}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Menu de l’espace particulier"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={styles.drawerHead}>
+              <strong>{ROLE_NAMES.client}</strong>
+              <button ref={drawerClose} type="button" className={styles.bellButton} aria-label="Fermer le menu" onClick={closeMenu}>
+                <Icon name="close" size={20} />
+              </button>
+            </div>
+            {sideBody}
+          </div>
+        </div>
+      ) : (
+        <div id="client-drawer" hidden />
+      )}
       <PublicContactActions phoneHref={null} whatsappOnly />
       <nav className={styles.bottomNav} aria-label="Navigation principale">
         {BOTTOM_NAV.map((n) => {
