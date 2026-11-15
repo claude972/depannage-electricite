@@ -2249,6 +2249,13 @@
 .main .kpis > div {
   background: var(--ui-card, #fff);
 }
+.main .kpis section {
+  flex: 1;
+  min-width: 0;
+}
+.main .kpis section > span {
+  max-width: none;
+}
 
 /* V5-C08 : fil d’Ariane cliquable à 44 px ; section documents pleine largeur sous la grille Détails | Décision ;
    boutons de décision teintés en contour (succès / erreur), pleins une fois choisis. */
