@@ -176,7 +176,7 @@ test("Chromium : démo ⇒ note honnête, aucun appel ; 360 px clair/sombre, cib
     const demo = await (await browser.newContext({ viewport: { width: 360, height: 800 } })).newPage();
     await demo.goto(`${base}#demo`);
     await demo.waitForTimeout(200);
-    assert.match(await demo.locator('[data-energy-export="demo"]').innerText(), /aucun export CSV n’est produit/);
+    assert.match(await demo.locator('[data-energy-export="demo"]').innerText(), /n’est pas exportée en démonstration/);
     assert.equal(await demo.getByRole("button").count(), 0);
     assert.equal((await w(demo)).calls.length, 0, "demo: zero calls");
     for (const theme of ["light", "dark"]) {

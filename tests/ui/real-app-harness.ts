@@ -67,3 +67,15 @@ export async function withApp(run: (open: (route: string, width?: number) => Pro
   }
 }
 
+
+/** Opens « Paramètres du compte » the way a user does: the header button on desktop, or the
+ *  account menu (« Ouvrir le menu ») below 1024 px. */
+export async function openAccountSettings(page: Page) {
+  const direct = page.getByRole("button", { name: "Paramètres du compte" });
+  if (await direct.first().isVisible().catch(() => false)) {
+    await direct.first().click();
+    return;
+  }
+  await page.getByRole("button", { name: "Ouvrir le menu" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Paramètres du compte" }).click();
+}

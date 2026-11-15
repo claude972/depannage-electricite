@@ -372,7 +372,7 @@ test("app réelle (démo client « Mes demandes ») : filtrage local, recherche 
     const before = await page.locator(".request-row").count();
     await page.getByRole("button", { name: "Toutes" }).click();
     const all = await page.locator(".request-row").count();
-    await page.getByPlaceholder("Rechercher une intervention").fill("zzzz-aucun");
+    await page.getByPlaceholder("Rechercher une demande").fill("zzzz-aucun");
     await page.waitForTimeout(400);
     const none = await page.locator(".request-row").count();
     const empty = await page.getByText("Aucune intervention ne correspond à votre recherche.").count();

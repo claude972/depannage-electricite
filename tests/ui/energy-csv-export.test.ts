@@ -107,5 +107,5 @@ test("panneau : bouton désactivé tant qu’aucune consolidation valide n’est
   assert.match(idle, /disponible une fois une sélection valide consolidée/);
   const demo = html(createElement(p.EnergyConsolidationPanel as never, { organizationId: ORG, sites, demo: true, context: ctx } as never));
   assert.doesNotMatch(demo, /<button/);
-  assert.match(demo, /aucun export CSV n’est produit/);
+  assert.match(demo, /n’est pas exportée en démonstration/);
 });

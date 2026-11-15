@@ -192,7 +192,7 @@ test("formulaire de demande : AddressField branché (combobox + 3 champs requis)
 // ---- P3 : vue « auth » ---------------------------------------------------------------------
 test("auth (SSR réel) : login / signup / reset dans le chrome thémé, classes réellement rendues", () => {
   const guards: Record<string, string[]> = {
-    login: ["auth-layout", "panel auth-form", "field", "forgot-link", "button primary full", "auth-switch", "form-note"],
+    login: ["auth-layout", "panel auth-form", "field", "forgot-link", "button primary full", "auth-switch"],
     signup: ["auth-layout", "panel auth-form", "field", "button primary full", "auth-switch"],
     reset: ["auth-layout", "panel auth-form", "field", "button primary full", "auth-switch"],
   };
@@ -224,7 +224,8 @@ test("auth : props de l’AuthForm inchangées, chaque mode appelle son seul cal
     await a.onSubmit(values);
     a.onMode("reset");
     a.onDemo();
-    assert.deepEqual(calls, [expected[mode], "setAuthMode(reset)", "startDemo(client)"], mode);
+    // Switching mode first clears the previous session error/notice (no stale message under the new form).
+    assert.deepEqual(calls, [expected[mode], "setError()", "setNotice()", "setAuthMode(reset)", "startDemo(client)"], mode);
     assert.equal(captured.chrome.current, "auth");
     calls.length = 0;
     captured.chrome.onHome();

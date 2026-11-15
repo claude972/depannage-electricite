@@ -50,7 +50,7 @@ function setup() {
     Object.getOwnPropertyDescriptor(proto, "value").set.call(el, value);
     el.dispatchEvent(new Event(el.tagName === "SELECT" ? "change" : "input", { bubbles: true }));
   };
-  const field = (label) => { const l = [...form().querySelectorAll("label")].filter((x) => x.textContent.trim() === label); return l.map((x) => document.getElementById(x.htmlFor)); };
+  const field = (label) => { const l = [...form().querySelectorAll("label")].filter((x) => x.textContent.trim().replace(" (obligatoire)", "") === label); return l.map((x) => document.getElementById(x.htmlFor)); };
   const controls = () => [...form().querySelectorAll("input, select, textarea, button")];
   const release = async (outcome) => { const r = held; held = null; r?.(outcome); await tick(200); };
   return { div, root, calls, queue, form, button, setValue, field, controls, release };

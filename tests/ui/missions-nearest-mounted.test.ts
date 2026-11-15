@@ -268,6 +268,8 @@ test("app réelle : « Missions » artisan (démo) — aucun sélecteur de tri, 
         await page.goto("about:blank");
         api.length = 0;
         await page.goto(`${origin}/#demo/artisan-missions`);
+        // The radius panel sits in the collapsed « Zone de recherche » disclosure: open it like a user.
+        await page.getByText("Zone de recherche", { exact: false }).first().click();
         await page.locator('[data-mission-radius="demo"]').waitFor();
         await page.locator("[data-available-missions]").waitFor();
         assert.equal(await page.locator("[data-available-sort]").count(), 0, where);
