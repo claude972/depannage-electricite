@@ -5,6 +5,7 @@ import { Action, Card, Copy, ReadState, Screen } from '@/components/ui';
 import { useResource } from '@/lib/api';
 import { timestamp } from '@/lib/contracts';
 import { supportDetailFor } from '@/lib/support-contract';
+import { SupportReply } from '@/components/support-reply';
 import { useSession } from '@/lib/session';
 import { orderReference } from '../../../../../shared/order-reference';
 
@@ -41,6 +42,7 @@ function History({id,token,actor}:{id:string;token:string;actor:string}){
         })}
         <Copy kind="muted">{data.page.total_events} événement(s) · {data.page.total_messages} message(s)</Copy>
       </Card>
+      <SupportReply id={id} actor={actor} token={token} data={data} onSent={refresh}/>
       {previous.length>0&&<Action secondary label="Événements précédents" onPress={()=>{setAfter(previous[previous.length-1]);setPrevious(current=>current.slice(0,-1));}}/>}
       {data.page.has_more&&data.page.next_after_version!==null&&<Action secondary label="Événements suivants" onPress={()=>{setPrevious(current=>[...current,after]);setAfter(data.page.next_after_version!);}}/>}
     </>}

@@ -46,6 +46,8 @@ function Navigator() {
         <Stack.Screen name="offre/[id]" options={{title:"Offre de mission"}}/>
         <Stack.Screen name="dossier/[id]" options={{title:'Intervention'}}/>
         <Stack.Screen name="dossier/messages" options={{title:'Messages'}}/>
+        <Stack.Screen name="dossier/assistance" options={{title:"Assistance",headerTitleStyle:{fontFamily:"JakartaMedium",fontSize:16}}}/>
+        <Stack.Screen name="dossier/assistance-suivi" options={{title:"Assistance",headerTitleStyle:{fontFamily:"JakartaMedium",fontSize:16}}}/>
       </Stack.Protected>
     </Stack>
     </View>

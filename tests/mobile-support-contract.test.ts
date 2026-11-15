@@ -48,3 +48,15 @@ test('ticket history rejects another ticket and non-advancing pagination',async(
  assert.equal(schema.safeParse({...detail,page:{...detail.page,after_version:2,next_after_version:2,has_more:true}}).success,false);
  assert.equal(schema.safeParse({...detail,page:{...detail.page,after_version:2,next_after_version:3,has_more:true}}).success,true);
 });
+
+test('reply receipt and recovery require the exact author, content and next revision',async()=>{
+ const {supportReplyReceipt,pendingReplyRecorded}=await import('../apps/mobile/src/lib/support-contract');
+ const value={ticket:{...response().ticket,version:3},message:{...response().initial_message,version:3}};
+ const schema=supportReplyReceipt(other,actor,2,command.body);
+ assert.equal(schema.safeParse(value).success,true);
+ assert.equal(schema.safeParse({...value,message:{...value.message,author_id:other}}).success,false);
+ assert.equal(schema.safeParse({...value,ticket:{...value.ticket,version:4}}).success,false);
+ const detail={ticket:value.ticket,messages:[value.message],events:[],permissions:{can_reply:true,can_set_status:false},page:{limit:50,after_version:2,next_after_version:null,has_more:false,total_events:3,total_messages:2}};
+ assert.equal(pendingReplyRecorded(detail as Parameters<typeof pendingReplyRecorded>[0],actor,{body:command.body,version:2}),true);
+ assert.equal(pendingReplyRecorded(detail as Parameters<typeof pendingReplyRecorded>[0],actor,{body:'Un autre message',version:2}),false);
+});

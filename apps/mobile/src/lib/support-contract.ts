@@ -80,3 +80,17 @@ export function supportDetailFor(id: string) {
   z.uuid().parse(id);
   return supportDetail.refine(value => value.ticket.id === id, 'La réponse concerne une autre demande.');
 }
+
+export const supportReplyDraft = z.object({
+  body: z.string().max(4000),
+  pending: z.object({ body: z.string().trim().min(1).max(4000), version: revision }).nullable(),
+}).strict();
+export function supportReplyReceipt(id: string, actor: string, version: number, body: string) {
+  return z.object({ticket:supportTicket,message:supportMessage}).refine(value =>
+    value.ticket.id===id && value.ticket.version===version+1 && value.message.ticket_id===id &&
+    value.message.author_id===actor && value.message.version===version+1 && value.message.body===body,
+    'La réponse envoyée n’a pas pu être confirmée. Actualisez l’historique avant de réessayer.');
+}
+export function pendingReplyRecorded(data: z.infer<typeof supportDetail>, actor: string, pending: {version:number;body:string}) {
+  return data.messages.some(message=>message.author_id===actor&&message.version===pending.version+1&&message.body===pending.body);
+}
