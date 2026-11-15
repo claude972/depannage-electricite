@@ -1003,7 +1003,7 @@ function DetailView({
           <Icon name="person" size={20} />
           Artisan assigné
         </h2>
-        <button type="button" className="button outline" onClick={() => session.go("messages")}>
+        <button type="button" className="button outline" onClick={() => session.go("messages", i.id)}>
           <Icon name="message" size={17} />
           Contacter
         </button>
@@ -1777,7 +1777,7 @@ export function QuoteView({
             type="button"
             className="button outline"
             style={{ marginLeft: "auto" }}
-            onClick={() => session.go("messages")}
+            onClick={() => session.go("messages", i.id)}
           >
             <Icon name="message" size={17} />
             Contacter
