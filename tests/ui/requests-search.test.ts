@@ -202,7 +202,7 @@ const w = window;
 const tick = (ms) => new Promise((r) => setTimeout(r, ms));
 const item = (n, over = {}) => (${item.toString().replace("ID(n)", "'a0000000-0000-4000-8000-' + String(n).padStart(12, '0')")})(n, over);
 const page = (items, cursor = null, total = items.length) => ({ items, total, page: { limit: 50, has_more: cursor !== null, next_cursor: cursor } });
-const session = (mode, opened, gen) => ({ mode, mutationContext: { userId: () => "${USER}", generation: () => gen.value }, go: () => {}, openIntervention: (id) => opened.push(id) });
+const session = (mode, opened, gen) => ({ mode, data: { quotes: [], payments: [] }, mutationContext: { userId: () => "${USER}", generation: () => gen.value }, go: () => {}, openIntervention: (id) => opened.push(id) });
 w.frames = async () => {
   const bodies = [];
   w.fetch = async (url, init) => {
