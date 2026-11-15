@@ -1222,6 +1222,12 @@ button.row:hover {
     width: 36px;
     height: 36px;
   }
+  .kpi > div {
+    width: 100%;
+  }
+  .kpiLabel {
+    min-height: 2lh;
+  }
   .kpiValue {
     font-size: 24px;
   }
