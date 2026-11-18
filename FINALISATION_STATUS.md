@@ -1,6 +1,6 @@
 # DomDépannage — suivi de finalisation (Claude)
 
-Mis à jour : 2026-11-15 soir AST (recette PWA, correctif public, tests mobiles, transfert MacBook) — Claude Opus 5.5 (Fable non utilisé : quota épuisé ; aucune facturation ni crédit EAS consommé).
+Mis à jour : 2026-11-18 (checkpoint `1483d4b8`, preview `bswte5fe6`) — Claude Opus 5.5.
 
 ## Base et version testée
 
@@ -9,7 +9,7 @@ Mis à jour : 2026-11-15 soir AST (recette PWA, correctif public, tests mobiles,
 | Copie Claude | `/Volumes/Stockage/dev/Atelier/claude/depannage-electricite/repo`, clone isolé, push vers l'intégration désactivé |
 | Branche / base | `claude/finalisation-20261114` depuis `b424c8d` (`codex/figma-responsive-20261114`) ; aucun commit plus récent dans l'intégration du mini |
 | Travaux planning Codex non commités (MacBook) | non intégrés, non touchés |
-| **Version candidate Web/PWA** | code applicatif du commit **`af47bb72`** (HEAD `076bfec9` : + tests seulement) — preview https://domdepannage-recette-20261112-77s96ixlc-brafas-projects.vercel.app (cible *preview*). Écart avec `e0526c1` : routes publiques en client anonyme (serveur uniquement). |
+| **Version candidate Web/PWA (18/11)** | commit **`1483d4b8`** — preview https://domdepannage-recette-20261112-bswte5fe6-brafas-projects.vercel.app : admin réel 35/35, PWA 22/22. Précédente : `af47bb72` (HEAD `076bfec9` : + tests seulement) — preview https://domdepannage-recette-20261112-77s96ixlc-brafas-projects.vercel.app (cible *preview*). Écart avec `e0526c1` : routes publiques en client anonyme (serveur uniquement). |
 | **Version candidate mobile** | source `apps/mobile` identique de `04138064` à HEAD. APK `e0526c1` (API embarquée `lizw2oi45`, équivalente pour les parcours mobiles : le client mobile n'envoie jamais de cookie, il n'est donc pas concerné par le correctif public). iOS : Codex sur MacBook, même source. |
 | Previews de la recette réelle | `4jadwewvm` (`15a9775`, parcours complet), `5sivte8w3` (`a382c28`, paiement), `fexnt9wgj` (`68b5646`, B2B) |
 | Alias de recette | `domdepannage-recette-20261112.vercel.app` → `dpl_5HgGE477…` (12/11), **non modifié** |
@@ -29,6 +29,16 @@ Légende : **synthétique** = mode démo (localStorage, aucun serveur) · **rée
 | Entreprise : 12 vues ; lecteur (lecture seule, 403) ; cloisonnement (404 tiers/lecteur) | **vérifié réel** | à faire | à faire | `real-sweep`, `real-viewer`, `real-isolation` | — |
 | Artisan : missions, devis, planning (écriture réversible), photos, compte rendu | **vérifié réel** | à faire | à faire | `real-art`, `real-plan`, `s2`, `s4*` | — |
 | Admin | **vérifié isolé** : 77/77 tests routes + UI montée ; revues SQL pglite (tableau de bord 19/19, messagerie 20/20 ; ensemble des 92 revues `tests/sql-*review*.mjs` : 92/92, aucun saut, `preuves/admin-isole/sql-reviews-summary.txt`) ; preview candidate en démo : 14 vues à 390 et 1440, 0 erreur, 0 écriture serveur | à faire | à faire | `preuves/admin-isole/` | **réel bloqué** : aucun compte admin de recette autorisé (fixture Astra rétrogradée, non réactivée) ; approbation d'artisan non jouable en démo (dossier absent, refus attendu) |
+
+## Checkpoint 18/11 — à lire en premier
+- Dépôt `/Volumes/Stockage/dev/Atelier/claude/depannage-electricite/repo`, branche `claude/finalisation-20261114`, HEAD `1483d4b8` (+ ce commit de statut). `origin` = clone local d'intégration, push désactivé (non modifié) : lire le dépôt directement.
+- **Admin réel (16–18/11) : PASS 35/35** sur `bswte5fe6`. Compte synthétique dédié `audit-claude-admin-…@example.test` créé sur la recette (`kcpyjz…`) avec l'accord du propriétaire, promu admin par SQL avec entrée d'audit ; identifiants : `/Volumes/Stockage/depannage-qa-private/claude-20261116/admin.private.json` (600). 14 vues × 390/1440 sur données réelles, 0 erreur ; recherche `INT-5B12D9` / `INT-6C3682` → 1 dossier chacun, fiches ouvertes (130,20 € / 162,75 €, « À régler ») ; particulier refusé sur 5 routes admin (403/404). Aucune action d'écriture admin sur les données d'autrui. Écrans plateforme lus sans MFA ; actions plateforme (MFA aal2) non testées. Preuves `livraison/preuves/admin-reel-bswte5fe6/`.
+- **Défaut corrigé `1483d4b8`** : la recherche admin « INT-… ou ville » ignorait la référence `INT-XXXXXX` (0 résultat) ; filtre par plage d'identifiants, test (échoue sans le correctif) ; vérifié en ligne.
+- **PWA : PASS 22/22** rejouée sur `bswte5fe6` (`livraison/preuves/pwa-bswte5fe6/`).
+- **Android : NON VALIDÉ.** L'APK `e0526c1` est **non configuré** (variables Supabase absentes du build local ; constat mini-brafa : « L'environnement mobile n'est pas configuré »). Recette de build, fichier privé des variables publiques, garde-fou `verify-mobile-bundle.sh` (3 × NON sur cet APK) et script de signature : `livraison/transfert-macbook/LISEZMOI.md` §0. Reconstruction en cours côté mini-brafa (clone isolé Codex).
+- **iOS** : `build-ios/` du mini = tentative échouée (inexploitable). Seul build valide : MacBook Codex (`04138064`, non signé), probablement non configuré lui aussi → vérifier avec le garde-fou. Chemins exacts dans le LISEZMOI.
+- **Stripe : mode TEST prouvé** (clé modifiée le 12/11 17:06:59 UTC ; sessions `cs_test_` créées après, aucune `cs_live_` ; page Stripe : « Vous utilisez un compte de test avec des données de test »). Compte connecté de test créé pour l'artisan synthétique (`acct_…` enregistré). **Bloqué par un hCaptcha** sur l'onboarding Stripe : non résolu (interdit). Reprise manuelle : se connecter en artisan synthétique sur `bswte5fe6` (identifiants `ui-accounts.private.json`, rôle `artisan`), Profil → « Configurer mes règlements Stripe » (réutilise le compte existant, génère seulement un nouveau lien, l'ancien expire en quelques minutes), compléter le hCaptcha et les écrans avec les boutons « données de test » de Stripe, sans accepter de conditions réelles. Ensuite seulement : rejouer « Payer » sur `INT-5B12D9` en mode test.
+- **Tests locaux (mini)** : binaires natifs du dépôt (`esbuild`, `fsevents`) bloqués à `_dyld_start` par la vérification de signature macOS depuis le redémarrage du 16/11 (aucune protection désactivée). Contournement sans effet sur le dépôt : `ESBUILD_BINARY_PATH=/Users/claudebrafa/rea/node_modules/@esbuild/darwin-arm64/bin/esbuild node --import ./node_modules/.cache/claude-tests/register.mjs --test <tests>`. Typecheck propre ; tests ciblés PASS ; suite complète non relancée depuis.
 
 ## Recette Web/PWA complémentaire — preview `77s96ixlc` (réel, comptes synthétiques) — 15/11 soir : **22/22 PASS**
 Script reproductible `livraison/transfert-macbook/scripts/pwa-recette.mjs` ; journal et captures `livraison/preuves/pwa-77s96ixlc/`.
