@@ -1,4 +1,5 @@
 "use client";
+import { useOnlineReadRetry } from "../../app/use-online-read-retry";
 // Available missions (artisan): anonymized eligible offers from GET /api/artisan/missions, oldest
 // first, 50 per page with the opaque cursor sent unchanged (« Afficher plus »), deduplicated, no
 // total count claimed. An offer opens its anonymized summary (?id=) — never the private dossier
@@ -86,6 +87,7 @@ export function AvailableMissionsPanel(props: AvailableMissionsProps) {
     });
   }
   const ctrl = controller.current;
+  useOnlineReadRetry(!props.demo && state.phase === "error" && !state.nearestRefused && state.accepting === null, () => ctrl.load());
   useEffect(() => {
     ctrl.attach();
     if (!props.initial && !props.demo) void ctrl.load();

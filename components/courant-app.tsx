@@ -424,10 +424,12 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
     const onFocus = () => scheduler.signal();
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onFocus);
+    window.addEventListener("online", onFocus);
     return () => {
       scheduler.cancel();
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener("online", onFocus);
     };
   }, [mode, revalidateNow]);
 

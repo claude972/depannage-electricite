@@ -1,4 +1,5 @@
 "use client";
+import { useOnlineReadRetry } from "../../app/use-online-read-retry";
 // ADM-01: reads the bounded admin snapshot in live mode only. The view carries the role + identity it
 // was read for; the host shows it only when that matches the CURRENT role + identity at render (no
 // old frame). Sequence-guarded; 401/403 ⇒ cleared. « Actualiser » = reload(). Demo: never called.
@@ -29,5 +30,6 @@ export function useAdminDashboard({ live, ident, fetcher }: { live: boolean; ide
       seq.current++;
     };
   }, [reload, ident]);
+  useOnlineReadRetry(live && view.ident === ident && view.phase === "error", reload);
   return { view, reload };
 }
