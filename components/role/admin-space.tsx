@@ -228,7 +228,7 @@ export function actorLabel(
 
 export function dossierAuditLabel(action: string): string {
   const labels: Record<string, string> = {
-    create: "Demande créée", accept_mission: "Mission acceptée", admin_reassigned: "Artisan réaffecté",
+    create: "Demande créée", created: "Demande créée", appointment_saved: "Rendez-vous enregistré", accept_mission: "Mission acceptée", admin_reassigned: "Artisan réaffecté",
     send_quote: "Devis envoyé", accept_quote: "Devis accepté", start: "Intervention démarrée",
     complete: "Intervention clôturée", cancel: "Demande annulée", payment_confirmed: "Paiement confirmé",
   };
