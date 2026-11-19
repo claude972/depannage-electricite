@@ -78,7 +78,7 @@ function Live({ canWrite, context, onOpenDossier, fetcher, store = tabStore, new
           <select value={filter} onChange={(e) => { setFilter(e.target.value as StateFilter); setCursors([null]); setSelected(null); }}>
             <option value="">Tous</option>
             <option value="needs_review">À examiner</option>
-            <option value="matched">Associées au transfert enregistré</option>
+            <option value="matched">Associées (règlement invité ou paiement Checkout)</option>
           </select>
         </label>
         <button type="button" className={styles.secondary} onClick={() => setReload((n) => n + 1)} disabled={list.phase === "loading"}>{COPY.reread}</button>
@@ -205,7 +205,7 @@ function DetailPanel({ id, canWrite, context, fetcher, store, newId, onOpenDossi
                 {res.intervention_id ? (
                   <>
                     {onOpenDossier ? <button type="button" className="text-button" onClick={() => onOpenDossier(res.intervention_id!)} data-reconciliation-dossier={res.intervention_id}>Ouvrir le dossier</button> : <span className={styles.mono}>{res.intervention_id}</span>}
-                    <span className={styles.mono}> · règlement {res.settlement_id} · devis {res.quote_id}</span>
+                    <span className={styles.mono}>{res.payment_id ? ` · paiement Checkout ${res.payment_id}` : ` · règlement ${res.settlement_id}`} · devis {res.quote_id}</span>
                   </>
                 ) : (
                   "Aucun (preuve insuffisante)"
@@ -230,6 +230,20 @@ function DetailPanel({ id, canWrite, context, fetcher, store, newId, onOpenDossi
                 </li>
               ))}
             </ol>
+          )}
+          {d.automatic_history && (
+            <>
+              <h4>Rapprochements automatiques ({d.automatic_history.length}{d.automatic_history_limited ? ", limités aux 50 derniers" : ""})</h4>
+              <p className={styles.hint}>Changements calculés par le serveur après relecture Stripe du paiement Checkout (sans note ni opérateur).</p>
+              <ol className={styles.history} data-reconciliation-automatic="">
+                {d.automatic_history.map((h) => (
+                  <li key={h.version}>
+                    <span className={styles.mono}>v{h.version} · {when(h.created_at)} · serveur</span>
+                    <span>{STATE_LABEL[h.previous.state]} ({h.previous.reason}) → {STATE_LABEL[h.outcome.state]} ({h.outcome.reason})</span>
+                  </li>
+                ))}
+              </ol>
+            </>
           )}
           {view.notice && (
             <p className={styles.ok} role="status" data-reconciliation-notice="">

@@ -53,32 +53,46 @@ export const observationEvent = z
   .strict()
   .refine((e) => (eventTypes[e.family] as readonly string[]).includes(e.type))
   .refine((e) => e.family === "fee" || e.object.source_charge === null || charge.safeParse(e.object.source_charge).success);
+export const reasons = [
+  "unexpected_source_account",
+  "unlinked_transfer",
+  "transfer_proof_mismatch",
+  "transfer_reversal",
+  "linked_transfer_observation",
+  "aggregate_payout_unallocated",
+  "fee_reference_not_bound",
+  "dispute_reference_not_bound",
+  // Platform Checkout payments (server link from provider re-reads, migration 20261119120000).
+  "linked_checkout_transfer",
+  "linked_checkout_fee",
+  "fee_proof_mismatch",
+  "fee_refund_review",
+  "checkout_link_review",
+] as const;
+const checkoutReasons: readonly string[] = ["linked_checkout_transfer", "linked_checkout_fee", "fee_refund_review", "checkout_link_review"];
+// payment_id is present only when a Checkout link proves the association; historic results
+// (guest settlement or unlinked) keep their previous shape without the key.
 export const result = z
   .object({
     state: z.enum(["matched", "needs_review"]),
-    reason: z.enum([
-      "unexpected_source_account",
-      "unlinked_transfer",
-      "transfer_proof_mismatch",
-      "transfer_reversal",
-      "linked_transfer_observation",
-      "aggregate_payout_unallocated",
-      "fee_reference_not_bound",
-      "dispute_reference_not_bound",
-    ]),
+    reason: z.enum(reasons),
     settlement_id: uuid.nullable(),
     intervention_id: uuid.nullable(),
     quote_id: uuid.nullable(),
+    payment_id: uuid.nullable().optional(),
   })
   .strict()
-  .refine(
-    (r) =>
-      (r.settlement_id === null) === (r.intervention_id === null) &&
-      (r.settlement_id === null) === (r.quote_id === null) &&
-      (r.state !== "matched" ||
-        (r.settlement_id !== null &&
-          r.reason === "linked_transfer_observation")),
-  );
+  .refine((r) => {
+    const payment = r.payment_id ?? null;
+    const linked = (r.intervention_id === null) === (r.quote_id === null);
+    const owner = r.settlement_id !== null || payment !== null;
+    if (!linked || (r.settlement_id !== null && payment !== null) || owner !== (r.intervention_id !== null)) return false;
+    if (payment !== null && !checkoutReasons.includes(r.reason) && r.reason !== "transfer_reversal") return false;
+    if (r.state === "matched")
+      return (r.settlement_id !== null && r.reason === "linked_transfer_observation")
+        || (payment !== null && (r.reason === "linked_checkout_transfer" || r.reason === "linked_checkout_fee"));
+    return !(["linked_transfer_observation", "linked_checkout_transfer", "linked_checkout_fee"] as string[]).includes(r.reason);
+  });
 export const record = z
   .object({
     event: observationEvent,
@@ -107,8 +121,16 @@ export const detail = z
       )
       .max(50),
     history_limited: z.boolean(),
+    // Server re-associations after a Checkout link (webhook, operator relink or review).
+    automatic_history: z
+      .array(z.object({ created_at: z.iso.datetime({ offset: true }), version, previous: result, outcome: result }).strict())
+      .min(1)
+      .max(50)
+      .optional(),
+    automatic_history_limited: z.boolean().optional(),
   })
-  .strict();
+  .strict()
+  .refine((d) => (d.automatic_history === undefined) === (d.automatic_history_limited === undefined));
 export const reviewCommand = z
   .object({
     command_id: uuid,
