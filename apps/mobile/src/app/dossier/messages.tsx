@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import { useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
 import { z } from 'zod';
 import { Action, Card, Copy, Field, ReadState, Screen } from '@/components/ui';
@@ -24,7 +25,15 @@ function ConversationThread({id,token,profileId}:{id:string;token:string;profile
   const [body,setBody]=useState(''), [error,setError]=useState<string|null>(null), [busy,setBusy]=useState(false);
   const intent=useRef<{body:string;id:string}|null>(null), lock=useRef(false);
   const path=token&&id?'/api/messages?intervention_id='+id+(cursor?'&cursor='+encodeURIComponent(cursor):''):null;
-  const state=useResource(path,history,token);
+  const [focused,setFocused]=useState(false);
+  const [active,setActive]=useState(AppState.currentState==='active');
+  useFocusEffect(useCallback(()=>{setFocused(true);return ()=>setFocused(false);},[]));
+  useEffect(()=>{
+    const subscription=AppState.addEventListener('change',value=>setActive(value==='active'));
+    return ()=>subscription.remove();
+  },[]);
+  // Keep the draft and current page stable; only the newest page follows arrivals.
+  const state=useResource(path,history,token,profileId,focused&&active&&!cursor?5000:0);
   async function send(){
     if(!token||!id||!body.trim()||lock.current)return;
     const text=body.trim();
@@ -38,7 +47,7 @@ function ConversationThread({id,token,profileId}:{id:string;token:string;profile
     }catch(issue){if(controller.signal.aborted)return;setError(issue instanceof Error?issue.message:'Envoi indisponible.');}
     finally{if(!controller.signal.aborted){pending.current=null;lock.current=false;setBusy(false);state.reload();}}
   }
-  return <Screen>
+  return <Screen onRefresh={state.reload}>
     <Copy kind="title">Conversation</Copy>
     <ReadState loading={state.loading} error={state.error} onRetry={state.reload}/>
     {state.data&&<>
