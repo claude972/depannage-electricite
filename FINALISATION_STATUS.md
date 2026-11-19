@@ -233,3 +233,11 @@ Preuves : `livraison/preuves/recette-web-suite-20261119/`.
   - droits de règlement : PASS.
 - **Limite d'outil :** aucun paiement par carte saisi par Claude sur le Web. FIN-01 (Web), FIN-04 et ART-11 restent sans preuve Web. FIN-05 et ENT-16 sont bloqués par l'émetteur de factures non configuré.
 - **Détail :** `livraison/CORRECTIFS-UX-CLAUDE-20261119.md`.
+
+## Responsive Web — 19/11 (17:50 UTC)
+- **Candidat courant :** `dpl_GrLBkDt1HAckvjB8HkzUvKSoLBMA` (fdtb4motz, commit `dd3f260f`), aliasé. Aucune production.
+- **Audit :** 72 écrans des cinq espaces à 8 largeurs (576 mesures par élément), passe ciblée de 185 états ouverts plus les neuf onglets Finance, menus à 320 et 768 px, redimensionnement continu sur 22 écrans.
+- **Corrigé (CSS seul, 6 fichiers) :** 8 défauts reproduits avant correction — notifications, sélecteur de version de devis, tableau des rapports, étiquette de site, fiche artisan admin, paramètres admin, Finance › Observations et Remboursements.
+- **Reste :** tableau des prestations de devis à 320 px, pris par Codex (`quote-documents`).
+- **Non vérifié :** zoom navigateur sur petites largeurs, paysage mobile, thème sombre, mode démonstration, Safari et Firefox.
+- **Détail :** `livraison/RESPONSIVE-RESULTAT-20261119.md`.
