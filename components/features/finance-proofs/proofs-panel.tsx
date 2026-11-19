@@ -5,6 +5,7 @@
 // provider observation detail (payout proof of a payout event). Logic and fence in ./model.
 import { useEffect, useId, useRef, useState } from "react";
 import { COPY, EVT, PROOF_INITIAL, createProofApi, createProofController, identityOf, tabStore, targetId, validTarget, viewKey, viewOf, type Context, type Data, type ProofApi, type ProofState, type Store, type Target } from "./model";
+import { z } from "zod";
 import styles from "./finance-proofs.module.css";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -14,7 +15,7 @@ const signed = (cents: number) => (cents < 0 ? `−${eur(-cents)}` : eur(cents))
 const at = (iso: string) => new Date(iso).toLocaleString("fr-FR", { timeZone: "America/Martinique", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 const unix = (s: number) => at(new Date(s * 1000).toISOString());
 
-type Deps = { api?: ProofApi; store?: () => Store | null; newId?: () => string | null };
+type Deps = { api?: ProofApi; store?: () => Store | null; newId?: () => string | null; relinkFetcher?: typeof fetch };
 
 function useProof(target: Target | null, context: Context, deps: Deps, onCursor?: (after: string | null) => void) {
   const [state, setState] = useState<ProofState>(PROOF_INITIAL);
@@ -197,6 +198,97 @@ export function ProofSection({ target, title, canWrite, context, ...deps }: { ta
   );
 }
 
+
+const relinkReceipt = z.object({
+  payment_id: z.string().regex(UUID), state: z.enum(["awaiting_provider", "linked", "needs_review"]),
+  review_reason: z.enum(["transfer_reversal", "fee_refunded"]).nullable(), commission: z.enum(["none", "existing", "recorded"]),
+  rematched: z.array(z.string().regex(EVT)), command_id: z.string().regex(UUID),
+}).strict();
+const RELINK_STATE: Record<z.infer<typeof relinkReceipt>["state"], string> = {
+  linked: "Rattaché : transfert et commission relus chez Stripe et identiques au paiement enregistré.",
+  needs_review: "Rattaché mais à examiner : reprise du transfert ou remboursement de commission constaté.",
+  awaiting_provider: "En attente : Stripe n’a pas encore créé le transfert ou la commission. Réessayez plus tard.",
+};
+const RELINK_COMMISSION = { recorded: "commission inscrite au registre", existing: "commission déjà inscrite (aucun doublon)", none: "aucune commission inscrite" } as const;
+/** Explicit operator relink of a paid platform Checkout: server provider READS + the same automatic step.
+ *  Fenced like ProofSection: a reply is applied only to the identity (user, session generation) and the
+ *  payment that issued it; changing either aborts the request. Busy is a synchronous ref (no double POST). */
+export function CheckoutRelinkSection({ paymentId, canWrite, context, relinkFetcher, newId }: { paymentId: string; canWrite: boolean; context: Context; relinkFetcher?: typeof fetch; newId?: () => string | null }) {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  // Results are kept with the key that issued them and only rendered for that same key.
+  const [outcome, setOutcome] = useState<{ key: string; out: z.infer<typeof relinkReceipt> | null; error: string } | null>(null);
+  const key = `${identityOf(context)}|${paymentId}`;
+  const out = outcome?.key === key ? outcome.out : null;
+  const error = outcome?.key === key ? outcome.error : "";
+  const live = useRef(key);
+  const command = useRef<{ key: string; id: string } | null>(null);
+  const running = useRef(false);
+  const abort = useRef<AbortController | null>(null);
+  live.current = key;
+  useEffect(() => {
+    setConfirming(false); setBusy(false);
+    return () => { abort.current?.abort(); abort.current = null; running.current = false; };
+  }, [key]);
+  if (!canWrite) return null;
+  async function run() {
+    if (running.current) return;
+    const issued = live.current;
+    const id = command.current?.key === issued ? command.current.id : (newId ?? uuid)();
+    if (!id) { setOutcome({ key: issued, out: null, error: "Ce navigateur ne permet pas de créer un identifiant sécurisé." }); return; }
+    command.current = { key: issued, id };
+    running.current = true; setBusy(true); setOutcome({ key: issued, out: null, error: "" });
+    const controller = new AbortController(); abort.current = controller;
+    // The live identity is re-read: userId()/generation() may change before any re-render.
+    const still = () => live.current === issued && `${identityOf(context)}|${paymentId}` === issued && !controller.signal.aborted;
+    try {
+      const r = await (relinkFetcher ?? ((...a: Parameters<typeof fetch>) => fetch(...a)))(`/api/platform-operations/payments/${encodeURIComponent(paymentId)}/checkout-link`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ command_id: id }), signal: controller.signal });
+      const body: unknown = await r.json().catch(() => null);
+      if (!still()) return;
+      if (r.ok) {
+        const parsed = relinkReceipt.safeParse(body);
+        if (!parsed.success || parsed.data.payment_id !== paymentId || parsed.data.command_id !== id) throw Error("receipt");
+        setOutcome({ key: issued, out: parsed.data, error: "" }); command.current = null;
+      } else if (r.status === 503) {
+        setOutcome({ key: issued, out: null, error: "Le rattachement n’est pas confirmé. Réessayez : la même commande sera renvoyée." });
+      } else {
+        const message = body && typeof body === "object" && "error" in body && typeof body.error === "string" ? body.error : "";
+        setOutcome({ key: issued, out: null, error: r.status === 401 || r.status === 403 ? "Accès refusé par le serveur : droits finance en lecture et en écriture requis." : message || "Le serveur refuse ce rattachement." });
+        command.current = null;
+      }
+    } catch {
+      if (still()) setOutcome({ key: issued, out: null, error: "Le rattachement n’est pas confirmé. Réessayez : la même commande sera renvoyée." });
+    } finally {
+      if (abort.current === controller) abort.current = null;
+      if (live.current === issued) { running.current = false; setBusy(false); }
+    }
+  }
+  return (
+    <section className={styles.proof} aria-label="Rattachement automatique du paiement Checkout" data-checkout-relink="" aria-busy={busy || undefined}>
+      <h4>Rattachement automatique du paiement Checkout</h4>
+      <p className={styles.hint}>Relit chez Stripe la session, le paiement, la charge, le transfert et la commission de ce paiement, puis applique le même rapprochement que le webhook : associations exactes et commission inscrite une seule fois. Lectures seulement : aucun paiement, transfert, remboursement ni facture.</p>
+      {out && (
+        <p className={styles.ok} role="status" data-checkout-relink-result={out.state}>
+          {RELINK_STATE[out.state]} {out.state !== "awaiting_provider" && `— ${RELINK_COMMISSION[out.commission]} ; observations réassociées : ${out.rematched.length}.`}
+        </p>
+      )}
+      {error && <p className={styles.error} role="alert">{error}</p>}
+      {!confirming ? (
+        <button type="button" className={styles.secondary} disabled={busy} onClick={() => setConfirming(true)} data-checkout-relink-open="">Relancer le rattachement (lectures Stripe)…</button>
+      ) : (
+        <div className={styles.confirm} role="group" aria-label="Confirmer le rattachement">
+          <p>Confirmez la relecture Stripe et le rapprochement automatique de ce paiement. Une reprise ou un remboursement constaté laisse la situation « à examiner ».</p>
+          <div className={styles.actions}>
+            <button type="button" className={styles.primary} disabled={busy} onClick={() => { setConfirming(false); void run(); }} data-checkout-relink-confirm="">Lancer le rattachement</button>
+            <button type="button" className={styles.secondary} onClick={() => setConfirming(false)}>{COPY.cancel}</button>
+          </div>
+        </div>
+      )}
+      {busy && <p className={styles.hint} role="status">Rattachement en cours…</p>}
+    </section>
+  );
+}
+
 /** Payout proof of ONE provider observation (payout family), inside the observation detail. */
 export function PayoutProofSection({ eventId, canWrite, context, ...deps }: { eventId: string; canWrite: boolean; context: Context } & Deps) {
   return <ProofSection target={{ kind: "payout", eventId }} title="Preuve de rapprochement du versement" canWrite={canWrite} context={context} {...deps} />;
@@ -243,6 +335,7 @@ export function FinanceProofsTab({ demo, canRead, canWrite, context, ...deps }: 
             <button type="submit" className={styles.primary} data-proofs-open="">Afficher les preuves</button>
           </form>
           {shown && <ProofSection target={{ kind: "charge", paymentId: shown.paymentId, after: null }} title="Preuve de capture (Charge Checkout)" canWrite={canWrite} context={context} {...deps} />}
+          {shown && <CheckoutRelinkSection paymentId={shown.paymentId} canWrite={canWrite} context={context} relinkFetcher={deps.relinkFetcher} newId={deps.newId} />}
           {shown?.eventId && <ProofSection target={{ kind: "fee", paymentId: shown.paymentId, eventId: shown.eventId }} title="Preuve de commission (Fee)" canWrite={canWrite} context={context} {...deps} />}
         </>
       )}

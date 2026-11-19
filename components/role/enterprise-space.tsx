@@ -1599,7 +1599,9 @@ export function RequestsView({ c }: { c: Ctx }) {
 const isRequestCategory = (value: string): value is Category => CATEGORIES.some((cat) => cat.id === value);
 
 const SITE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-function NewRequestView({ c, siteId, initialCategory = "panel" }: { c: Ctx; siteId: string; initialCategory?: Category }) {
+function NewRequestView({ c, siteId: routeSiteId, initialCategory = "panel" }: { c: Ctx; siteId: string; initialCategory?: Category }) {
+  // Without an explicit site in the route, the site chosen in the header is the natural default.
+  const siteId = routeSiteId || (c.activeSite && !c.activeSite.archived_at && c.authority.canWriteSite(c.activeSite.id) ? c.activeSite.id : "");
   const site = c.orgSites.find((s) => s.id === siteId) || null;
   // ENT-03: a site id absent from the bootstrap cache ⇒ exact read in the ACTIVE organisation, then the
   // existing form for that site only (live). The normal path below is unchanged.
@@ -1656,6 +1658,7 @@ function NewRequestView({ c, siteId, initialCategory = "panel" }: { c: Ctx; site
                 : null
         }
         sites={writableSites}
+        siteRequired
         mode={c.session.mode}
         busy={c.session.busy}
         onBack={() => c.go("requests")}
@@ -1714,6 +1717,7 @@ function DirectNewRequest({ c, siteId, initialCategory }: { c: Ctx; siteId: stri
               initialCategory={initialCategory}
               initialValues={{ category: initialCategory, description: "", address: site.address, postal_code: "", city: "", urgency: "scheduled", site_id: site.id }}
               sites={[only]}
+              siteRequired
               mode={session.mode}
               busy={session.busy}
               onBack={() => c.go("requests")}
@@ -2369,6 +2373,11 @@ function AppointmentPanel({
       setError("La fin du créneau doit suivre son début.");
       return;
     }
+    // O3 : un créneau passé est refusé par le serveur ; le dire avant tout envoi.
+    if (start <= Date.now()) {
+      setError("Ce créneau est déjà passé : choisissez une date et une heure à venir.");
+      return;
+    }
     setError("");
     const sentVersion = slotRevision;
     const ok = await session.operate(intervention.id, {
@@ -2512,6 +2521,9 @@ function SitesView({ c }: { c: Ctx }) {
   const alertsState = session.capabilities.professional;
   const recent = byDateDesc(scope.interventions).slice(0, 5);
   const siteName = (id?: string | null) => scope.sites.find((s) => s.id === id)?.name || "Hors site";
+  // W4 : un site archivé ne reçoit plus de demande ; il n'est plus listé parmi « Mes sites »
+  // (il reste consultable depuis « Sites archivés » du portefeuille ci-dessous).
+  const activeSites = scope.sites.filter((s) => !s.archived_at);
   return (
     <>
       <PageTitle
@@ -2535,10 +2547,10 @@ function SitesView({ c }: { c: Ctx }) {
       <section className={styles.listSection} aria-labelledby="sites-table-title">
         <div className={styles.sectionHead}>
           <h2 id="sites-table-title">
-            Mes sites <span className={styles.countPill}>{scope.sites.length}</span>
+            Mes sites <span className={styles.countPill}>{activeSites.length}</span>
           </h2>
         </div>
-        {scope.sites.length && alertsState !== "unknown" && alertsState !== "available" ? (
+        {activeSites.length && alertsState !== "unknown" && alertsState !== "available" ? (
           <Unavailable title="Alertes des sites non vérifiées" state={alertsState}>
             <p>
               Les devis à approuver et les échéances de contrôle n’ont pas pu être chargés : aucune
@@ -2549,7 +2561,7 @@ function SitesView({ c }: { c: Ctx }) {
             </button>
           </Unavailable>
         ) : null}
-        {scope.sites.length ? (
+        {activeSites.length ? (
           <div className={cx("panel", styles.tablePanel, styles.scrollX)}>
             <ScrollableTable label="Sites — tableau à défilement horizontal">
               <table className={cx(styles.table, styles.sitesTable)}>
@@ -2572,7 +2584,7 @@ function SitesView({ c }: { c: Ctx }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {scope.sites.map((s) => {
+                  {activeSites.map((s) => {
                     const f = siteFigures(s, session.data);
                     const tone = budgetTone(f.ratio ?? 0, f.over);
                     const alerts = siteAlertSummary(
@@ -2843,6 +2855,7 @@ function SiteInterventionsPanel({ session, siteId, headingId, title = "Intervent
                     {shortId(i.id)} · {dateTime(i.created_at)}
                   </small>
                 </section>
+                {i.urgency === "urgent" && <Tag tone="red">Urgent</Tag>}
                 <Badge status={i.status} />
                 <Icon name="arrow" size={16} />
               </button>
@@ -3641,8 +3654,8 @@ function DirectSiteSheet({ c, id }: { c: Ctx; id: string }) {
                   void session.refresh();
                 }}
               />
-              {!archived && <SiteAreasPanel siteId={site.id} context={session.mutationContext} demo={false} />}
-              {!archived && <SiteContactsPanel siteId={site.id} context={session.mutationContext} />}
+              <SiteAreasPanel siteId={site.id} context={session.mutationContext} demo={false} readOnly={archived} />
+              <SiteContactsPanel siteId={site.id} context={session.mutationContext} readOnly={archived} />
             </div>
             {session.mode !== "demo" && (
               <SiteComplianceRecords
@@ -3675,9 +3688,8 @@ function DirectSiteSheet({ c, id }: { c: Ctx; id: string }) {
                 canWrite={state.canWrite && site.archived_at === null}
               />
             )}
-            {/* ENT-09 / ENT-05: the EXISTING energy and co-ownership panels, only for an active site proven in
-                the current organisation (rendered by the loader only then); rights stay each panel's server
-                permissions. Archived / demo / other organisation ⇒ nothing mounted, nothing read. */}
+            {/* Energy remains limited to active sites. Archived syndic records are rendered below
+                in read-only mode after the exact site and organisation access have been verified. */}
             {!archived && session.mode !== "demo" && (
               <SiteEnergyPanel
                 key={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${site.organization_id}|${site.id}`}
@@ -3709,12 +3721,13 @@ function DirectSiteSheet({ c, id }: { c: Ctx; id: string }) {
                 headingId="site-direct-attachments"
               />
             )}
-            {!archived && session.mode !== "demo" && site.type === "syndic" && (
+            {session.mode !== "demo" && site.type === "syndic" && (
               <CoOwnershipPanel
                 key={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${site.organization_id}|${site.id}`}
                 siteId={site.id}
                 context={session.mutationContext}
                 demo={false}
+                readOnly={archived}
               />
             )}
           </div>
@@ -4533,7 +4546,7 @@ export function ReportsView({ c }: { c: Ctx }) {
           <span>{error}</span>
         </div>
       )}
-      <section className={cx("panel", styles.tablePanel)} aria-labelledby="report-table-title" data-report={live ? report.state.phase : "demo"}>
+      <section className={cx("panel", styles.tablePanel)} aria-labelledby="report-table-title" tabIndex={0} data-report={live ? report.state.phase : "demo"}>
         <div className={styles.tableHead}>
           <div>
             <h2 id="report-table-title">Budget et engagements par site</h2>

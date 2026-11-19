@@ -2,7 +2,7 @@ import {
   ApiError,
   apiError,
   dbError,
-  serverClient,
+  publicClient,
 } from "@/lib/supabase/server";
 import { published } from "@/lib/features/warranty-policy/contract";
 export const dynamic = "force-dynamic";
@@ -17,7 +17,7 @@ export async function GET(request: Request) {
       (v !== null && (!/^[1-9][0-9]{0,9}$/.test(v) || Number(v) > 2147483647))
     )
       throw new ApiError(422, "Version invalide.");
-    const db = await serverClient();
+    const db = publicClient();
     const r = await db.rpc("read_public_warranty_terms", {
       p_version: v === null ? null : Number(v),
     });

@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // Mount the public header with the production CSS and self-hosted Plus Jakarta Sans.
 // Check its layout and disclosure under both system preferences.
 import test from "node:test";
@@ -14,7 +15,7 @@ const CHROMIUM =
   process.env.QA_CHROMIUM_PATH ||
   path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 
 const ENTRY = `
 import { createElement as h } from "react";

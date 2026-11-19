@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
@@ -9,7 +10,7 @@ import { StorageApiError } from "@supabase/storage-js";
 import * as server from "../lib/supabase/server";
 
 const nodeRequire = createRequire(import.meta.url);
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const root = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..");
 const USER = "10000000-0000-4000-8000-000000000001";
 const JOB = "20000000-0000-4000-8000-000000000001";
 const ID = "30000000-0000-4000-8000-000000000001";

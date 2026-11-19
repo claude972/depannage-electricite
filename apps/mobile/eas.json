@@ -23,7 +23,7 @@
     "simulator": {
       "extends": "preview",
       "env": {
-        "EXPO_PUBLIC_HOME_SUPPORT_PREVIEW": "true"
+        "EXPO_PUBLIC_HOME_SUPPORT_PREVIEW": "false"
       }
     },
     "device": {
@@ -33,7 +33,7 @@
         "credentialsSource": "remote"
       },
       "env": {
-        "EXPO_PUBLIC_HOME_SUPPORT_PREVIEW": "true"
+        "EXPO_PUBLIC_HOME_SUPPORT_PREVIEW": "false"
       }
     }
   }

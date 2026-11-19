@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // Client « Mes demandes » server search. Real model/controller (fake api + fake timers) and a Chromium
 // mount of the REAL RequestsView from client-space (live session stub + fake fetch; demo = zero fetch).
 import test from "node:test";
@@ -192,7 +193,7 @@ test("câblage : RequestsView utilise la recherche serveur en direct, garde le f
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const ENTRY = `
 import { createElement as h, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -202,7 +203,7 @@ const w = window;
 const tick = (ms) => new Promise((r) => setTimeout(r, ms));
 const item = (n, over = {}) => (${item.toString().replace("ID(n)", "'a0000000-0000-4000-8000-' + String(n).padStart(12, '0')")})(n, over);
 const page = (items, cursor = null, total = items.length) => ({ items, total, page: { limit: 50, has_more: cursor !== null, next_cursor: cursor } });
-const session = (mode, opened, gen) => ({ mode, mutationContext: { userId: () => "${USER}", generation: () => gen.value }, go: () => {}, openIntervention: (id) => opened.push(id) });
+const session = (mode, opened, gen) => ({ mode, data: { quotes: [], payments: [] }, mutationContext: { userId: () => "${USER}", generation: () => gen.value }, go: () => {}, openIntervention: (id) => opened.push(id) });
 w.frames = async () => {
   const bodies = [];
   w.fetch = async (url, init) => {
@@ -372,7 +373,7 @@ test("app réelle (démo client « Mes demandes ») : filtrage local, recherche 
     const before = await page.locator(".request-row").count();
     await page.getByRole("button", { name: "Toutes" }).click();
     const all = await page.locator(".request-row").count();
-    await page.getByPlaceholder("Rechercher une intervention").fill("zzzz-aucun");
+    await page.getByPlaceholder("Rechercher une demande").fill("zzzz-aucun");
     await page.waitForTimeout(400);
     const none = await page.locator(".request-row").count();
     const empty = await page.getByText("Aucune intervention ne correspond à votre recherche.").count();

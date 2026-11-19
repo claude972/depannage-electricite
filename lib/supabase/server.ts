@@ -29,6 +29,17 @@ export async function serverClient() {
     },
   });
 }
+/** Anonymous client for public reads: never forwards the visitor's session cookies, so an
+ * expired or revoked session cannot turn public information into a 401/403. */
+export function publicClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !key)
+    throw new ApiError(503, "Les informations publiques sont momentanément indisponibles.");
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+}
 export async function authenticatedClient(request?: Request) {
   const authorization = request?.headers.get("authorization");
   if (authorization != null) {
@@ -91,6 +102,10 @@ export function assertOrigin(request: Request) {
   if (origin && origin !== new URL(request.url).origin)
     throw new ApiError(403, "Origine de la requête non autorisée.");
 }
+const KNOWN_REFUSALS: Record<string, string> = {
+  "Approval required": "Ce devis doit d’abord être approuvé par votre organisation (règle d’approbation du site). Il pourra ensuite être accepté.",
+  "Advanced approval required for exact quote": "Ce devis doit d’abord être approuvé dans le circuit de votre organisation, pour cette version exacte. Il pourra ensuite être accepté.",
+};
 export function dbError(error: { code?: string; message?: string } | null) {
   if (!error) return;
   const code = error.code;
@@ -102,6 +117,9 @@ export function dbError(error: { code?: string; message?: string } | null) {
   if (code === "42501" || code === "PGRST301")
     throw new ApiError(403, "Vous n’avez pas accès à cette action.");
   if (code === "P0002") throw new ApiError(404, "Ce dossier est introuvable.");
+  // Known business refusals keep their real reason (never « refresh » for a rule that still applies).
+  if (code === "P0001" && error.message && KNOWN_REFUSALS[error.message])
+    throw new ApiError(409, KNOWN_REFUSALS[error.message]);
   if (code === "23505" || code === "P0001")
     throw new ApiError(
       409,

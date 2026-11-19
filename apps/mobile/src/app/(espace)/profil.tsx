@@ -79,6 +79,7 @@ export default function Profile() {
         <AccountTile icon="lock" label="Mes données" onPress={() => openSection('privacy')} />
       </View>
       <View>
+        <AccountRow icon="activity" label="Notifications" hint="Actualités et suivi de votre espace" onPress={() => router.push('/notifications')} />
         <AccountRow icon="account" label="Informations personnelles" hint="Nom et coordonnées" onPress={() => openSection('identity')} />
         {profile.role === 'client' && <AccountRow icon="pin" label="Adresses enregistrées" hint="Adresses d’intervention" onPress={() => openSection('addresses')} />}
         <AccountRow icon="activity" label={profile.role === 'artisan' ? 'Mes missions' : 'Mes interventions'} hint="Historique et devis"

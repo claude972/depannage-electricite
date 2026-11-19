@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // Web push enrollment mounted for real (React root, StrictMode, local Chromium, 360 px) with injected
 // browser APIs: real MessageChannel handshake; subscribe called synchronously inside the click;
 // permission granted / default+refused / denied; unsupported; worker not ready (timeout); preference
@@ -13,13 +14,13 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
-import { withApp, skip as appSkip } from "./real-app-harness";
+import { withApp, skip as appSkip, openAccountSettings } from "./real-app-harness";
 
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
 const skip = available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)";
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const ENDPOINT = "https://push.example.test/private-endpoint-123";
 const ENTRY = `
 import { createElement as h, StrictMode } from "react";
@@ -254,7 +255,7 @@ test("app réelle : préférences de notification (démo) — note push honnête
   await withApp(async (open) => {
     for (const width of [360, 1280]) {
       const { page, errors, api } = await open("client-profile", width);
-      await page.getByRole("button", { name: "Paramètres du compte" }).click();
+      await openAccountSettings(page);
       const panel = page.locator('[data-web-push="demo"]');
       await panel.waitFor();
       assert.equal(await panel.count(), 1);

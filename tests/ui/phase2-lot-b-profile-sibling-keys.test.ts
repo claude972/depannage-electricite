@@ -2,7 +2,7 @@
 // Les panneaux de compte sont montés une seule fois dans les paramètres client ou le profil artisan.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { withApp, skip } from "./real-app-harness";
+import { withApp, skip, openAccountSettings } from "./real-app-harness";
 
 test("profils client et artisan démo : chaque panneau de compte monté une seule fois", { skip }, async () => {
   await withApp(async (open) => {
@@ -14,7 +14,7 @@ test("profils client et artisan démo : chaque panneau de compte monté une seul
           assert.equal(await page.locator("[data-client-addresses]").count(), 1);
           assert.equal(await page.locator("[data-profile-requests]").count(), 2);
           assert.equal(await page.locator("[data-account-data],[data-saved-methods],[data-subscriptions]").count(), 0);
-          await page.getByRole("button", { name: "Paramètres du compte" }).click();
+          await openAccountSettings(page);
         }
         await page.locator("[data-account-data]").waitFor();
         const where = `${route} ${width}px`;

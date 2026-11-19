@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // ADM-10 / PUB-06 mounted (React root, StrictMode, Chromium 390 and 1280 px). Real WarrantyPanel on
 // the paged GET /api/warranty: the REAL claim form only after proof (enabled + has_active === false),
 // never while loading / on error / has_active true / global null; old case reached by pagination with
@@ -17,7 +18,7 @@ const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_module
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
 const skip = available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)";
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 
 const FIXTURES = `
 const D = (n) => "d0000000-0000-4000-8000-" + String(n).padStart(12, "0");

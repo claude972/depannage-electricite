@@ -14,7 +14,7 @@ import { createDemoFeatureClients, createFeatureClients, planningProbeRange, rep
 import type { PlatformAccess } from "../lib/features/platform-operations/types";
 import { PLATFORM_DEMO } from "../lib/features/platform-operations/demo";
 import { demoNotificationPage } from "../lib/features/notifications/demo";
-import { createRevalidationScheduler } from "./app/revalidate";
+import { createRevalidationScheduler, startAccessRevalidation } from "./app/revalidate";
 import { createRefreshCoordinator, refreshContextKey, type ReadResult, type RefreshCoordinator } from "./app/workspace-refresh";
 import { safeCheckoutUrl } from "./app/booking-status";
 import { CARD_RETURN_COPY, PENDING_COPY, cancelCardReturn, cardAction, lookupPending, sameReturn, verifyCardReturn, type CardReturn } from "./app/card-return";
@@ -156,6 +156,26 @@ const AdminSpace = dynamic(() => import("./role/admin-space").then(module => mod
 const DRAFT_KEY = "courant-request-draft";
 const INVITE_KEY = "courant-invitation-code";
 type AuthMode = "login" | "signup" | "reset";
+
+// Explicit result of a dossier action, so the user knows what was recorded (never a generic
+// « modification » after refusing or accepting a quote). Demo wording says nothing was sent.
+const ACTION_NOTICES: Record<string, string> = {
+  accept_mission: "Mission acceptée : le dossier est maintenant le vôtre.",
+  decline_offer: "Offre déclinée.",
+  send_quote: "Devis envoyé au client.",
+  accept_quote: "Devis accepté. Il sert de base au règlement après l’intervention.",
+  reject_quote: "Devis refusé. L’artisan peut vous proposer une nouvelle version.",
+  start: "Intervention démarrée.",
+  complete: "Intervention terminée.",
+  save_appointment: "Rendez-vous enregistré.",
+  save_report: "Compte rendu enregistré.",
+  sign_report: "Compte rendu signé.",
+};
+export function actionNotice(name: string, demo: boolean): string {
+  const text = ACTION_NOTICES[name];
+  if (!text) return demo ? "Modification enregistrée dans la démonstration." : "Modification enregistrée.";
+  return demo ? `${text} (démonstration, rien n’est envoyé)` : text;
+}
 
 export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }: { supportWhatsAppPhone?: string; showSupportPreview?: boolean } = {}) {
   const [mode, setMode] = useState<Mode>("public");
@@ -402,12 +422,19 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
       if (document.visibilityState === "visible") scheduler.signal();
     };
     const onFocus = () => scheduler.signal();
+    const stopAccessRevalidation = startAccessRevalidation(revalidateNow, () =>
+      modeRef.current === "live" && roleRef.current === "manager" &&
+      document.visibilityState === "visible" && navigator.onLine !== false,
+    );
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onFocus);
+    window.addEventListener("online", onFocus);
     return () => {
       scheduler.cancel();
+      stopAccessRevalidation();
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener("online", onFocus);
     };
   }, [mode, revalidateNow]);
 
@@ -555,33 +582,35 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
         // Same-tab return from the signup email with a request prepared before: open its
         // confirmation (never an automatic POST), as the login chain does.
         const resume = mode === "live" && pendingDraft !== null;
-        setNotice(
-          resume
-            ? "Votre adresse est confirmée. Vérifiez votre demande puis confirmez son envoi."
-            : mode === "live"
-              ? "Votre adresse est confirmée. Votre espace est chargé."
-              : "Votre adresse est confirmée. Connectez-vous pour ouvrir votre espace.",
-        );
         if (resume) navigate("new");
         if (mode === "public") {
           setAuthMode("login");
           navigate("auth");
         }
+        // Navigation clears feedback. Set it afterwards, and never certify an email from
+        // a forgeable URL parameter: only the independently loaded session is known here.
+        setNotice(
+          resume
+            ? "Votre session est ouverte. Vérifiez votre demande puis confirmez son envoi."
+            : mode === "live"
+              ? "Votre espace est chargé."
+              : "Connectez-vous pour vérifier votre compte et ouvrir votre espace.",
+        );
       } else {
+        if (mode === "public") navigate("auth");
         setError(
           "Ce lien de confirmation est expiré ou déjà utilisé. Demandez un nouveau lien depuis la connexion.",
         );
-        if (mode === "public") navigate("auth");
       }
       setReturnContext(null);
       return;
     }
     if (mode !== "live") {
+      setAuthMode("login");
+      navigate("auth");
       setError(
         "Connectez-vous pour relire l’état de votre retour Stripe. Aucun statut n’est déduit du lien.",
       );
-      setAuthMode("login");
-      navigate("auth");
       setReturnContext(null);
       return;
     }
@@ -937,7 +966,7 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
     ctx.notice(
       name === "simulate_payment"
         ? "Paiement simulé dans la démonstration. Aucun débit bancaire n’a été effectué."
-        : "Modification enregistrée dans la démonstration.",
+        : actionNotice(name, true),
     );
   }
 
@@ -957,7 +986,7 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
         throw new Error("Le devis affiché est introuvable. Rechargez le dossier.");
       await api(`/api/interventions/${id}/actions`, { action: name, ...extra });
       if (ctx.alive()) await refresh();
-      ctx.notice("Modification enregistrée.");
+      ctx.notice(actionNotice(name, false));
     });
   }
 
@@ -1061,7 +1090,7 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
         ops[id] = entry;
         saveDemoOps(ops);
         ctx.when(setData)(next);
-        ctx.notice("Modification enregistrée dans la démonstration.");
+        ctx.notice(actionNotice(body.action, true));
         return;
       }
       try {
@@ -1073,7 +1102,7 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
         throw e;
       }
       if (ctx.alive()) await refresh();
-      ctx.notice("Modification enregistrée.");
+      ctx.notice(actionNotice(body.action, false));
     });
   }
 

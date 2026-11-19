@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // Artisan mission history mounted (React root, StrictMode, Chromium 390 px) with the host logic of
 // artisan-space: labels without a number until the server's counts are read, then exact counts;
 // « Afficher plus » appends; a row opens through openIntervention (id outside any cache); segment
@@ -16,7 +17,7 @@ const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_module
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
 const skip = available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)";
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const ENTRY = `
 import { createElement as h, StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";

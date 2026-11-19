@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // Notification centre MOUNTED in Chromium (real React root, <StrictMode>, fake client with held
 // replies): a « Toutes » continuation held by the network is dropped after switching to « Non lues »
 // (rows, cursor, loading, error), one continuation in flight, reload fence, and a confirmed mark
@@ -11,7 +12,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
@@ -22,7 +23,17 @@ import { createElement as h, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { NotificationCenter } from "./components/features/notifications/notification-center";
 const w = window;
-const tick = (ms) => new Promise((r) => setTimeout(r, ms));
+// Wait at least ms, then until React has stopped committing (no DOM mutation for 60 ms, cap 4 s):
+// fixed sleeps alone failed under full-suite CPU load. Held replies never resolve on their own,
+// so in-flight states stay observable.
+const tick = (ms) => new Promise((done) => setTimeout(() => {
+  let last = performance.now();
+  const seen = new MutationObserver(() => { last = performance.now(); });
+  seen.observe(document.body, { subtree: true, childList: true, attributes: true, characterData: true });
+  const end = last + 4000;
+  const poll = () => { const now = performance.now(); if (now - last >= 60 || now >= end) { seen.disconnect(); done(); } else setTimeout(poll, 20); };
+  setTimeout(poll, 20);
+}, ms));
 const AT = "2026-11-07T10:00:00.000Z";
 // 60 rows, newest first; even index unread. « Toutes »: 25 + 25 + 10. « Non lues »: 25 + 5.
 const ROWS = Array.from({ length: 60 }, (_, i) => ({ id: "n" + String(i + 1).padStart(2, "0"), kind: "quote_received", title: "Notif " + (i + 1), body: "Corps " + (i + 1), intervention_id: null, organization_id: null, site_id: null, payload: {}, read_at: i % 2 === 0 ? null : AT, created_at: new Date(Date.parse(AT) - i * 60000).toISOString() }));

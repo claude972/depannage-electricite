@@ -698,6 +698,10 @@ export type AdminInterventionDetail = {
   quotes: Quote[];
   quotes_limit: number;
   quotes_limited: boolean;
+  audit?: { status: "error" } | {
+    status: "ok"; items: { id: string; actor_id: string | null; action: string; created_at: string }[];
+    limit: number; limited: boolean;
+  };
 };
 
 // Contract WEB-PWA-QUOTE-DRAFT-001 (published before implementation): private persistent quote

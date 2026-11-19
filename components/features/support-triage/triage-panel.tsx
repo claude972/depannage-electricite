@@ -110,7 +110,7 @@ export function SupportTriagePanel({ ticketId, resolved, demo, context, fetcher 
               <dd data-support-triage-assignee="">
                 {data.triage.assigned_to ? (
                   <>
-                    {data.triage.assignee_name || `Opérateur ${shortId(data.triage.assigned_to)}`}
+                    {data.triage.assignee_name || "Opérateur"} · réf. {data.triage.assigned_to.slice(-8)}{data.triage.assigned_to === context.userId() ? " (vous)" : ""}
                     {!data.triage.assignee_active && <> {" "}<Tag tone="amber">{TRIAGE_COPY.inactive}</Tag></>}
                   </>
                 ) : (
@@ -134,7 +134,7 @@ export function SupportTriagePanel({ ticketId, resolved, demo, context, fetcher 
                     {e.action === "assign" ? (e.assigned_to ? "Attribution" : "Attribution retirée") : e.escalated ? "Escalade" : "Escalade levée"}
                   </strong>
                   <span className={styles.hint}>
-                    {dateTime(e.created_at)} · par l’opérateur {shortId(e.actor_id)} · version {e.version}
+                    {dateTime(e.created_at)} · par l’opérateur réf. {e.actor_id.slice(-8)} · version {e.version}
                   </span>
                   <span>Motif : {e.reason}</span>
                 </li>
@@ -291,8 +291,8 @@ function OperatorPicker({ context, fetcher, selected, onSelect, current }: { con
       <div className={styles.options}>
         {state.rows.map((o) => (
           <label key={o.id} className={styles.choice}>
-            <input type="radio" name="triage-operator" checked={selected?.id === o.id} disabled={o.id === current} onChange={() => onSelect(o)} />
-            {o.name || `Opérateur ${shortId(o.id)}`}{o.id === current ? " (déjà attribuée)" : ""}
+            <input type="radio" name="triage-operator" aria-label={`${o.name || "Opérateur"} · référence ${o.id}${o.id === context.userId() ? " (vous)" : ""}${o.id === current ? " (déjà attribuée)" : ""}`} checked={selected?.id === o.id} disabled={o.id === current} onChange={() => onSelect(o)} />
+            {o.name || "Opérateur"} · réf. {o.id.slice(-8)}{o.id === context.userId() ? " (vous)" : ""}{o.id === current ? " (déjà attribuée)" : ""}
           </label>
         ))}
       </div>

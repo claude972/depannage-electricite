@@ -112,11 +112,26 @@ export function PreferredAddressNote({ preferred, onClear }: { preferred: Prefer
   );
 }
 
+/** Octets de tête JPEG (FF D8 FF), PNG (89 50 4E 47) ou WebP (RIFF….WEBP). Lecture impossible ⇒ on laisse le serveur décider. */
+async function looksLikeImage(file: File): Promise<boolean> {
+  try {
+    const b = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+    if (b.length < 12) return false;
+    const jpeg = b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
+    const png = b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47;
+    const webp = b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50;
+    return jpeg || png || webp;
+  } catch {
+    return true;
+  }
+}
+
 export function RequestForm({
   initialCategory,
   categoryPreselected = true,
   initialValues,
   sites,
+  siteRequired = false,
   mode,
   busy,
   onBack,
@@ -135,6 +150,9 @@ export function RequestForm({
   categoryPreselected?: boolean;
   initialValues: RequestValues | null;
   sites: Site[];
+  /** Enterprise space: the request must belong to one of the organisation's sites (a site-less
+   *  request would leave the organisation's lists). */
+  siteRequired?: boolean;
   mode: string;
   busy: boolean;
   onBack: () => void;
@@ -158,6 +176,7 @@ export function RequestForm({
   const [step, setStep] = useState(1);
   const [categoryChosen, setCategoryChosen] = useState(Boolean(initialValues) || categoryPreselected);
   const [categoryError, setCategoryError] = useState("");
+  const [siteError, setSiteError] = useState("");
   const categoryChoices = useRef<HTMLDivElement>(null);
   const phase = addressFirst && step < 3 ? 3 - step : step;
   const labels = addressFirst ? ["Le lieu et le besoin", "Le problème"] : ["Le problème", "Le lieu et le besoin"];
@@ -183,8 +202,14 @@ export function RequestForm({
   }, []);
   const [photos, setPhotos] = useState<File[]>(() => (initialPhotos ?? []).slice(0, 6));
   const [photoError, setPhotoError] = useState("");
-  function addPhotos(list: FileList | null) {
-    if (!list) return;
+  // O2 : le serveur refuse un fichier dont le contenu n'est pas une image (octets de tête). Le même
+  // contrôle est fait dès la sélection pour le dire tout de suite ; le serveur reste l'autorité.
+  const photoPending = useRef(false);
+  const [checkingPhotos, setCheckingPhotos] = useState(false);
+  async function addPhotos(list: FileList | null) {
+    if (!list || photoPending.current) return;
+    photoPending.current = true;
+    setCheckingPhotos(true);
     const next = [...photos];
     const problems: string[] = [];
     for (const file of Array.from(list)) {
@@ -194,10 +219,13 @@ export function RequestForm({
       }
       const invalid = validateUpload(file, PHOTO_TYPES);
       if (invalid) problems.push(`${file.name} : ${invalid}`);
+      else if (!(await looksLikeImage(file))) problems.push(`${file.name} : le contenu ne correspond pas à une image JPEG, PNG ou WebP.`);
       else if (!next.some((f) => f.name === file.name && f.size === file.size)) next.push(file);
     }
     setPhotos(next);
     setPhotoError(problems.join(" "));
+    photoPending.current = false;
+    setCheckingPhotos(false);
   }
   const [values, setValues] = useState<RequestValues>(() => {
     const fresh: RequestValues = initialValues || { category: initialCategory, description: initialDescription, address: "", postal_code: "", city: "", urgency: initialUrgency };
@@ -221,6 +249,7 @@ export function RequestForm({
   const c = category(values.category);
   function next(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (photoPending.current) return;
     if (phase === 1 && !categoryChosen) {
       setCategoryError("Choisissez le problème qui correspond à votre demande.");
       categoryChoices.current?.querySelector("button")?.focus();
@@ -301,16 +330,18 @@ export function RequestForm({
               error={photoError || undefined}
             >
               <input
+                disabled={checkingPhotos || busy}
                 key="request-photos"
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
                 multiple
                 onChange={(e) => {
-                  addPhotos(e.target.files);
+                  void addPhotos(e.target.files);
                   e.target.value = "";
                 }}
               />
             </Field>
+            {checkingPhotos && <p role="status">Vérification des photos…</p>}
             {photos.length > 0 && (
               <ul className="photo-list" aria-label="Photos sélectionnées">
                 {photos.map((f, index) => (
@@ -322,6 +353,7 @@ export function RequestForm({
                     <button
                       type="button"
                       className="icon-button"
+                      disabled={checkingPhotos || busy}
                       aria-label={`Retirer ${f.name}`}
                       onClick={() => setPhotos(photos.filter((_, j) => j !== index))}
                     >
@@ -343,17 +375,17 @@ export function RequestForm({
           <>
             <h2 ref={stepTitle} tabIndex={-1} style={STEP_TITLE_STYLE}>Où faut-il intervenir ?</h2>
             {sites.length > 0 && (
-              <Field label="Site professionnel (facultatif)">
+              <Field label={siteRequired ? "Site professionnel" : "Site professionnel (facultatif)"} error={siteError}>
                 <select
+                  required={siteRequired}
                   value={values.site_id || ""}
-                  onChange={(e) =>
-                    setValues({
-                      ...values,
-                      site_id: e.target.value || undefined,
-                    })
-                  }
+                  onInvalid={() => setSiteError("Choisissez le site professionnel concerné par cette demande.")}
+                  onChange={(e) => {
+                    setSiteError("");
+                    setValues({ ...values, site_id: e.target.value || undefined });
+                  }}
                 >
-                  <option value="">Adresse personnelle ou autre lieu</option>
+                  <option value="">{siteRequired ? "Choisir un site" : "Adresse personnelle ou autre lieu"}</option>
                   {sites.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
@@ -525,7 +557,7 @@ export function RequestForm({
           ) : (
             <span />
           )}
-          <button type="submit" className="button primary" disabled={busy}>
+          <button type="submit" className="button primary" disabled={busy || checkingPhotos}>
             {busy
               ? finalStep
                 ? "Veuillez patienter…"
@@ -880,9 +912,22 @@ export function MessageCenter({
   // disabled and makes no call. Labels come from the server state only.
   const readActive = live && Boolean(context) && Boolean(id) && Boolean(target) && !unavailable;
   const readState = useMessageReadState({ context: context ?? NO_READ_CONTEXT, interventionId: readActive ? id : null, messages: rows, demo: !readActive });
+  const threadsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const list = threadsRef.current;
+    const selected = list?.querySelector<HTMLButtonElement>("button.selected");
+    if (!list || !selected || list.scrollWidth <= list.clientWidth) return;
+    const bounds = list.getBoundingClientRect();
+    const item = selected.getBoundingClientRect();
+    const left = bounds.left + list.clientLeft;
+    const right = left + list.clientWidth;
+    // Move only the horizontal thread strip, never the page or the message history.
+    if (item.left < left) list.scrollLeft += item.left - left;
+    else if (item.right > right) list.scrollLeft += item.right - right;
+  }, [id]);
   return (
     <section className="panel messages-layout">
-      <div className="message-threads">
+      <div className="message-threads" ref={threadsRef}>
         <h2>Interventions</h2>
         {interventions.map((i) => (
           <button
@@ -1851,7 +1896,7 @@ export function ReviewForm({
   busy: boolean;
   onSubmit: (values: { rating: number; body: string }) => Promise<void>;
 }) {
-  const [rating, setRating] = useState(5);
+  const [rating, setRating] = useState<number | null>(null);
   const [body, setBody] = useState("");
   if (existing)
     return (
@@ -1870,17 +1915,21 @@ export function ReviewForm({
       className="panel review-panel"
       onSubmit={(e) => {
         e.preventDefault();
+        if (busy || rating === null) return;
         void onSubmit({ rating, body });
       }}
     >
       <h2>Comment s’est passée l’intervention ?</h2>
       <p>Votre retour porte sur cette intervention terminée et réglée.</p>
+      <p>Choisissez une note pour enregistrer votre avis.</p>
       <fieldset className="rating-options">
         <legend>Votre note sur cinq</legend>
         {[1, 2, 3, 4, 5].map((n) => (
           <label key={n}>
             <input
               type="radio"
+              required
+              disabled={busy}
               name="rating"
               value={n}
               checked={rating === n}
@@ -1901,7 +1950,7 @@ export function ReviewForm({
           placeholder="Ce qui vous a été utile, ce qui pourrait être amélioré…"
         />
       </Field>
-      <button className="button primary" type="submit" disabled={busy}>
+      <button className="button primary" type="submit" disabled={busy || rating === null}>
         Enregistrer mon avis
       </button>
     </form>

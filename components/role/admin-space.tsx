@@ -226,6 +226,15 @@ export function actorLabel(
   return shortUser(actorId);
 }
 
+export function dossierAuditLabel(action: string): string {
+  const labels: Record<string, string> = {
+    create: "Demande créée", created: "Demande créée", appointment_saved: "Rendez-vous enregistré", accept_mission: "Mission acceptée", admin_reassigned: "Artisan réaffecté",
+    send_quote: "Devis envoyé", accept_quote: "Devis accepté", start: "Intervention démarrée",
+    complete: "Intervention clôturée", cancel: "Demande annulée", payment_confirmed: "Paiement confirmé",
+  };
+  return labels[action] ?? "Événement du dossier";
+}
+
 // ---- Local building blocks -----------------------------------------------------------------
 function Kpi({
   icon,
@@ -2036,7 +2045,7 @@ function DossierTable<T extends RowLike>({
           render: (i) => (
             <span className={styles.cellStack}>
               {category(i.category).label}
-              <small>{i.urgency === "urgent" ? "Demande urgente" : "À planifier"}</small>
+              <small>{i.urgency === "urgent" ? "Demande urgente" : "Demande non urgente"}</small>
             </span>
           ),
         },
@@ -3482,7 +3491,7 @@ function DossierView({
               <div>
                 <h2>{c.label}</h2>
                 <span>
-                  {shortId(intervention.id)} · {intervention.urgency === "urgent" ? "Demande urgente" : "Intervention à planifier"}
+                  {shortId(intervention.id)} · {intervention.urgency === "urgent" ? "Demande urgente" : "Demande non urgente"}
                 </span>
               </div>
               <span className={styles.badges}>
@@ -3677,6 +3686,22 @@ function DossierView({
                 </dl>
               </>
             )}
+          </Panel>
+
+          <Panel title="Journal du dossier" intro="Actions enregistrées, de la plus récente à la plus ancienne.">
+            {detailStale && <p role="status">La dernière lecture a échoué : ce journal provient de la lecture précédente.</p>}
+            {detail?.audit?.status === "ok" ? <>
+              {detail.audit.items.length ? <ul className={styles.checks}>
+                {detail.audit.items.map(event => <li key={event.id}>
+                  <span>{dossierAuditLabel(event.action)} · {actorLabel(event.actor_id, { selfId: session.profileId, participants: operations?.participants, overview })}</span>
+                  <span>{dateTime(event.created_at)}</span>
+                </li>)}
+              </ul> : <p>Aucune action enregistrée dans le journal de ce dossier.</p>}
+              <p className={styles.muted}>{detail.audit.limited ? `Affichage limité aux ${detail.audit.limit} dernières actions.` : "Toutes les actions du journal sont affichées."}</p>
+            </> : <>
+              <p role="status">{demo ? "Le journal du dossier n’est pas simulé dans cette démonstration." : detail === undefined ? "Chargement du journal du dossier…" : "Le journal du dossier est momentanément indisponible."}</p>
+              {!demo && <button type="button" className="button outline" onClick={() => setDetailAttempt(value => value + 1)}>Recharger le journal</button>}
+            </>}
           </Panel>
 
           <Panel title="Messages du dossier" count={messages.length} intro="Échanges entre le client, l’artisan et l’exploitant.">

@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // RefundExecutionPanel MOUNTED in Chromium in a real React root (fake API, no network):
 // <StrictMode> mount → cleanup → mount ends ready with the SECOND mount's GET (the first one is
 // dropped); capability revoked by a rerender (same uid / generation) after the confirmation step or
@@ -11,7 +12,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM =
   process.env.QA_CHROMIUM_PATH ||

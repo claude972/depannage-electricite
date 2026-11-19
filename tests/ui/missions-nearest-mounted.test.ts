@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // « Plus proches d’abord » + radius fixes, mounted for real (React root, StrictMode, local Chromium)
 // with the SAME host logic as artisan-space Missions (confirmed radius ⇒ selector; key =
 // identity|confirmed radius rev|order). Server simulated per the 12f62f2 route: ranked pages carry
@@ -17,7 +18,7 @@ const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_module
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
 const skip = available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)";
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const ENTRY = `
 import { createElement as h, StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -268,6 +269,8 @@ test("app réelle : « Missions » artisan (démo) — aucun sélecteur de tri, 
         await page.goto("about:blank");
         api.length = 0;
         await page.goto(`${origin}/#demo/artisan-missions`);
+        // The radius panel sits in the collapsed « Zone de recherche » disclosure: open it like a user.
+        await page.getByText("Zone de recherche", { exact: false }).first().click();
         await page.locator('[data-mission-radius="demo"]').waitFor();
         await page.locator("[data-available-missions]").waitFor();
         assert.equal(await page.locator("[data-available-sort]").count(), 0, where);

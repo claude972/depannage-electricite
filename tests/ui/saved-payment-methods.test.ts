@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // FIN-08 saved payment methods (client « Mon profil »). Real model + SSR + a Chromium mount of the
 // real panel (fake api) + real-app demo wiring.
 import test from "node:test";
@@ -11,7 +12,7 @@ import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { build } from "esbuild";
 import { loadModule } from "../documents/harness";
-import { withApp, skip } from "./real-app-harness";
+import { withApp, skip, openAccountSettings } from "./real-app-harness";
 import type * as Model from "../../components/features/saved-payment-methods/model";
 
 const m = loadModule("components/features/saved-payment-methods/model.ts") as unknown as typeof Model;
@@ -173,7 +174,7 @@ test("états : 403 refus honnête, 503 réessai, vide, pagination after, démo s
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const ENTRY = `
 import { createElement as h, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -236,7 +237,7 @@ test("panneau monté (Chromium, StrictMode) : suppression après confirmation se
 test("app réelle (paramètres client démo) : note honnête, aucun appel /api, pas de débordement à 390", { skip }, async () => {
   await withApp(async (open) => {
     const { page, errors, api } = await open("client-profile", 390);
-    await page.getByRole("button", { name: "Paramètres du compte" }).click();
+    await openAccountSettings(page);
     await page.locator('[data-saved-methods="demo"]').waitFor();
     const r = await page.evaluate(() => ({ note: document.querySelector('[data-saved-methods="demo"]')?.textContent ?? null, overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth }));
     assert.match(r.note ?? "", /aucune banque n’est contactée/);

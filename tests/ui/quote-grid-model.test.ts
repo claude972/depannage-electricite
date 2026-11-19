@@ -130,7 +130,8 @@ test("rendus : accès propriétaire seulement (sinon rien) ; source « Basé sur
   assert.match(draftSrc, /disabled=\{locked \|\| !saveValid \|\| gridLinked\}/);
   assert.match(draftSrc, /const gridLinked = !!gridLink && !!envelope && envelope\.version === gridLink\.version && !dirty;/);
   assert.match(draftSrc, /onApplied=\{\(env, source\) => \{\s*applyEnvelope\(env, true\);/);
-  assert.match(draftSrc, /if \(dirty\) \{\s*const saved = await save\(envelope\);/, "send saves only when dirty");
+  // Send saves only when dirty, or when unused 0 € template lines are dropped before publication.
+  assert.match(draftSrc, /if \(dirty \|\| trimmed\) \{\s*const saved = await save\(envelope, trimmed \? kept! : undefined\);/, "send saves only when dirty or trimmed");
   for (const f of ["components/role/client-space.tsx", "components/role/artisan-space.tsx", "components/role/enterprise-space.tsx"]) assert.match(readFileSync(f, "utf8"), /<ContractSourceLine key=\{\w+\.id\} quoteId=\{\w+\.id\} demo=/, f);
   assert.match(readFileSync("components/role/enterprise-space.tsx", "utf8"), /<QuoteGridAccessPanel interventionId=\{intervention\.id\} context=\{session\.mutationContext\} demo=\{demo\} \/>/);
 });

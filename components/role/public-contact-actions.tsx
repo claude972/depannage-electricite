@@ -39,7 +39,7 @@ export function PublicContactActions({ phoneHref, whatsappPhone, inline = false,
 
   return (
     <>
-      {inline ? phoneAction : <div className={`${styles.actions} ${whatsappOnly ? styles.persistentWhatsapp : ""}`} role="group" aria-label="Contacter DomDépannage" data-floating-contact="">
+      {inline ? phoneAction : <div className={`${styles.actions} ${whatsappOnly ? styles.persistentWhatsapp : ""}`} role="group" aria-label="Contacter DomDépannage" data-floating-contact="" data-whatsapp-dock={whatsappOnly ? "" : undefined}>
         {!whatsappOnly && phoneAction}
         {whatsappHref
           ? <a className={styles.whatsapp} href={whatsappHref} aria-label={SUPPORT_CONTACT.whatsapp.label}>{whatsappIcon}</a>

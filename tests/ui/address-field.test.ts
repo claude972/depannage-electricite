@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // FASTSPLIT-CLIENT-ADDRESS-NAME-001 — address field leaf: pure controller with fake timers,
 // deferred search/reverse promises and a fake geolocation; SSR of the real component.
 import test from "node:test";
@@ -380,7 +381,7 @@ test("reset() : recherche annulée, liste vidée, géolocalisation en attente ig
 // ---- Real React component in local Chromium (root P2) -------------------------------------
 // The real <AddressField> rendered by a real React root under a tiny parent that owns the value
 // (esbuild browser bundle served on 127.0.0.1). Skipped — never passed — without local Chromium.
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM =
   process.env.QA_CHROMIUM_PATH ||

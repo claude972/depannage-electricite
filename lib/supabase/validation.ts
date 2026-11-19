@@ -11,6 +11,7 @@ export const quoteLine = z
 export async function validated<T>(
   request: Request,
   schema: z.ZodType<T>,
+  invalidMessage?: string,
 ): Promise<T> {
   if (Number(request.headers.get("content-length") || 0) > 65536)
     throw new ApiError(413, "Le contenu envoyé est trop volumineux.");
@@ -21,7 +22,7 @@ export async function validated<T>(
   if (!result.success)
     throw new ApiError(
       422,
-      result.error.issues[0]?.message ?? "Vérifiez les informations saisies.",
+      invalidMessage ?? result.error.issues[0]?.message ?? "Vérifiez les informations saisies.",
     );
   return result.data;
 }

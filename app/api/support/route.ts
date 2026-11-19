@@ -17,7 +17,7 @@ function failed(error: unknown) { const response = apiError(error); response.hea
 function count(value: number | null): number { if (value === null || !Number.isSafeInteger(value) || value < 0) throw new ApiError(503, "Le comptage des demandes est indisponible."); return value; }
 export async function GET(request: Request) {
   try {
-    const { db, user } = await authenticatedClient();
+    const { db, user } = await authenticatedClient(request);
     const actor = await db.from("profiles").select("role").eq("id", user.id).single(); dbError(actor.error);
     const params = new URL(request.url).searchParams;
     const allowed = new Set(["limit", "cursor", "scope", "status", "intervention_id", "q"]);
@@ -68,7 +68,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     assertOrigin(request);
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     if (new URL(request.url).searchParams.size) invalid();
     const data = await validated(request, createSchema);
     const result = await db.rpc("create_support_ticket", { p_request_id: data.request_id, p_subject: data.subject, p_body: data.body, p_intervention_id: data.intervention_id });

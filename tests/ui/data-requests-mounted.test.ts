@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // SYS-07 mounted for real (React root, StrictMode, local Chromium, 360 px light/dark):
 // client « Mes demandes d’effacement » inside AccountDataPanel (opt-in): error ⇒ retry, pagination,
 // distinct labels, never « effacé » on a request; the POST receipt's request shown and the list
@@ -17,7 +18,7 @@ const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_module
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
 const skip = available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)";
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const ENTRY = `
 import { createElement as h, StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";

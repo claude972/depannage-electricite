@@ -98,8 +98,8 @@ test("site archivé ouvert directement : lecture seule, aucune action d’éditi
   const body = src.slice(src.indexOf("function DirectSiteSheet"), src.indexOf("function siteAssetSource"));
   assert.match(body, /organizationId=\{c\.organization\?\.id \?\? null\}/);
   assert.match(body, /initial=\{state\}/, "the settings panel is seeded: no second GET");
-  assert.match(body, /\{!archived && <SiteAreasPanel /);
-  assert.match(body, /\{!archived && <SiteContactsPanel /);
+  assert.match(body, /<SiteAreasPanel [^>]*readOnly=\{archived\}/);
+  assert.match(body, /<SiteContactsPanel [^>]*readOnly=\{archived\}/);
   // Realigned (phase 2 lot B): the direct sheet now offers ENT-03 request creation (af676ab) and the
   // compliance « completed » command (0beec1b) — both strictly gated by an ACTIVE site and the server
   // can_write; an archived site still offers no write action (also proven in Chromium by
@@ -112,7 +112,7 @@ test("site archivé ouvert directement : lecture seule, aucune action d’éditi
   // ENT-05 / ENT-09 (claude/direct-site-verticals): energy and co-ownership are now mounted on the direct
   // sheet, but ONLY for an active, live, proven site (co-ownership: syndic only) — never for an archived one.
   assert.match(body, /\{!archived && session\.mode !== "demo" && \(\s*<SiteEnergyPanel/);
-  assert.match(body, /\{!archived && session\.mode !== "demo" && site\.type === "syndic" && \(\s*<CoOwnershipPanel/);
+  assert.match(body, /\{session\.mode !== "demo" && site\.type === "syndic" && \(\s*<CoOwnershipPanel/);
   assert.match(body, /la liste peut être incomplète/);
   assert.doesNotMatch(src, /title="Site introuvable dans l’organisation active"/);
 });

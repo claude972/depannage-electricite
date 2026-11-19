@@ -28,18 +28,19 @@ import {
 } from "./areas-model";
 import styles from "./site-areas.module.css";
 
-type PanelProps = { siteId: string; api?: AreasApi; context?: AreasContext; demo?: boolean; /** Tests only. */ initial?: AreasState; newId?: () => string | null };
+type PanelProps = { siteId: string; readOnly?: boolean; api?: AreasApi; context?: AreasContext; demo?: boolean; /** Tests only. */ initial?: AreasState; newId?: () => string | null };
 /** Keyed by uid + generation + mode + site: any identity or scope change is a fresh panel. */
 export function SiteAreasPanel(props: PanelProps) {
   const ctx = props.context ?? DEFAULT_AREAS_CONTEXT;
-  return <SitePanel key={`${ctx.userId() ?? "-"}|${ctx.generation()}|${props.demo ? "demo" : "live"}|${props.siteId}`} {...props} />;
+  return <SitePanel key={`${ctx.userId() ?? "-"}|${ctx.generation()}|${props.demo ? "demo" : "live"}|${props.siteId}|${Boolean(props.readOnly)}`} {...props} />;
 }
 const depthClass = (d: number) => (d === 2 ? styles.depth2 : d === 3 ? styles.depth3 : d === 4 ? styles.depth4 : "");
 
-function SitePanel({ siteId, api, context = DEFAULT_AREAS_CONTEXT, demo = false, initial, newId = areaUuid }: PanelProps) {
-  const [state, setStateRaw] = useState<AreasState>(initial ?? AREAS_INITIAL);
+function SitePanel({ siteId, api, context = DEFAULT_AREAS_CONTEXT, demo = false, initial, readOnly = false, newId = areaUuid }: PanelProps) {
+  const [state, setStateRaw] = useState<AreasState>(() => { const value = initial ?? AREAS_INITIAL; return readOnly ? { ...value, canWrite: false, pending: null } : value; });
   const ref = useRef(state);
   const set = (next: AreasState) => {
+    if (readOnly) next = { ...next, canWrite: false, pending: null };
     ref.current = next;
     setStateRaw(next);
   };

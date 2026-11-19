@@ -1,4 +1,5 @@
 "use client";
+import { ReviewContestationPanel } from "../features/review-contestation/review-contestation-panel";
 import { DemoBanner } from "../app/demo-banner";
 // Artisan space (role "artisan"). Presentational: every mutation goes through `session`.
 // Master references: M35 (shell + dashboard), M67 (offer), M34 (quote), M14 (documents),
@@ -122,6 +123,7 @@ import {
   type MissionSegment,
 } from "./artisan-lists";
 import { CredentialReviewPanel } from "../features/credential-reviews/credential-review-panel";
+import { DECISION_LABEL, type Decision } from "../features/credential-reviews/credential-reviews-model";
 import { ArtisanQuotes } from "../features/artisan-quotes/artisan-quotes";
 import { useArtisanPerformance, LivePerformanceSummary, LivePerformanceGrid, LiveRatingLine, livePerformanceSubtitle } from "../features/artisan-performance";
 import { CredentialReminderPanel } from "../features/operational-reminders/operational-reminder-panel";
@@ -213,6 +215,7 @@ const CREDENTIAL_KINDS: { kind: CredentialKind; title: string; description: stri
     description: "Titre, habilitation ou certificat justifiant vos compétences.",
   },
 ];
+const DECISION_TONE: Record<Decision, Tone> = { accepted: "green", changes_requested: "amber", rejected: "red" };
 const CREDENTIAL_KIND_LABEL: Record<CredentialKind, string> = {
   registration: "Kbis / inscription",
   liability: "Assurance RC Pro",
@@ -1113,6 +1116,10 @@ function Missions({ session, declinedIds, onDeclined, availability }: { session:
   const order: MissionsOrder = choice.ident === ident ? choice.order : "oldest_first";
   const setOrder = (o: MissionsOrder) => setChoice({ ident, order: o });
   const [radiusCheck, setRadiusCheck] = useState(0);
+  const radiusDetails = useRef<HTMLDetailsElement>(null);
+  const revealRadiusError = useCallback(() => {
+    if (radiusDetails.current) radiusDetails.current.open = true;
+  }, []);
   const confirmed = radius?.ident === ident ? radius : null;
   const shownOrder: MissionsOrder = !demo && confirmed?.active ? order : "oldest_first";
   const m = artisanMissions(session.data.interventions, session.profileId);
@@ -1187,12 +1194,13 @@ function Missions({ session, declinedIds, onDeclined, availability }: { session:
         <Segments label="Filtrer les missions" value={segment} options={options} onChange={setSegment} />
       </div>
       {segment === "available" && (
-        <details className={styles.radiusSettings}>
+        <details ref={radiusDetails} className={styles.radiusSettings}>
         <summary>Zone de recherche{confirmed?.active ? " · filtre actif" : ""}</summary>
         <MissionRadiusPanel
           demo={demo}
           context={session.mutationContext}
           recheck={radiusCheck}
+          onAttention={revealRadiusError}
           onConfirmed={(p) => {
             setRadius((prev) => ({ ident, ...p, rev: prev && prev.ident === ident && prev.version !== p.version ? prev.rev + 1 : prev?.rev ?? 0 }));
             if (!p.active) setOrder("oldest_first"); // no active radius: nearest is not offered any more
@@ -1659,6 +1667,9 @@ function WorkDossier({ session, intervention: i }: { session: Session; intervent
           {["completed", "paid"].includes(i.status) && (
             <PaymentPanel session={session} intervention={i} />
           )}
+          {session.data.reviews.filter(review => review.intervention_id === i.id).map(review =>
+            <ReviewContestationPanel key={review.id} reviewId={review.id} context={session.mutationContext} demo={session.mode === "demo"} />
+          )}
           <section className="panel" aria-labelledby="dossier-messages">
             <h2 id="dossier-messages">Échanges</h2>
             <p>Conversation liée à ce dossier, visible du client.</p>
@@ -1802,6 +1813,11 @@ function AppointmentPanel({
     const s = new Date(start);
     if (!start || Number.isNaN(s.getTime())) {
       setError("Choisissez une date et une heure de début.");
+      return;
+    }
+    // O3 : un créneau passé est refusé par le serveur ; le dire sur le champ avant tout envoi.
+    if (s.getTime() <= Date.now()) {
+      setError("Ce créneau est déjà passé : choisissez une date et une heure à venir.");
       return;
     }
     setError("");
@@ -1949,6 +1965,18 @@ function QuotePanel({
         {versions.length > 0 && (
           <section className="panel" aria-labelledby="dossier-previous-quotes">
             <h2 id="dossier-previous-quotes">Versions précédentes</h2>
+            {versions[versions.length - 1]?.status === "rejected" && (
+              <div className="alert warning" role="status" data-quote-rejected-hint="">
+                <Icon name="info" />
+                <span>
+                  Le client a refusé {quoteRef(versions[versions.length - 1].id)} ({money(versions[versions.length - 1].total_cents)}).
+                  Son motif est dans la conversation du dossier ; préparez une nouvelle version ci-dessus.{" "}
+                  <button type="button" className="text-button" onClick={() => session.go("messages", i.id)}>
+                    Lire le motif
+                  </button>
+                </span>
+              </div>
+            )}
             {versions.map((q) => (
               <div key={q.id} className={styles.quoteLine}>
                 <div>
@@ -2752,6 +2780,11 @@ function Documents({
   const personal = session.data.documents.filter((d) => !d.intervention_id);
   const today = localDate(new Date());
   const status = dossier?.artisan_profile?.application_status;
+  // O1 : décision courante de chaque pièce, signalée par son panneau de revue (lecture serveur).
+  const [decisions, setDecisions] = useState<Record<string, Decision | null>>({});
+  const noteDecision = useCallback((credentialId: string, decision: Decision | null) => {
+    setDecisions((prev) => (prev[credentialId] === decision ? prev : { ...prev, [credentialId]: decision }));
+  }, []);
   const states = CREDENTIAL_KINDS.map((k) => ({
     ...k,
     state: credentialState(dossier?.credentials ?? [], k.kind, today),
@@ -2801,10 +2834,11 @@ function Documents({
                   document={session.data.documents.find((d) => d.id === s.state.credential?.document_id)}
                   busy={session.busy}
                   onLink={() => setLinking(s.kind)}
+                  decision={s.state.credential && s.state.key === "pending" ? decisions[s.state.credential.id] ?? null : null}
                   review={
                     s.state.credential ? (
                       <>
-                        <CredentialReviewPanel credentialId={s.state.credential.id} mode="artisan" context={session.mutationContext} demo={session.mode === "demo"} />
+                        <CredentialReviewPanel credentialId={s.state.credential.id} mode="artisan" context={session.mutationContext} demo={session.mode === "demo"} onCurrentDecision={noteDecision} />
                         <CredentialReminderPanel credentialId={s.state.credential.id} context={session.mutationContext} demo={session.mode === "demo"} />
                       </>
                     ) : undefined
@@ -2861,6 +2895,7 @@ function CredentialCard({
   busy,
   onLink,
   review,
+  decision,
 }: {
   title: string;
   description: string;
@@ -2870,6 +2905,8 @@ function CredentialCard({
   onLink: () => void;
   /** ART-03: read-only decisions of this credential (history, current decision, reason). */
   review?: ReactNode;
+  /** O1 : décision courante lue par le panneau de revue ; absente ⇒ pastille de transmission. */
+  decision?: Decision | null;
 }) {
   const iconClass = state.key === "pending" ? styles.credBlue : state.key === "expired" ? styles.credAmber : styles.credRed;
   const icon = state.key === "pending" ? "clock" : state.key === "expired" ? "refresh" : "warning";
@@ -2891,7 +2928,7 @@ function CredentialCard({
       </div>
       {/* M14 : colonne d’état à droite — pastille réelle et date d’expiration réelle, sinon dit sans date. */}
       <div className={styles.credStatus}>
-        <Tag tone={state.tone}>{state.label}</Tag>
+        <Tag tone={decision ? DECISION_TONE[decision] : state.tone}>{decision ? DECISION_LABEL[decision] : state.label}</Tag>
         {credentialDateLabel(state) && <small>{credentialDateLabel(state)}</small>}
       </div>
       <div className={styles.credActions}>

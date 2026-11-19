@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {loadModule,ApiError} from './documents/harness';
 const actor='10000000-0000-4000-8000-000000000001',site='20000000-0000-4000-8000-000000000001';
 const id=(n:number)=>`30000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
-const job=(n:number)=>({id:id(n),site_id:site,category:'socket',status:'requested',created_at:'2026-11-07T12:00:00.123456Z',client_id:'PRIVATE'});
+const job=(n:number)=>({id:id(n),site_id:site,category:'socket',urgency:'scheduled',status:'requested',created_at:'2026-11-07T12:00:00.123456Z',client_id:'PRIVATE'});
 const compliance=(n:number)=>({id:id(n),site_id:site,title:'QA',kind:'audit',due_on:'2026-01-01',status:'pending',notes:'QA',created_by:'PRIVATE'});
 function setup(options:{rows?:unknown[];role?:string;hidden?:boolean;revoke?:boolean;error?:boolean;anonymous?:boolean}={}){
  const calls:Array<[string,...unknown[]]>=[];let reads=0;
@@ -12,7 +12,7 @@ function setup(options:{rows?:unknown[];role?:string;hidden?:boolean;revoke?:boo
  return{calls,get:(q='kind=open',target=site)=>route.GET(new Request('https://example.test/api/sites/'+target+'/records?'+q),{params:Promise.resolve({id:target})})};
 }
 test('jobs exact projection and stable next cursor; oldest page beyond100',async()=>{
- const h=setup({rows:Array.from({length:51},(_,n)=>job(151-n))});const r=await h.get();assert.equal(r.status,200);const b=await r.json();assert.equal(b.items.length,50);assert.equal(b.page.has_more,true);assert.ok(!JSON.stringify(b).includes('PRIVATE'));assert.deepEqual(Object.keys(b.items[0]).sort(),['category','created_at','id','site_id','status']);
+ const h=setup({rows:Array.from({length:51},(_,n)=>job(151-n))});const r=await h.get();assert.equal(r.status,200);const b=await r.json();assert.equal(b.items.length,50);assert.equal(b.page.has_more,true);assert.ok(!JSON.stringify(b).includes('PRIVATE'));assert.deepEqual(Object.keys(b.items[0]).sort(),['category','created_at','id','site_id','status','urgency']);
  const n=setup({rows:[job(101)]});assert.equal((await n.get('kind=open&cursor='+b.page.next_cursor)).status,200);assert.ok(n.calls.some(c=>c[0]==='or'&&String(c[1]).includes('id.lt.')));assert.ok(h.calls.some(c=>c[0]==='eq'&&c[1]==='site_id'&&c[2]===site));
  assert.equal((await setup().get('kind=past&cursor='+b.page.next_cursor)).status,422);
 });
@@ -28,7 +28,7 @@ test('role/site access including post-read revocation, empty, validation and fai
  for(const opts of [{hidden:true},{revoke:true}])assert.equal((await setup(opts).get()).status,404);
  const empty=await setup().get();assert.equal(empty.headers.get('cache-control'),'private, no-store');assert.deepEqual((await empty.json()).page,{limit:50,has_more:false,next_cursor:null});
  for(const q of ['', 'kind=x','kind=open&kind=past','kind=open&limit=50','kind=open&cursor=%%%'])assert.equal((await setup().get(q)).status,422);
- for(const rows of [[job(1),job(2)],[job(1),job(1)],[{...job(1),site_id:id(7)}],[{...job(1),status:'paid'}]]){const r=await setup({rows}).get();assert.equal(r.status,503);assert.equal(r.headers.get('retry-after'),'2')}
+ for(const rows of [[job(1),job(2)],[job(1),job(1)],[{...job(1),site_id:id(7)}],[{...job(1),status:'paid'}],[{...job(1),urgency:'unknown'}]]){const r=await setup({rows}).get();assert.equal(r.status,503);assert.equal(r.headers.get('retry-after'),'2')}
  assert.equal((await setup({error:true}).get()).status,503);
 });
 

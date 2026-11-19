@@ -1,5 +1,19 @@
 # Direction de design
 
+## Décisions prioritaires du 14 novembre 2026 — finition et références de livraison
+
+Cette section formalise les demandes récentes du propriétaire et prévaut sur les prescriptions historiques contradictoires ci-dessous. Les maquettes doivent être finalisées et vérifiées avant leur transposition au Web/PWA puis à l’application mobile. Une modification de version déployée ne remplace pas la livraison de maquettes éditables.
+
+- Conserver l’identité, les compositions et les contenus utiles de l’application de référence `https://domdepannage-recette-20261112.vercel.app/`. Moderniser la finesse et la cohérence, sans refonte générique ni changement arbitraire de direction graphique.
+- Harmoniser particulier, artisan, entreprise et administration. Le fichier Figma de travail courant est `3t2Y0JsAdBll5PAIHOs5H7` ; ses anciennes variantes ne sont pas toutes des références d’intégration. Utiliser les racines canoniques et leurs preuves de recette dans le dossier de livraison.
+- Conserver le menu flottant de l’accueil dans les parcours mobiles. Préserver l’action « Appelez-nous » et WhatsApp sur l’accueil ; WhatsApp reste disponible dans les parcours particulier. Tenir compte des zones sûres et réserver l’espace nécessaire pour que ces commandes ne masquent pas le contenu ou les actions.
+- Retirer le sélecteur clair/sombre visible demandé par le propriétaire. Ne pas le réintroduire sur la base des anciennes règles de thème ci-dessous. Le retrait du contrôle ne justifie pas, à lui seul, une modification des contrats techniques de stockage du thème.
+- Ne pas afficher de logo supérieur dans les espaces connectés mobiles, y compris l’entreprise. Ne pas réintroduire le cartouche noir rejeté.
+- Affiner titres, textes et icônes : Plus Jakarta Sans, titres de page généralement 23 px sur téléphone/tablette et 28 px sur desktop, graisse Medium ; titres de section 18 px, textes Regular ou Medium selon leur fonction. Ces repères viennent des finitions Figma et ne constituent pas un remplacement global aveugle : conserver la lisibilité des corps de texte, la hiérarchie des montants et les cibles tactiles d’au moins 44 px.
+- Vérifier chaque composition aux formats téléphone, tablette et desktop, puis le comportement continu lors de l’intégration. Les maquettes à quatre largeurs ne prouvent pas à elles seules le responsive, le clavier, le zoom ou l’accessibilité de l’application.
+
+Les commandes de simulation et de recette restent hors des écrans produit. Les données d’exemple et résultats serveur illustratifs d’un prototype ne sont pas des preuves de fonctionnement connecté. La livraison finale exige des contrôles distincts du Web/PWA et de l’application iOS/Android.
+
 ## Décision du 13 novembre 2026 — logo sans cartouche noir
 
 Le propriétaire demande de retirer le logo sur fond noir. La référence approuvée est le sigle DD noir et bleu avec le nom DomDépannage noir, empilé sur fond blanc. La ressource `apps/mobile/assets/images/splash.png` correspond à l’image fournie ; sa copie web est `public/brand/domdepannage-logo.png`. Sur mobile, les en-têtes des espaces connectés particulier, artisan et administration ne portent aucun logo : titre ou contexte, retour/menu et notifications priment. Le logo reste autorisé sur l’accueil public et au lancement natif. Cette décision prévaut sur les anciennes prescriptions de logo horizontal noir. Ne pas recréer un cartouche noir dans les maquettes ou les en-têtes.

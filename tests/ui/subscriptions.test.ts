@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // FIN-07 optional subscription, slice 1 (client + artisan « Mon profil »). Contract bf3cdc8 + portal_available
 // (dec2594) + relayed correction (state ready|unavailable, currency strictly "eur").
 // Real model + SSR + a Chromium mount of the real panel (fake api) + real-app demo wiring.
@@ -12,7 +13,7 @@ import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { build } from "esbuild";
 import { loadModule } from "../documents/harness";
-import { withApp, skip } from "./real-app-harness";
+import { withApp, skip, openAccountSettings } from "./real-app-harness";
 import type * as Model from "../../components/features/subscriptions/model";
 
 const m = loadModule("components/features/subscriptions/model.ts") as unknown as typeof Model;
@@ -355,7 +356,7 @@ test("montages : profil client après les moyens de paiement, profil artisan apr
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const ENTRY = `
 import { createElement as h, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -477,7 +478,7 @@ test("app réelle (démo, profils client ET artisan) : note honnête, aucun appe
   await withApp(async (open) => {
     for (const route of ["client-profile", "artisan-profile"]) {
       const { page, errors, api } = await open(route, 390);
-      if (route === "client-profile") await page.getByRole("button", { name: "Paramètres du compte" }).click();
+      if (route === "client-profile") await openAccountSettings(page);
       await page.locator('[data-subscriptions="demo"]').waitFor();
       const r = await page.evaluate(() => ({ note: document.querySelector('[data-subscriptions="demo"]')?.textContent ?? null, overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth }));
       assert.match(r.note ?? "", /aucune offre n’est lue ni souscrite/, route);

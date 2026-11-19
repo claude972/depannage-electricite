@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // PUB-02 / ADM-08 in Chromium at 390 px. Mount: one shared GET feeds every IndicativeRange (values
 // from the server, never static); a failed read shows the honest fallback (no number); the admin
 // « Barème public » shows the active version + « publication fermée », and « Préparer une version »
@@ -17,7 +18,7 @@ const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_module
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
 const skip = available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)";
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const ENTRY = `
 import { createElement as h, StrictMode } from "react";
 import { createRoot } from "react-dom/client";

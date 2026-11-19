@@ -57,3 +57,12 @@ test("only a freshly retrieved expired unpaid session releases a new attempt and
 test("invalid JSON and oversized body fail explicitly before ledger/provider mutation",async()=>{const f=fixture();await check(await f.raw(new Request(ORIGIN,{method:"POST",body:"{"})),400);await check(await f.raw(new Request(ORIGIN,{method:"POST",body:"x".repeat(65537)})),413);assert.equal(f.calls.length,0)});
 
 test("revoked mandate during provider lookup or bind never returns the checkout URL",async()=>{for(const options of [{existing:true,revokeOnRetrieve:true},{revokeOnBind:true}]){const f=fixture(options);const body=await check(await f.request(),403);assert.equal(body.url,undefined);}});
+
+
+test("checkout malformed fields return French validation before any financial operation",async()=>{
+ for(const body of [null,{}, {quote_id:"bad"},{quote_id:Q,native_test:false},{quote_id:Q,amount_cents:1}]){
+  const f=fixture();const result=await check(await f.request(body),422);
+  assert.equal(result.error,"La demande de paiement est invalide. Réessayez depuis le devis concerné.");
+  assert.equal(f.calls.length,0);
+ }
+});

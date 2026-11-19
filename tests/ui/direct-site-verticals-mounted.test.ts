@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // ENT-05 / ENT-09 — real enterprise SiteSheet for an ACTIVE site absent from the cache (StrictMode,
 // Chromium 390): after the exact settings read in the current organisation, the EXISTING energy panel
 // reads for the exact site, and the co-ownership panel only for a syndic site; server can_write governs
@@ -16,7 +17,7 @@ const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_module
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
 const skip = available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)";
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const ENTRY = `
 import { createElement as h, StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -76,7 +77,7 @@ type Any = any;
 const S77 = "50000000-0000-4000-8000-000000000077";
 const vertCalls = (calls: string[]) => calls.filter((u) => u.includes("/energy") || u.includes("/co-ownership"));
 
-test("Chromium 390 : fiche directe ⇒ énergie du site exact, copropriété seulement syndic ; lecteur sans écriture ; hors périmètre / archivé / démo ⇒ rien ; changement de site ; fiche normale intacte", { skip }, async () => {
+test("Chromium 390 : fiche directe ⇒ énergie du site exact, copropriété seulement syndic ; lecteur sans écriture ; hors périmètre / démo ⇒ rien ; archives en lecture seule ; changement de site ; fiche normale intacte", { skip }, async () => {
   const { server, url } = await serve();
   const pw = await import(pathToFileURL(path.join(PW, "index.mjs")).href);
   const browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true });
@@ -116,7 +117,7 @@ test("Chromium 390 : fiche directe ⇒ énergie du site exact, copropriété seu
     assert.equal(await v.page.locator("[data-co-add]").count(), 0, "viewer ⇒ no co-ownership write");
     assert.ok(((await v.page.evaluate("document.documentElement.scrollWidth")) as number) <= 390);
     // Other organisation / archived / demo ⇒ no panel, no read, no probe.
-    for (const cfg of [{ org: "other" }, { archived: true }, { demo: true }]) {
+    for (const cfg of [{ org: "other" }, { demo: true }]) {
       const x = await open(cfg);
       await x.page.waitForTimeout(600);
       assert.deepEqual(vertCalls((await x.page.evaluate("window.calls")) as string[]), [], JSON.stringify(cfg) + " ⇒ no energy / co-ownership read");
@@ -124,6 +125,13 @@ test("Chromium 390 : fiche directe ⇒ énergie du site exact, copropriété seu
       assert.deepEqual(await x.page.evaluate("window.probes"), [], JSON.stringify(cfg) + " ⇒ no probe");
       assert.deepEqual(x.errors, []);
     }
+    // Archived syndic history remains readable even if the API advertises can_write.
+    const archived = await open({ archived: true });
+    await archived.page.locator('[data-co-panel="ready"]').waitFor();
+    assert.equal(await archived.page.locator('[data-co-add]').count(), 0);
+    assert.equal(await archived.page.locator('[data-co-readonly]').count(), 1);
+    assert.equal(await archived.page.locator('[data-energy-panel]').count(), 0);
+    assert.deepEqual(archived.errors, []);
     // Normal (cached) sheet unchanged: both panels for a syndic site.
     const n = await open({ normal: true });
     await n.page.locator('[data-energy-panel="ready"]').waitFor();

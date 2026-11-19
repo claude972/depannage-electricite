@@ -40,7 +40,7 @@
   max-width: 100%;
   border-radius: 5% / 16%;
 }
-.headerLogo { width: 104px; border-radius: 0; }
+.headerLogo { width: 84px; border-radius: 0; } /* stacked logo 84 × 49 px: phone header stays ≤ 110 px */
 .footerLogo { width: 164px; padding: 10px; background: #fff; border-radius: 8px; }
 
 .topbarInner {
@@ -186,6 +186,8 @@
 .appNav { display: none; }
 @media (max-width: 767px) {
   .appChrome .homeTopbar { display: none; }
+}
+@media (max-width: 1023px) {
   .appChrome { padding-bottom: calc(134px + env(safe-area-inset-bottom, 0px)); }
   .appNav {
     position: fixed;
@@ -211,21 +213,32 @@
     border: 0;
     background: transparent;
     font: inherit;
-    font-weight: 650;
+    font-weight: 400;
     cursor: pointer;
     border-radius: 999px;
     color: var(--ui-text-muted);
-    font-size: .7rem;
+    font-size: 11px;
+    line-height: 16px;
     text-decoration: none;
   }
   .appNav [aria-current="page"] { background: var(--ui-surface); color: var(--ui-text); }
 }
 @media (min-width: 940px) {
   .topbarInner { display: flex; gap: 20px; min-height: 74px; }
-  .headerLogo { width: 112px; }
+  .headerLogo { width: 104px; }
   .topbar .recruit { min-height: 48px; padding-inline: 16px; font-size: .88rem; }
   .editorialActions { margin-inline-start: auto; gap: 20px; font-size: .81rem; }
   .contact { padding-inline: 14px; }
 }
 
 .footer button, .footer a { min-width: 44px; }
+
+/* WhatsApp docked to the right of the floating menu (public-contact-actions, < 1024 px). */
+@media (max-width: 1023px) {
+  :global(body:has([data-whatsapp-dock])) .appChrome .appNav {
+    left: calc((100% - min(100% - 24px, 426px)) / 2);
+    right: auto;
+    width: calc(min(100% - 24px, 426px) - 56px);
+    margin-inline: 0;
+  }
+}

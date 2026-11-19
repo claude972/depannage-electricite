@@ -3,7 +3,7 @@
 const PUBLIC_CACHE_PREFIX = "courant-pwa-public-";
 // A generation is immutable and may be created only once. Bump it whenever this worker
 // or any of the three public assets changes; a reused generation fails closed.
-const PUBLIC_CACHE = `${PUBLIC_CACHE_PREFIX}v9`;
+const PUBLIC_CACHE = `${PUBLIC_CACHE_PREFIX}v10`;
 const OFFLINE_URL = "/offline.html";
 const FORM_URL = "/offline-request.html";
 const SCRIPT_URL = "/offline-request.js";

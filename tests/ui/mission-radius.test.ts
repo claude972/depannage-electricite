@@ -183,7 +183,7 @@ test("aucune géolocalisation, aucun filtrage côté client ; libellés d’appr
   assert.match(demo, /aucun appel n’est fait/);
   assert.doesNotMatch(demo, /<button|<select|<input/);
   const artisan = readFileSync("components/role/artisan-space.tsx", "utf8");
-  assert.match(artisan, /<MissionRadiusPanel\s+demo=\{demo\}\s+context=\{session\.mutationContext\}\s+recheck=\{radiusCheck\}\s+onConfirmed=/);
+  assert.match(artisan, /<MissionRadiusPanel\s+demo=\{demo\}\s+context=\{session\.mutationContext\}\s+recheck=\{radiusCheck\}\s+onAttention=\{revealRadiusError\}\s+onConfirmed=/);
   assert.match(artisan, /\|\$\{confirmed\?\.rev \?\? 0\}\|\$\{shownOrder\}`\}/);
   const missions = readFileSync("components/features/available-missions/available-missions-panel.tsx", "utf8");
   const missionsModel = readFileSync("components/features/available-missions/available-missions-model.ts", "utf8");
@@ -220,4 +220,26 @@ test("409 ⇒ relecture : nouvelle version confirmée remontée (offres relancé
   assert.ok(g.view().pending);
   assert.ok(f.mem.map.has(m.pendingKey(UID, 1)));
   assert.doesNotMatch(readFileSync("components/features/mission-radius/mission-radius-panel.tsx", "utf8"), /Abandonner/);
+});
+
+
+test("successful reread clears cold and cached read errors without clearing a pending write warning", async () => {
+  for (const cached of [false, true]) {
+    let fail = !cached;
+    const h = ctrl(() => fail ? status(503) : ok(VIEW()), () => status(503));
+    if (cached) { await h.c.load(); fail = true; }
+    assert.equal(await h.c.load(), false);
+    assert.notEqual(h.view().error, "");
+    fail = false;
+    assert.equal(await h.c.load(), true);
+    assert.equal(h.view().phase, "ready");
+    assert.equal(h.view().error, "");
+    await h.c.save("97209", "25");
+    const warning = h.view().error;
+    assert.ok(h.view().pending);
+    await h.c.load();
+    assert.equal(h.view().error, warning);
+    assert.ok(h.view().pending);
+    assert.equal(h.calls.filter(call => call.kind === "POST").length, 1);
+  }
 });

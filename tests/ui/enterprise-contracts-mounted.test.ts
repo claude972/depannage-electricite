@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // ENT-13 mounted: real ProfessionalOperations (React root, StrictMode, Chromium 390 and 1280 px),
 // « Contrats cadres » tab in live with the typed contracts context. 120 server contracts (beyond 50)
 // paginated; detail read on open; 422 cursor ⇒ page 1; 503 ⇒ Réessayer; 401/403/404 (sites-only scope)
@@ -16,7 +17,7 @@ const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_module
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
 const skip = available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)";
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const ENTRY = `
 import { createElement as h, StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";

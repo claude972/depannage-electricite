@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // ADM-03 picker model + ADM-07 wiring (source checks).
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -6,7 +7,7 @@ import path from "node:path";
 import { appendPage, artisanLabel, normalizeQuery, pickerInitial } from "../../components/features/admin-reassign/artisan-picker-model";
 import type { DirectoryArtisan, DirectoryPage } from "../../components/app/types";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const a = (n: number, over: Partial<DirectoryArtisan> = {}): DirectoryArtisan => ({ id: `a${n}`, full_name: `Artisan ${n}`, phone: "0696", artisan_approved: true, created_at: "2026-01-01T00:00:00Z", company_name: null, application_status: "approved", ...over });
 const page = (items: DirectoryArtisan[], next: string | null, total = 150): DirectoryPage<"artisans"> => ({ kind: "artisans", items, page: { limit: 25, has_more: next !== null, next_cursor: next, total }, filters: { q: null, approved: true, role: null, owner_id: null } });
 

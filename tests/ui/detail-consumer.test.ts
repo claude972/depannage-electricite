@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
@@ -12,7 +13,7 @@ import { detailReadSchema, type DetailRead } from "../../lib/features/workspace/
 import { JOB, ORG, SITE, USER, id, job, org, quote, site, stamp } from "../detail-read-fixtures";
 
 const require = createRequire(import.meta.url);
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 
 function envelope(patch: Partial<Record<keyof DetailRead, unknown>> = {}): DetailRead {
   const raw = {
