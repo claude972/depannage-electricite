@@ -216,3 +216,14 @@ test("review contestation history is bounded and restricted to the assigned arti
     assert.ok(!denied.calls.some(call=>call.table === "platform_review_contestations"));
   }
 });
+
+
+test("review contestation explains invalid reason lengths in French before any write", async () => {
+  for (const [reason,expected] of [["123456789","Décrivez le motif de contestation en au moins 10 caractères."],["a".repeat(2001),"Le motif de contestation ne doit pas dépasser 2 000 caractères."]]) {
+    const h=harness("none"),id=uuid(90);
+    const response=await h.route("reviews/[id]").POST(h.request("/reviews/"+id,{action:"contest",request_id:uuid(91),reason}),h.ctx(id));
+    assert.equal(response.status,422);
+    assert.equal((await response.json()).error,expected);
+    assert.equal(h.calls.length,0,"invalid input never reaches a database operation");
+  }
+});
