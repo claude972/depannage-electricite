@@ -46,7 +46,8 @@ test("artisan review: read failure, validation, uncertain send replay, double su
    await page.getByText("Lecture indisponible.",{exact:true}).waitFor();
    await page.evaluate("window.state.readFail=false");await page.getByRole("button",{name:"Recharger l’avis",exact:true}).click();
    await page.getByRole("button",{name:"Contester cet avis",exact:true}).click();
-   await page.getByText("Expliquez votre contestation en 10 à 2 000 caractères.",{exact:true}).waitFor();
+   await page.getByText("Motif trop court (0 caractère) : décrivez votre contestation en au moins 10 caractères.",{exact:true}).waitFor();
+   assert.equal(await page.getByLabel("Motif de la contestation",{exact:true}).getAttribute("aria-invalid"),"true");
    assert.equal(await page.evaluate("window.state.posts.length"),0);
    await page.getByLabel("Motif de la contestation",{exact:true}).fill("La prestation décrite ne correspond pas à ce dossier synthétique.");
    await page.getByRole("button",{name:"Contester cet avis",exact:true}).click();
