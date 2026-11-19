@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createRevalidationScheduler } from "../../components/app/revalidate";
+import { createRevalidationScheduler, startAccessRevalidation } from "../../components/app/revalidate";
 
 // Deterministic clock and timers.
 function clock() {
@@ -108,5 +108,29 @@ test("cancel drops pending timers and trailing runs (unmount / identity change)"
   await Promise.resolve();
   await c.advance(20000);
   assert.equal(runs, 1);
+  assert.equal(c.pending(), 0);
+});
+
+
+test("access revalidation waits 30 seconds, checks current visibility/role/connectivity and recovers after failure", async () => {
+  const c = clock(); let eligible = false; let runs = 0;
+  const stop = startAccessRevalidation(async () => { runs++; if (runs === 1) throw Error("offline"); }, () => eligible, c);
+  await c.advance(30000); assert.equal(runs, 0);
+  eligible = true;
+  await c.advance(29999); assert.equal(runs, 0);
+  await c.advance(1); assert.equal(runs, 1);
+  await c.advance(30000); assert.equal(runs, 2);
+  eligible = false;
+  await c.advance(30000); assert.equal(runs, 2);
+  stop(); assert.equal(c.pending(), 0);
+  eligible = true; await c.advance(60000); assert.equal(runs, 2);
+});
+
+test("access revalidation does not overlap slow reads or reschedule after unmount", async () => {
+  const c = clock(), gate = deferred(); let runs = 0;
+  const stop = startAccessRevalidation(async () => { runs++; await gate.promise; }, () => true, c);
+  await c.advance(30000); assert.equal(runs, 1);
+  await c.advance(120000); assert.equal(runs, 1); assert.equal(c.pending(), 0);
+  stop(); gate.resolve(); await Promise.resolve(); await Promise.resolve();
   assert.equal(c.pending(), 0);
 });

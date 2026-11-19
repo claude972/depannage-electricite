@@ -14,7 +14,7 @@ import { createDemoFeatureClients, createFeatureClients, planningProbeRange, rep
 import type { PlatformAccess } from "../lib/features/platform-operations/types";
 import { PLATFORM_DEMO } from "../lib/features/platform-operations/demo";
 import { demoNotificationPage } from "../lib/features/notifications/demo";
-import { createRevalidationScheduler } from "./app/revalidate";
+import { createRevalidationScheduler, startAccessRevalidation } from "./app/revalidate";
 import { createRefreshCoordinator, refreshContextKey, type ReadResult, type RefreshCoordinator } from "./app/workspace-refresh";
 import { safeCheckoutUrl } from "./app/booking-status";
 import { CARD_RETURN_COPY, PENDING_COPY, cancelCardReturn, cardAction, lookupPending, sameReturn, verifyCardReturn, type CardReturn } from "./app/card-return";
@@ -422,11 +422,16 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
       if (document.visibilityState === "visible") scheduler.signal();
     };
     const onFocus = () => scheduler.signal();
+    const stopAccessRevalidation = startAccessRevalidation(revalidateNow, () =>
+      modeRef.current === "live" && roleRef.current === "manager" &&
+      document.visibilityState === "visible" && navigator.onLine !== false,
+    );
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onFocus);
     window.addEventListener("online", onFocus);
     return () => {
       scheduler.cancel();
+      stopAccessRevalidation();
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("online", onFocus);
