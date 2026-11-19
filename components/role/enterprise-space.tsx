@@ -2521,6 +2521,9 @@ function SitesView({ c }: { c: Ctx }) {
   const alertsState = session.capabilities.professional;
   const recent = byDateDesc(scope.interventions).slice(0, 5);
   const siteName = (id?: string | null) => scope.sites.find((s) => s.id === id)?.name || "Hors site";
+  // W4 : un site archivé ne reçoit plus de demande ; il n'est plus listé parmi « Mes sites »
+  // (il reste consultable depuis « Sites archivés » du portefeuille ci-dessous).
+  const activeSites = scope.sites.filter((s) => !s.archived_at);
   return (
     <>
       <PageTitle
@@ -2544,10 +2547,10 @@ function SitesView({ c }: { c: Ctx }) {
       <section className={styles.listSection} aria-labelledby="sites-table-title">
         <div className={styles.sectionHead}>
           <h2 id="sites-table-title">
-            Mes sites <span className={styles.countPill}>{scope.sites.length}</span>
+            Mes sites <span className={styles.countPill}>{activeSites.length}</span>
           </h2>
         </div>
-        {scope.sites.length && alertsState !== "unknown" && alertsState !== "available" ? (
+        {activeSites.length && alertsState !== "unknown" && alertsState !== "available" ? (
           <Unavailable title="Alertes des sites non vérifiées" state={alertsState}>
             <p>
               Les devis à approuver et les échéances de contrôle n’ont pas pu être chargés : aucune
@@ -2558,7 +2561,7 @@ function SitesView({ c }: { c: Ctx }) {
             </button>
           </Unavailable>
         ) : null}
-        {scope.sites.length ? (
+        {activeSites.length ? (
           <div className={cx("panel", styles.tablePanel, styles.scrollX)}>
             <ScrollableTable label="Sites — tableau à défilement horizontal">
               <table className={cx(styles.table, styles.sitesTable)}>
@@ -2581,7 +2584,7 @@ function SitesView({ c }: { c: Ctx }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {scope.sites.map((s) => {
+                  {activeSites.map((s) => {
                     const f = siteFigures(s, session.data);
                     const tone = budgetTone(f.ratio ?? 0, f.over);
                     const alerts = siteAlertSummary(
