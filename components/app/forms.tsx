@@ -162,6 +162,7 @@ export function RequestForm({
   const [step, setStep] = useState(1);
   const [categoryChosen, setCategoryChosen] = useState(Boolean(initialValues) || categoryPreselected);
   const [categoryError, setCategoryError] = useState("");
+  const [siteError, setSiteError] = useState("");
   const categoryChoices = useRef<HTMLDivElement>(null);
   const phase = addressFirst && step < 3 ? 3 - step : step;
   const labels = addressFirst ? ["Le lieu et le besoin", "Le problème"] : ["Le problème", "Le lieu et le besoin"];
@@ -347,16 +348,15 @@ export function RequestForm({
           <>
             <h2 ref={stepTitle} tabIndex={-1} style={STEP_TITLE_STYLE}>Où faut-il intervenir ?</h2>
             {sites.length > 0 && (
-              <Field label={siteRequired ? "Site professionnel" : "Site professionnel (facultatif)"}>
+              <Field label={siteRequired ? "Site professionnel" : "Site professionnel (facultatif)"} error={siteError}>
                 <select
                   required={siteRequired}
                   value={values.site_id || ""}
-                  onChange={(e) =>
-                    setValues({
-                      ...values,
-                      site_id: e.target.value || undefined,
-                    })
-                  }
+                  onInvalid={() => setSiteError("Choisissez le site professionnel concerné par cette demande.")}
+                  onChange={(e) => {
+                    setSiteError("");
+                    setValues({ ...values, site_id: e.target.value || undefined });
+                  }}
                 >
                   <option value="">{siteRequired ? "Choisir un site" : "Adresse personnelle ou autre lieu"}</option>
                   {sites.map((s) => (

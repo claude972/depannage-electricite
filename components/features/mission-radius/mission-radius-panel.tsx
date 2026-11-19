@@ -18,6 +18,8 @@ export type MissionRadiusPanelProps = {
   onConfirmed: (p: ConfirmedRadius) => void;
   /** Bumped by the host to re-read the preference (GET), e.g. offers ranked with another version. */
   recheck?: number;
+  /** Reveal a collapsed parent when a read or save needs user attention. */
+  onAttention?: () => void;
   api?: RadiusApi;
   store?: () => Store | null;
 };
@@ -44,8 +46,11 @@ function useWait(seconds: number | null, key: unknown) {
   return waiting;
 }
 
-function Live({ context, onConfirmed, api, store = tabStore, recheck = 0 }: MissionRadiusPanelProps) {
+function Live({ context, onConfirmed, onAttention, api, store = tabStore, recheck = 0 }: MissionRadiusPanelProps) {
   const [view, setRaw] = useState<View>(VIEW_INITIAL);
+  useEffect(() => {
+    if (view.error) onAttention?.();
+  }, [view.error, onAttention]);
   const ref = useRef(view);
   const set = (v: View) => {
     ref.current = v;

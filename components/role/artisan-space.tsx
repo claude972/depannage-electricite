@@ -1113,6 +1113,10 @@ function Missions({ session, declinedIds, onDeclined, availability }: { session:
   const order: MissionsOrder = choice.ident === ident ? choice.order : "oldest_first";
   const setOrder = (o: MissionsOrder) => setChoice({ ident, order: o });
   const [radiusCheck, setRadiusCheck] = useState(0);
+  const radiusDetails = useRef<HTMLDetailsElement>(null);
+  const revealRadiusError = useCallback(() => {
+    if (radiusDetails.current) radiusDetails.current.open = true;
+  }, []);
   const confirmed = radius?.ident === ident ? radius : null;
   const shownOrder: MissionsOrder = !demo && confirmed?.active ? order : "oldest_first";
   const m = artisanMissions(session.data.interventions, session.profileId);
@@ -1187,12 +1191,13 @@ function Missions({ session, declinedIds, onDeclined, availability }: { session:
         <Segments label="Filtrer les missions" value={segment} options={options} onChange={setSegment} />
       </div>
       {segment === "available" && (
-        <details className={styles.radiusSettings}>
+        <details ref={radiusDetails} className={styles.radiusSettings}>
         <summary>Zone de recherche{confirmed?.active ? " · filtre actif" : ""}</summary>
         <MissionRadiusPanel
           demo={demo}
           context={session.mutationContext}
           recheck={radiusCheck}
+          onAttention={revealRadiusError}
           onConfirmed={(p) => {
             setRadius((prev) => ({ ident, ...p, rev: prev && prev.ident === ident && prev.version !== p.version ? prev.rev + 1 : prev?.rev ?? 0 }));
             if (!p.active) setOrder("oldest_first"); // no active radius: nearest is not offered any more
