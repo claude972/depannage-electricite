@@ -241,3 +241,8 @@ Preuves : `livraison/preuves/recette-web-suite-20261119/`.
 - **Reste :** tableau des prestations de devis à 320 px, pris par Codex (`quote-documents`).
 - **Non vérifié :** zoom navigateur sur petites largeurs, paysage mobile, thème sombre, mode démonstration, Safari et Firefox.
 - **Détail :** `livraison/RESPONSIVE-RESULTAT-20261119.md`.
+
+### Mise à jour 18:25 UTC
+- **Candidat courant :** `dpl_FmsB6YANFeYsgvhgFkC8it9gKqNw` (p2e70gxoc, commit `0761f94a`), aliasé.
+- **Ajouts :** bloc de grille contractuelle responsive (dossier INT-593638) ; site syndic synthétique archivé (ENT-03) ; W4 corrigé (site archivé encore listé dans « Mes sites ») ; O3 entreprise vérifié ; présentation du devis issu de grille vérifiée sans accord ni paiement.
+- **Ouvert :** W5 (assemblée, parties communes et contacts non consultables sur un site archivé) ; tableau des prestations de devis à 320 px (Codex).
