@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
-import { photoRepresentation, prepareJpeg } from '@/lib/photo-preparation';
+import { selectLibraryPhoto, prepareJpeg } from '@/lib/photo-preparation';
 import { File } from 'expo-file-system';
 import { REQUEST_PHOTO_LABEL } from '../../../../shared/request-details';
 import { Action, Card, Copy } from './ui';
@@ -31,7 +30,7 @@ export function BookingPhotoPicker({ photo, preservedPhotoId, onChange, onPickin
     picking.current = true;
     setBusy(true); setError(''); onPicking(true);
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({ preferredAssetRepresentationMode: photoRepresentation, mediaTypes: ['images'], allowsMultipleSelection: false, quality: 1 });
+      const result = await selectLibraryPhoto();
       const asset = result.assets?.[0];
       if (!asset || !alive.current) return;
       const size = Math.max(asset.width, asset.height);

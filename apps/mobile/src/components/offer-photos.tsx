@@ -3,8 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Platform } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Image } from 'expo-image';
-import * as ImagePicker from 'expo-image-picker';
-import { photoRepresentation, prepareJpeg } from '@/lib/photo-preparation';
+import { selectLibraryPhoto, prepareJpeg } from '@/lib/photo-preparation';
 import { File } from 'expo-file-system';
 import { z } from 'zod';
 import { Action, Card, Copy, ReadState } from './ui';
@@ -70,7 +69,7 @@ export function OfferPhotoConsent({ id, token, documents, onUploaded }: {
   }
   function upload() {
     void run(async signal => {
-      const selected = await ImagePicker.launchImageLibraryAsync({ preferredAssetRepresentationMode: photoRepresentation, mediaTypes:['images'], quality:1, allowsMultipleSelection:false });
+      const selected = await selectLibraryPhoto();
       const asset = selected.assets?.[0];
       if (!asset || signal.aborted) return;
       const image = await prepareJpeg(asset.uri, asset.width > 1600 ? [{resize:{width:1600}}] : []);

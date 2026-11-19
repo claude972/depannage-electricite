@@ -4,13 +4,13 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { transformSync } from 'esbuild';
 
-function load(manipulateAsync: (...args: any[]) => Promise<unknown>) {
+function load(manipulateAsync: (...args: any[]) => Promise<unknown>, launchImageLibraryAsync: (...args: any[]) => Promise<unknown> = async () => ({ canceled: true, assets: null })) {
   const module = { exports: {} as any };
   const code = transformSync(readFileSync('apps/mobile/src/lib/photo-preparation.ts', 'utf8'), { loader: 'ts', format: 'cjs' }).code;
   vm.runInNewContext(code, { module, exports: module.exports, Error,
     require: (name: string) => name === 'expo-image-manipulator'
       ? { manipulateAsync, SaveFormat: { JPEG: 'jpeg' } }
-      : { UIImagePickerPreferredAssetRepresentationMode: { Compatible: 'compatible' } },
+      : { UIImagePickerPreferredAssetRepresentationMode: { Compatible: 'compatible' }, launchImageLibraryAsync },
   });
   return module.exports;
 }
@@ -40,4 +40,22 @@ test('unreadable provider file gives an actionable message without a native path
     return true;
   });
   assert.equal((await photo.prepareJpeg('file:///cache/another.png', [])).uri, 'file:///cache/retry.jpg');
+});
+
+
+test('picker cancellation is preserved; blank/native rejection becomes actionable and retry works', async () => {
+  let attempt = 0;
+  const photo = load(async () => ({}), async options => {
+    assert.equal(options.preferredAssetRepresentationMode, 'compatible');
+    assert.equal(options.allowsMultipleSelection, false);
+    if (++attempt === 1) throw new Error('');
+    if (attempt === 2) throw new Error('native provider failed at file:///private/photo.png');
+    return { canceled: true, assets: null };
+  });
+  for (let n = 0; n < 2; n++) await assert.rejects(photo.selectLibraryPhoto(), (error: Error) => {
+    assert.match(error.message, /sélectionnée.*Réessayez/);
+    assert.doesNotMatch(error.message, /file:|private|provider/);
+    return true;
+  });
+  assert.equal((await photo.selectLibraryPhoto()).canceled, true);
 });
