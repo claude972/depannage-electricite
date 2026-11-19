@@ -15,8 +15,8 @@ L’inventaire des appels natifs a également vérifié les routes organisation,
 - TypeScript racine : réussi.
 - Preuves externes au dépôt : `preuves/native-auth-d15-20261119.log`, `preuves/native-auth-d15-tsc-20261119.log`.
 
-## À terminer
-Déploiement de recette, puis lecture/écriture avec les comptes synthétiques et refus entre comptes. Le succès local ne vaut pas validation en ligne ni recette visuelle native.
+## État courant
+Correction déployée en recette, vérifiée avec Bearer et sur les écrans iOS/Android ci-dessous. Les notifications externes ne sont pas activées.
 
 ## Vérification en ligne du candidat
 
@@ -25,3 +25,25 @@ Candidat `60ifc6p9z` / `dpl_3Xkx26iiUgfRs8Zpf9zWE5AF1mFV` READY. Lectures notifi
 La clôture du ticket par le compte nommé « admin » dans le fichier de recette est refusée 403 ; `/api/workspace` confirme que ce compte a en réalité le rôle client. Ce refus est attendu. Le ticket `9610e14b-5c58-4032-933a-195216b60879` reste ouvert et sa résolution est confiée à la file opérateur existante, sans élargir les droits. La recette visuelle native et la promotion de l’alias restent à confirmer.
 
 Après promotion, l’alias `domdepannage-recette-20261112.vercel.app` renvoie lui aussi 200 pour les préférences et la liste d’assistance avec le Bearer client (preuve `native-auth-d15-alias-read-20261119.json`). Les 21 contrôles métier du candidat réussissent ; le 22e contrôle initial était la clôture avec un compte incorrectement étiqueté admin, dont le rôle client a été confirmé et le refus documenté.
+
+## Écrans iOS
+
+`ios-notifications-d15-v2-20261119` réussit sur simulateur APFS : liste chargée, filtres Toutes/Non lues, ouverture des préférences, sauvegarde sans changement et confirmation « Préférences enregistrées. ». Les canaux e-mail/SMS restent indisponibles et explicitement expliqués. Le premier essai avait atteint la confirmation mais le processus Recette-Runner a quitté inopinément lors de la capture XCTest ; le rejeu sans cette capture passe. Capture indépendante `ios-notifications-d15-state-20261119.png`.
+
+CI 224 (D15) et 225 (D16) : check et PostgreSQL isolé entièrement réussis.
+
+## Assistance iOS depuis le dossier
+
+Le parcours réel depuis INT-0E073E refuse les champs vides, puis enregistre et ouvre le suivi d’une demande synthétique (`ios-support-finish-d15-20261119`, XCTest réussi). Ticket `55790d99-f35e-4cc0-a2d1-ae9411210040`, un seul ticket avec le sujet exact, message et dossier lié relus au serveur, tiers 404 (`ios-support-d15-readback-20261119.json`). Les essais initiaux avaient buté sur les sélecteurs XCTest du champ multiligne ; ils n’avaient rien soumis. Le brouillon a été repris dans le formulaire existant avant l’envoi réussi.
+
+L’ouverture directe du ticket précédent par simctl n’a pas été validée : premier essai arrêté par la confirmation iOS « Ouvrir », second essai restant sur l’écran précédent. Cela ne remplace pas le parcours interne de création/suivi réussi ; le lien externe reste à qualifier séparément.
+
+Le lien externe d’assistance est finalement validé par `ios-support-deeplink-20261119` : confirmation système ciblée par son bouton accessible « Ouvrir », puis affichage du ticket attendu. Les deux premiers essais avaient mal piloté cette confirmation ; aucune correction de routage applicatif n’a été nécessaire.
+
+Le premier ticket `9610e14b-…` est ensuite résolu par la file opérateur de recette : le client relit `resolved`, version 4 et trois messages (`native-support-resolved-readback-20261119.json`). Le refus initial du compte client étiqueté admin n’a pas été contourné.
+
+## Écrans Android et clôture opérateur
+
+Le binaire D15 passe la liste, les filtres Toutes/Non lues, les préférences et leur sauvegarde sans changement, puis l’ouverture directe et la lecture du ticket d’assistance (`android-notifications-support-d15-20261119.json`, journal `android-notifications-d15-20261119.log`).
+
+Le second ticket créé depuis iOS `55790d99-…` est également relu `resolved` au serveur après traitement par la file opérateur (`ios-support-d15-resolved-readback-20261119.json`). Aucun droit supplémentaire n’a été attribué au compte client.

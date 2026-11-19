@@ -62,3 +62,7 @@ INT-44B1D4, réalisé sur Android, est désormais payé en Stripe TEST depuis iO
 ### Correctifs D15 et D16, contrôle courant
 
 D15 corrige neuf méthodes notifications/assistance qui ignoraient le Bearer mobile : 36 tests ciblés et TypeScript réussis, candidat 60ifc6p9z publié sur alias et 21 contrôles Bearer en ligne réussis. D16 supprime la note 5/5 présélectionnée et exige un choix explicite ; composant monté vérifié en 390/1280, TypeScript réussi. CI 222 (D14) entièrement réussie. Les deux correctifs sont poussés dans la PR 9 en brouillon. Android D15 est recompilé ; recettes natives en cours. Les photos iOS échouent également sur un simulateur neuf HFS+ ; une isolation APFS est préparée. Le lancement commercial reste non validé.
+
+### Photo iOS : scénario nominal débloqué
+
+À 14:00 UTC, le même binaire D14 ajoute correctement la photo JPEG synthétique sur un simulateur APFS dédié, conservé sur disque externe. La photo est relue au serveur et les comptes tiers/non attribués sont refusés. Les essais précédents HFS+ restent des échecs historiques ; ce succès nominal ne couvre pas encore tous les formats ni le rapport iOS. Voir `PHOTOS_NATIVES_D12_2026-11-19.md`.
