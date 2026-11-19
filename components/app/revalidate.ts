@@ -65,3 +65,26 @@ export function createRevalidationScheduler(
     state: () => ({ running, trailing, scheduled: timer !== null }),
   };
 }
+
+/** Membership changes are not published through workspace Realtime. Re-read visible live
+ * enterprise sessions at a bounded cadence, without overlapping background polls. The caller's
+ * workspace coordinator still fences identity changes and coalesces concurrent refresh causes. */
+export function startAccessRevalidation(
+  run: () => Promise<void>,
+  eligible: () => boolean,
+  timers: { setTimer?: (fn: () => void, ms: number) => unknown; clearTimer?: (id: unknown) => void } = {},
+): () => void {
+  const setTimer = timers.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
+  const clearTimer = timers.clearTimer ?? (id => clearTimeout(id as ReturnType<typeof setTimeout>));
+  let stopped = false;
+  let timer: unknown;
+  const schedule = () => { timer = setTimer(() => { void tick(); }, 30000); };
+  async function tick() {
+    if (stopped) return;
+    try { if (eligible()) await run(); }
+    catch { /* the reader exposes its own error and the next poll can recover */ }
+    finally { if (!stopped) schedule(); }
+  }
+  schedule();
+  return () => { stopped = true; clearTimer(timer); };
+}
