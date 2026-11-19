@@ -19,7 +19,7 @@ function failed(error: unknown) { const response = apiError(error); response.hea
 function count(value: number | null): number { if (value === null || !Number.isSafeInteger(value) || value < 0) throw new ApiError(503, "Le comptage de l’historique est indisponible."); return value; }
 export async function GET(request: Request, context: Context) {
   try {
-    const { db, user } = await authenticatedClient(); const id = await ticketId(context);
+    const { db, user } = await authenticatedClient(request); const id = await ticketId(context);
     const params = new URL(request.url).searchParams;
     for (const key of params.keys()) if (!["limit", "after_version"].includes(key) || params.getAll(key).length !== 1) invalid();
     const limitText = params.get("limit") ?? "50", afterText = params.get("after_version") ?? "0";
@@ -48,7 +48,7 @@ export async function GET(request: Request, context: Context) {
 export async function POST(request: Request, context: Context) {
   try {
     assertOrigin(request);
-    const { db } = await authenticatedClient(); const id = await ticketId(context);
+    const { db } = await authenticatedClient(request); const id = await ticketId(context);
     if (new URL(request.url).searchParams.size) invalid();
     const data = await validated(request, schema);
     const result = await db.rpc("mutate_support_ticket", { p_id: id, p_action: data.action, p_expected_version: data.expected_version,

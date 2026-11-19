@@ -14,7 +14,7 @@ function failed(error: unknown) { const response = apiError(error); response.hea
 function count(value: number | null): number { if (value === null || !Number.isSafeInteger(value) || value < 0) throw new ApiError(503, "Le comptage des notifications est indisponible."); return value; }
 export async function GET(request: Request) {
   try {
-    const { db, user } = await authenticatedClient();
+    const { db, user } = await authenticatedClient(request);
     const params = new URL(request.url).searchParams;
     for (const key of params.keys()) if (!["limit", "cursor", "unread"].includes(key) || params.getAll(key).length !== 1) invalid();
     if (request.url.length > 4096) invalid();
@@ -59,7 +59,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     assertOrigin(request);
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     if (new URL(request.url).searchParams.size) invalid();
     const data = await validated(request, markSchema);
     const result = await db.rpc("mark_notifications", data.action === "mark_all_read"

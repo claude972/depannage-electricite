@@ -43,6 +43,7 @@ export type HarnessOptions = {
 export function harness(options: HarnessOptions = {}) {
   const role = options.role === undefined ? "artisan" : options.role;
   const user = options.userId ?? uuid(1);
+  const authenticationRequests: (Request | undefined)[] = [];
   const requests: { table: string; args?: Record<string, unknown>; url: URL; method: string }[] = [];
   const tables: Record<string, Row[]> = { profiles: [{ id: user, role }], ...(options.tables ?? {}) };
   const fetch: typeof globalThis.fetch = async (input, init) => {
@@ -71,7 +72,7 @@ export function harness(options: HarnessOptions = {}) {
   class ApiError extends Error { constructor(public status: number, message: string) { super(message); } }
   const helpers = {
     ApiError,
-    authenticatedClient: async () => { if (role === null) throw new ApiError(401, "Session requise"); return { db, user: { id: user } }; },
+    authenticatedClient: async (request?: Request) => { authenticationRequests.push(request); if (role === null) throw new ApiError(401, "Session requise"); return { db, user: { id: user } }; },
     assertOrigin: (request: Request) => { const origin = request.headers.get("origin"); if (origin && origin !== new URL(request.url).origin) throw new ApiError(403, "Origine refusée"); },
     dbError: (error: { code: string } | null) => { if (error) throw new ApiError(({ P0001: 409, P0002: 404, "42501": 403, "22023": 422, "23505": 409, "53300": 429 } as Record<string, number>)[error.code] ?? 503, "Commande refusée"); },
     apiError: (error: unknown) => Response.json({ error: error instanceof Error ? error.message : "Erreur" }, { status: error instanceof ApiError ? error.status : error instanceof SyntaxError ? 400 : 500 }),
@@ -99,6 +100,6 @@ export function harness(options: HarnessOptions = {}) {
   }
   const load = (relative: string) => compile(path.join(ROOT, relative));
   const request = (urlPath: string, body?: unknown, origin = "https://app.example.test") => new Request(`https://app.example.test${urlPath}`, body === undefined ? undefined : { method: "POST", headers: { origin, "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  return { requests, user, db, load, request, ApiError };
+  return { requests, authenticationRequests, user, db, load, request, ApiError };
 }
 export type Handler = (request: Request) => Promise<Response>;
