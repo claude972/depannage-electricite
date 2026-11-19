@@ -177,3 +177,7 @@ Scripts : `livraison/scripts-recette/` (lib.mjs + s1…s5, b1…b9, cleanup). Pr
 ## Préparation commerciale — 19/11 (Claude)
 - Test monté React du bouton « Relancer le rattachement » : `tests/ui/checkout-relink-mounted.test.ts`, 2/2 PASS (Chromium local, StrictMode), 4 mutations des gardes détectées.
 - Audit lecture seule de la configuration commerciale et de l'exploitation déployées : `livraison/AUDIT-COMMERCIAL-EXPLOITATION-20261119.md`. Constat principal : rien de commercial n'est publié (identité exploitant, garantie, zone desservie : `null`) ; barème de référence non validé ; aucune variable de production, aucun domaine commercial, aucun envoi email/push configuré ; portes fermées (preuves, barème, abonnements, notifications). Blocages listés pour le propriétaire ; rien d'inventé, Stripe live non activé.
+
+## Correctif sécurité et recette des rôles — 19/11 (Claude)
+- Next 16.4.3 → 16.4.6 (fichiers package de Codex, commit 214ec0d2) déployé en preview `dpl_G8TQpwy2NZj9PeLiq5AL1iCkxv9x` (qeqpc4bbs), alias de recette déplacé après smoke public/finance et admin 35/35 : `livraison/DEPLOIEMENT-SECURITE-RESULTAT-20261119.md`.
+- Recette Web/PWA des quatre rôles sur ce candidat (6 comptes synthétiques, 390/1440 ; parcours particulier→artisan et entreprise de bout en bout, sans paiement) et rapprochement avec les 76 capacités : `livraison/RECETTE-WEB-PWA-ROLES-20261119.md`. Web : PASS 9, PARTIEL 32, BLOQUÉ 6, DÉSACTIVÉ 2, NON VÉRIFIÉ 27. Défauts D1–D5 consignés, non corrigés (aucune modification runtime demandée).
