@@ -108,7 +108,7 @@ export const TYPE_LABEL: Record<string, string> = {
   "charge.dispute.funds_reinstated": "fonds restitués après contestation (selon le fournisseur)",
 };
 export const STATE_LABEL: Record<Observation["result"]["state"], string> = {
-  matched: "Associée au transfert enregistré",
+  matched: "Associée (règlement invité ou paiement Checkout)",
   needs_review: "À examiner",
 };
 export const REASON_LABEL: Record<Observation["result"]["reason"], string> = {
@@ -120,10 +120,15 @@ export const REASON_LABEL: Record<Observation["result"]["reason"], string> = {
   aggregate_payout_unallocated: "Versement bancaire agrégé : son montant n’est jamais réparti entre dossiers.",
   fee_reference_not_bound: "Commission conservée sans rattachement automatique (aucune référence immuable enregistrée).",
   dispute_reference_not_bound: "Contestation conservée sans rattachement automatique (aucune référence immuable enregistrée).",
+  linked_checkout_transfer: "Transfert brut du paiement Checkout de ce dossier : charge source, compte de l’artisan, montant et devise relus chez Stripe et identiques au paiement enregistré. Ce n’est ni un net ni la preuve d’un versement bancaire.",
+  linked_checkout_fee: "Commission du paiement Checkout de ce dossier : identifiant, montant figé, compte et charge relus chez Stripe et identiques. Inscrite une seule fois au registre.",
+  fee_proof_mismatch: "Les références de la commission (montant, devise, charge, compte source ou mode) ne correspondent pas au paiement Checkout lié : non rattachée.",
+  fee_refund_review: "Commission remboursée ou événement de remboursement : le lien au paiement est conservé, aucune nouvelle commission n’est inscrite, la situation reste à examiner.",
+  checkout_link_review: "Le paiement Checkout lié présente une reprise ou un remboursement : le lien est conservé, la situation reste à examiner.",
 };
 export const COPY = {
   title: "Observations du fournisseur de paiement",
-  intro: "Événements signés reçus du fournisseur et enregistrés par notre serveur, avec le résultat du rapprochement automatique. Une observation n’est ni un paiement, ni un versement, ni un remboursement : « associée » signifie seulement que l’événement correspond au transfert déjà enregistré pour un dossier. Aucune requête n’est envoyée au fournisseur depuis ce navigateur.",
+  intro: "Événements signés reçus du fournisseur et enregistrés par notre serveur, avec le résultat du rapprochement automatique. Une observation n’est ni un paiement, ni un versement, ni un remboursement : « associée » signifie seulement que l’événement correspond au règlement invité ou au paiement Checkout déjà enregistré pour un dossier. Aucune requête n’est envoyée au fournisseur depuis ce navigateur.",
   paging: "Pages de 50 au plus, ordonnées par identifiant d’événement — ni un solde, ni un ordre bancaire. Seuls les événements reçus et enregistrés apparaissent.",
   empty: "Aucune observation sur cette page pour ce filtre.",
   lastPage: "Pas de page suivante pour ce filtre au moment de la lecture.",
@@ -133,7 +138,7 @@ export const COPY = {
   notFound: "Observation introuvable.",
   demo: "En démonstration, aucune observation n’est lue et aucune revue n’est enregistrée : aucun appel n’est fait.",
   readOnly: "Lecture seule : enregistrer une revue nécessite les droits finance en lecture et en écriture.",
-  reviewExplain: "La revue enregistre votre note et relance l’association automatique avec les références déjà enregistrées. Elle ne crée aucun paiement, transfert ni remboursement, ne force aucun rattachement, et une note n’est pas une preuve bancaire : l’observation peut rester « à examiner ».",
+  reviewExplain: "La revue enregistre votre note, puis relance côté serveur la relecture Stripe du paiement Checkout concerné (lectures seulement) et l’association automatique. Elle ne crée aucun paiement, transfert, remboursement ni facture, ne force aucun rattachement, et une note n’est pas une preuve bancaire : l’observation peut rester « à examiner ».",
   reread: "Relire depuis notre serveur",
   noteRequired: "Saisissez une note (2000 caractères au plus).",
   sending: "Enregistrement de la revue…",

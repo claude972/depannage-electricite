@@ -1,3 +1,4 @@
+import { reconcileCheckoutLink, reconcileFinancialCheckoutEvent } from "@/lib/features/stripe-reconciliation/checkout-link";
 import {financialEventType,dispatchFinancialEvent} from "@/lib/features/stripe-reconciliation/webhook";
 import Stripe from "stripe";
 import { dispatchRefundEvent } from "@/lib/features/refund-execution/server";
@@ -43,7 +44,10 @@ export async function POST(request: Request) {
     if (event.livemode !== live || !validContext)
       throw new ApiError(400, "Contexte du paiement invalide.");
     if (financial) {
-      await dispatchFinancialEvent(event,body,adminClient(),live);
+      const admin = adminClient();
+      await dispatchFinancialEvent(event,body,admin,live);
+      // Run even when ingestion has deduplicated transport: an earlier link step may have failed.
+      await reconcileFinancialCheckoutEvent(event,admin,stripe,live);
       return Response.json({received:true},{headers:PAYMENT_HEADERS});
     }
     if(["refund.created","refund.updated","refund.failed"].includes(event.type)){
@@ -87,6 +91,9 @@ export async function POST(request: Request) {
     });
     // Failure leaves the event unprocessed; Stripe retries until the transaction commits.
     dbError(error);
+    if (outcome === "paid" && checkoutId !== undefined) {
+      await reconcileCheckoutLink(admin, stripe, live, { checkoutId });
+    }
     return Response.json({ received: true }, { headers: PAYMENT_HEADERS });
   } catch (error) {
     const status = error instanceof ApiError ? error.status : 503;

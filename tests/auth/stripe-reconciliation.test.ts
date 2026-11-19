@@ -8,6 +8,13 @@ const ID = "evt_FINQA",
 const PLATFORM_SECRET = "whsec_synthetic_platform";
 const CONNECT_SECRET = "whsec_synthetic_connect";
 const stripe = new Stripe("sk_test_synthetic_local");
+// Existing signed observations below represent the guest/unbound path, with no paid platform Checkout.
+const providerReads = {
+  webhooks: stripe.webhooks,
+  transfers: { retrieve: async (id: string) => ({ object: "transfer", id, livemode: false, source_transaction: "ch_QA" }) },
+  charges: { retrieve: async (id: string) => ({ object: "charge", id, livemode: false, metadata: {} }) },
+  applicationFees: { retrieve: async (id: string) => ({ object: "application_fee", id, livemode: false, originating_transaction: null }) },
+};
 function event(type = "transfer.created", account?: string) {
   return {
     id: ID,
@@ -37,6 +44,7 @@ function webhook(
   error: string | null = null,
   ack: any = { event_id: ID, version: 1, replayed: false },
   connectSecret: string | null = CONNECT_SECRET,
+  providerFailure = false,
 ) {
   const calls: any[] = [];
   const m = loadModule("app/api/payments/webhook/route.ts", {
@@ -52,12 +60,12 @@ function webhook(
       adminClient: () => ({
         rpc: async (name: string, args: any) => {
           calls.push({ name, args });
-          return { data: ack, error: error ? { code: error } : null };
+          return { data: name === "stripe_checkout_link_context" ? null : ack, error: error ? { code: error } : null };
         },
       }),
     },
     "@/lib/supabase/stripe": {
-      stripeClient: () => stripe,
+      stripeClient: () => providerFailure ? { ...providerReads, transfers: { retrieve: async () => { throw Error("provider timeout"); } } } : providerReads,
     },
   });
   return {
@@ -82,7 +90,7 @@ test("real signed webhook records transfer proof only, never payment mutation or
   assert.equal(r.headers.get("Cache-Control"), "private, no-store");
   assert.deepEqual(
     f.calls.map((c) => c.name),
-    ["ingest_stripe_financial_observation"],
+    ["ingest_stripe_financial_observation", "stripe_checkout_link_context"],
   );
   const p = f.calls[0].args;
   assert.equal(p.p_event.source_account, null);
@@ -144,7 +152,7 @@ test("Stripe destinations require distinct signatures and matching snapshot prov
     const platformOnly = webhook(false, null, undefined, badSecret);
     assert.equal((await platformOnly.post(connected, undefined, true)).status, 503);
     assert.equal((await platformOnly.post()).status, 200);
-    assert.equal(platformOnly.calls.length, 1);
+    assert.equal(platformOnly.calls.length, 2);
   }
 });
 test("payout contains no bank destination, no dossier inference, and keeps source account", async () => {
@@ -251,14 +259,16 @@ function api(data: unknown, error: unknown = null, list = false) {
       ? "app/api/platform-operations/stripe-observations/route.ts"
       : "app/api/platform-operations/stripe-observations/[id]/route.ts",
     {
-      "@/lib/supabase/server": fakeServerHelpers({
+      "@/lib/supabase/stripe": { stripeClient: () => providerReads },
+      "@/lib/supabase/server": { ...fakeServerHelpers({
         db: {
           rpc: async (name: string, args: unknown) => {
             calls.push({ name, args });
-            return { data, error };
+            return { data: name === "stripe_financial_observation_detail" && data && typeof data === "object" && "event_id" in data
+              ? { record, history: [], history_limited: false } : data, error };
           },
         },
-      }),
+      }), adminClient: () => ({ rpc: async () => ({ data: null, error: null }) }) },
     },
   );
   const c = { params: Promise.resolve({ id: ID }) };
@@ -341,4 +351,12 @@ test("finance denial, wrong origin, private projection and list cursor are check
     503,
   );
   assert.equal((await api(null, null, true).get("?state=paid")).status, 422);
+});
+
+test("a deduplicated signed delivery still returns retry when provider reconciliation is unavailable", async () => {
+  const f = webhook(false, null, { event_id: ID, version: 1, replayed: true }, CONNECT_SECRET, true);
+  const r = await f.post();
+  assert.equal(r.status, 503);
+  assert.equal(r.headers.get("Retry-After"), "2");
+  assert.equal(f.calls[0].name, "ingest_stripe_financial_observation");
 });
