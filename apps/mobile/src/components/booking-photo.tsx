@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import * as ImageManipulator from 'expo-image-manipulator';
+import { photoRepresentation, prepareJpeg } from '@/lib/photo-preparation';
 import { File } from 'expo-file-system';
 import { REQUEST_PHOTO_LABEL } from '../../../../shared/request-details';
 import { Action, Card, Copy } from './ui';
@@ -31,12 +31,12 @@ export function BookingPhotoPicker({ photo, preservedPhotoId, onChange, onPickin
     picking.current = true;
     setBusy(true); setError(''); onPicking(true);
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: false, quality: 1 });
+      const result = await ImagePicker.launchImageLibraryAsync({ preferredAssetRepresentationMode: photoRepresentation, mediaTypes: ['images'], allowsMultipleSelection: false, quality: 1 });
       const asset = result.assets?.[0];
       if (!asset || !alive.current) return;
       const size = Math.max(asset.width, asset.height);
       const resize = size > 1600 ? [{ resize: asset.width >= asset.height ? { width: 1600 } : { height: 1600 } }] : [];
-      const image = await ImageManipulator.manipulateAsync(asset.uri, resize, { compress: .74, format: ImageManipulator.SaveFormat.JPEG });
+      const image = await prepareJpeg(asset.uri, resize);
       const file = new File(image.uri);
       try {
         const staged = await stageReportPhoto(file);

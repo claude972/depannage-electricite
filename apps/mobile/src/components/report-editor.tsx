@@ -4,7 +4,7 @@ import { Alert, Platform } from 'react-native';
 import { randomUUID } from 'expo-crypto';
 import { File } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
-import * as ImageManipulator from 'expo-image-manipulator';
+import { photoRepresentation, prepareJpeg } from '@/lib/photo-preparation';
 import { Action, Card, Copy, Field, ReadState } from './ui';
 import { api } from '@/lib/api';
 import { fileSaved, signature, success } from '@/lib/contracts';
@@ -78,7 +78,7 @@ export function ReportEditor({ draftKey, token, id, report, required, onSaved }:
       // The marker (account + dossier + side) is persisted before the native picker opens.
       const launch = () => source === 'camera'
         ? ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1 })
-        : ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1, allowsMultipleSelection: false });
+        : ImagePicker.launchImageLibraryAsync({ preferredAssetRepresentationMode: photoRepresentation, mediaTypes: ['images'], quality: 1, allowsMultipleSelection: false });
       const picked = await (Platform.OS === 'android' ? launchWithTicket(draftKey, side, signal, launch) : launch());
       if (!picked || picked.canceled) return;
       if (signal.aborted) return;
@@ -89,7 +89,7 @@ export function ReportEditor({ draftKey, token, id, report, required, onSaved }:
 
   async function keep(side: Side, asset: ImagePicker.ImagePickerAsset, signal: AbortSignal) {
     const actions = asset.width > 1600 ? [{ resize: { width: 1600 } }] : [];
-    const image = await ImageManipulator.manipulateAsync(asset.uri, actions, { compress: .74, format: ImageManipulator.SaveFormat.JPEG });
+    const image = await prepareJpeg(asset.uri, actions);
     let photo: PendingPhoto;
     try { photo = await stageReportPhoto(new File(image.uri)); }
     finally { if (image.uri !== asset.uri) discardTemporaryPhoto(new File(image.uri)); }

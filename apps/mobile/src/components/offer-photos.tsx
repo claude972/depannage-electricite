@@ -4,7 +4,7 @@ import { Alert, Platform } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
-import * as ImageManipulator from 'expo-image-manipulator';
+import { photoRepresentation, prepareJpeg } from '@/lib/photo-preparation';
 import { File } from 'expo-file-system';
 import { z } from 'zod';
 import { Action, Card, Copy, ReadState } from './ui';
@@ -70,11 +70,10 @@ export function OfferPhotoConsent({ id, token, documents, onUploaded }: {
   }
   function upload() {
     void run(async signal => {
-      const selected = await ImagePicker.launchImageLibraryAsync({ mediaTypes:['images'], quality:1, allowsMultipleSelection:false });
+      const selected = await ImagePicker.launchImageLibraryAsync({ preferredAssetRepresentationMode: photoRepresentation, mediaTypes:['images'], quality:1, allowsMultipleSelection:false });
       const asset = selected.assets?.[0];
       if (!asset || signal.aborted) return;
-      const image = await ImageManipulator.manipulateAsync(asset.uri, asset.width > 1600 ? [{resize:{width:1600}}] : [],
-        { compress:.74, format:ImageManipulator.SaveFormat.JPEG });
+      const image = await prepareJpeg(asset.uri, asset.width > 1600 ? [{resize:{width:1600}}] : []);
       try {
         if (signal.aborted) return;
         const source = Platform.OS === 'web' ? await (await fetch(image.uri, { signal })).blob() : new File(image.uri);
