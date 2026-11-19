@@ -2,6 +2,18 @@
 
 Statut : recette en cours, ouverture commerciale non validée. Consigne du propriétaire : créer les documents manquants comme brouillons modifiables et poursuivre exclusivement sur les appareils virtuels.
 
+## État courant — 19 novembre, 15:06 UTC
+
+- Photos iOS débloquées sur simulateur APFS avec le même binaire : JPEG/PNG, conservation, partage et retrait vérifiés. Les échecs HFS+ décrits plus bas sont historiques.
+- Notifications, préférences et assistance vérifiées sur Android et iOS ; deux tickets résolus par la file opérateur et relus côté client.
+- D17 corrige les messages entrants absents de l’écran natif ouvert. Réception et conservation du brouillon vérifiées sur Android et iOS reconstruits.
+- D16 est sur l’alias de recette, candidat hbqmw2992 ; CI 227 réussie. Limite de preuve du formulaire final explicitée dans son rapport.
+- La suite web v3 complète syndic, consommations et budget. D18 corrige le message de contestation en anglais ; déploiement et recette en ligne encore attendus.
+- D20 : clavier iOS corrigé, envoi unique et connexion sans en-tête vérifiés sur simulateur ; non-régression Android et CI232 réussies.
+- D19 distingue les opérateurs homonymes ; D18/D19 en cours de déploiement par la session existante. D21 protège les dates de pause SLA futures : tests SQL isolés 3/3 ; application recette encore à vérifier.
+- D22 : partage GPS Android synthétique, accès tiers refusé et arrêt en arrière-plan vérifiés ; carte/ETA et iOS restent ouverts.
+- Aucun lancement commercial, paiement LIVE ou dossier store n’est déclaré validé. Les contrôles partiels restent signalés dans la matrice.
+
 ## Documents livrés
 
 Le dossier [lancement](../lancement/README.md) contient identité/offre, prix/commissions, conditions de service, confidentialité et exploitation/ouverture. Aucun de ces textes n'est chargé automatiquement par l'application. Les données réelles restent à renseigner ; aucune identité, couverture, garantie, commission ou assistance n'a été publiée.

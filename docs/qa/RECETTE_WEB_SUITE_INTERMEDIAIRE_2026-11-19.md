@@ -1,6 +1,6 @@
-# Recette Web — suite, rapport intermédiaire v2 (19/11/2026, 13:35 UTC)
+# Recette Web — suite, rapport intermédiaire v3 (19/11/2026, 14:32 UTC)
 
-Auteur : Claude (mini). Ce rapport remplace la version de 12:20 UTC.
+Auteur : Claude (mini). La v3 complète la v2 (13:35 UTC) : D15, D16 et sa correction de largeur, rapprochement INT-44B1D4, tickets d'assistance, ENT-05/09/14. Les sections antérieures sont conservées.
 
 **Cadre**
 - Comptes synthétiques existants seulement. Les identifiants viennent des fichiers privés et ne figurent dans aucun journal ; aucun code d'invitation n'est journalisé.
@@ -27,17 +27,29 @@ Avant chaque copie, nos fichiers ont été comparés au parent Codex : aucune di
 | D10 accès entreprise | d52ac5c | 3ddc98b4 | revalidate + admin + session + rayon 39/39 |
 | D11 carte (W2) | 791e40f | 3f280ae8 | — |
 | D13 contestation (W1) | 8f24b37 | 9124a69a | routes plateforme 7/7 |
+| D15 Bearer (notifications, assistance) | 897325c | 9b82c4ea | notifications + assistance 18/18 (harness patché) |
+| D16 note explicite (O5) | 2f96aeb | d6c83695 | — |
+| D16 largeur (W3) | 8caecfe | 65d2b78b | — |
 
-**Candidat courant : `dpl_844a9eCa6NKuRocFZF2ZyzrCtY13` (qay300bx3, commit `d00fd2d6`).**
-- Cible preview, READY.
-- L'alias `domdepannage-recette-20261112.vercel.app` pointe sur ce candidat depuis 13:28 UTC.
-- Candidats intermédiaires :
-  - 8k1jrui9o (D1–D5) ;
-  - 6pwutkukc (+D2) ;
-  - o4n1lx6jm (+D6) ;
-  - ie7ir3uou (+D9, D10, non aliasé) ;
-  - a0ajqcdgg (+D11, aliasé de 13:08 à 13:28) ;
-  - 7ixt1hjfy (+D13 sans libellés, non aliasé).
+**Candidat courant : `dpl_GRTVMnRGoduvNRXB1UheT88t8P4e`**
+- URL : `https://domdepannage-recette-20261112-hbqmw2992-brafas-projects.vercel.app` (commit `65d2b78b`), cible preview, READY.
+- **Alias `domdepannage-recette-20261112.vercel.app` → hbqmw2992** (promu après non-régression, vers 14:20 UTC).
+- Historique de l'alias : o4n1lx6jm → a0ajqcdgg (13:08) → qay300bx3 (13:28) → **60ifc6p9z / D15** (`dpl_3Xkx26iiUgfRs8Zpf9zWE5AF1mFV`, ~13:56) → hbqmw2992.
+- **Non promus :** ie7ir3uou, 7ixt1hjfy, et miupzl34h (`dpl_DaSwkUB37E4F9rTWHCZZRaVxuiYR`, première version de D16, régression W3).
+
+**D15 (60ifc6p9z) : PASS côté Web**
+- Sessions Web par cookie (client, entreprise, artisan) : 200 sur notifications, préférences, résumé et assistance.
+- Sans session : 401. Bearer invalide : 401.
+- Bearer synthétiques et écrans natifs : vérifiés par Codex (21 contrôles).
+
+**D16 : PASS fonctionnel (miupzl34h), PARTIEL pour la mise en page en ligne (hbqmw2992)**
+- Aucune note cochée au départ ; envoi désactivé sans note.
+- Note 4/5 choisie délibérément sur INT-44B1D4 (client synthétique) : transmise exactement, une seule fois (201). Tiers 403.
+- **W3 constatée sur miupzl34h :** l'option « 5 » sortait de l'écran à 390 px (aide placée dans la ligne flex).
+- Sur hbqmw2992, la page INT-44B1D4 ne déborde ni à 390 ni à 1280 px.
+- **Limite exacte :** le formulaire n'a pas pu être réaffiché en ligne après correction. INT-44B1D4 a désormais un avis, aucun autre dossier réglé sans avis n'appartient au client synthétique, et le mode démonstration ne l'expose pas. La mise en page corrigée repose sur le test monté Codex avec le CSS réel (avant et après), et le diff ne déplace qu'un paragraphe.
+
+**Non-régression sur hbqmw2992 :** D1–D5 et D15 passent (16/16) ; Leaflet 0 erreur sur 6 essais ; panneau D13 présent.
 
 Vérifications sur ce candidat ou sur a0ajqcdgg, selon le cas :
 
@@ -110,6 +122,22 @@ Vérifications sur ce candidat ou sur a0ajqcdgg, selon le cas :
 - **FIN-06.** Rapprochement de INT-44B1D4, par « Relancer le rattachement » (lectures Stripe TEST) puis rejeu, pour prouver une commission inscrite une seule fois.
 - **FIN-01, 03, 04, 05 et ART-11.** Flux de paiement TEST.
 
+
+## 1 bis. Ajouts v3
+| Id | Proposition Web | Preuve | Limites explicites |
+|---|---|---|---|
+| FIN-06 (INT-44B1D4) | PASS (TEST) | Liaison Checkout créée par le webhook à 13:12:33, Fee figée à 1 845 c (1 700 bps), Transfer brut 10 850 c. « Relancer le rattachement » + rejeu : commission inchangée (4 058 c au total). « Rapprocher les règlements » : `payment_settled` de 10 850 c écrit une seule fois ; rejeu sans effet (`RAPPROCHEMENT-INT-44B1D4-20261119.md`) | Aucune facture ni versement ; taux plateforme non configuré, donc aucune estimation |
+| ADM-07 | PASS | Deux tickets synthétiques natifs (`9610e14b`, `55790d99`) : attribution et escalade à motif obligatoire, réponse, « Résolue », historique ; demandeur 200, tiers 404 (t2, t4) | O8 : opérateurs indiscernables (8 « Admin Recette ») |
+| ENT-03 | PASS (création) | Deux sites **SYNTHETIQUE R1341** (syndic `313e4d0d…`, restauration `bb0126c4…`), adresse « Adresse fictive de recette », créés par « Nouveau site » (201) | Archivage non rejoué |
+| ENT-05 | PASS | AG « Tenue » avec ordre du jour, compte rendu et décisions consignées (version 1) ; titre obligatoire ; parties communes « Hall A » et « Étage 1 » ; contact fictif `@example.test` (téléphone ou e-mail exigé), sans invitation ; mention « aucune convocation, aucun fonds, aucune validation juridique » ; lecteur refusé (n5, n5b, n9) | Appels de fonds non saisis |
+| ENT-09 | PASS | Période avec fin avant début refusée. Septembre : facture, 1 234,5 kWh, 245,67 €. Octobre : relevé, 1 000,25 kWh, sans coût. Total 2 234,75 kWh avec « coûts incomplets » ; filtre 15/09–31/10 = 1 000,25 kWh (aucun prorata) ; source et référence affichées (n7) | Site Bureaux seulement |
+| ENT-14 | PASS | Lignes Maintenance 300 € et Contrôles 100 € : budget 400 €, devis acceptés 434 € (3 dossiers), réglé 0, **écart −34,00 €** (budget − devis acceptés) (n8) | Un seul exercice |
+
+## Prochaines étapes immédiates
+- **ENT-06 et ENT-11 :** sur le site restauration synthétique, calendrier, règle et demande urgente synthétique suivie (échéance, pause, reprise).
+- **ENT-07 :** équipement relié à un ticket.
+- **Archivage de site (ENT-03).**
+
 ## 2. Défauts et observations
 | Id | État | Constat |
 |---|---|---|
@@ -123,6 +151,8 @@ Vérifications sur ce candidat ou sur a0ajqcdgg, selon le cas :
 | O3 | Observation | Date de créneau passée : message générique |
 | O5 | Observation (UX, données) | Note 5/5 présélectionnée dans le formulaire d'avis |
 | O6 | Observation | Message de validation en anglais sur `POST /api/platform-operations/reviews/[id]` |
+| W3 | Corrigé (D16 largeur), mise en page en ligne partiellement revérifiée | Option « 5 » hors écran à 390 px sur miupzl34h |
+| O8 | Observation | Liste d'attribution d'assistance : opérateurs indiscernables |
 | O7 | Observation | Contestation de 9 caractères : seule l'aide « De 10 à 2 000 caractères » reste affichée, sans message d'erreur explicite |
 
 ## 3. Données synthétiques créées ou modifiées (recette)
