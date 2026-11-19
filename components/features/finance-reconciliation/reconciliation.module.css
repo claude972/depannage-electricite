@@ -36,3 +36,9 @@
 .primary:disabled, .secondary:disabled { opacity: 0.6; cursor: not-allowed; }
 .field select:focus-visible, .field textarea:focus-visible, .primary:focus-visible, .secondary:focus-visible { outline: 3px solid var(--ui-focus); outline-offset: 2px; }
 @media (max-width: 640px) { .kv > div { grid-template-columns: 1fr; gap: 2px; } .primary, .secondary { justify-self: stretch; } .actions > * { flex: 1 1 100%; } }
+/* Responsive (19/11) : la liste déroulante du filtre (option la plus longue : 355 px) fixait la
+   largeur des grilles à une seule colonne implicite et élargissait la page à 392 px à 320 et 390 px. */
+.panel, .live, .detail, .summary, .field, .list, .item { grid-template-columns: minmax(0, 1fr); }
+.field select, .field textarea { min-width: 0; max-width: 100%; width: 100%; }
+.kv > div { min-width: 0; }
+.kv dd, .kv dt, .headline, .hint { overflow-wrap: anywhere; }
