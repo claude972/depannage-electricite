@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // PUB-06 — terms version recorded with a warranty case: on-demand exact read (?version=N, version
 // checked), unavailable version honest, null ⇒ no request, wording never « acceptées »; Chromium 390:
 // real WarrantyPanel, on-demand read, error ⇒ Réessayer, missing, scope switch ⇒ cleared, demo ⇒ 0 fetch.
@@ -15,7 +16,7 @@ const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_module
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
 const skip = available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)";
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const pub = (version: number) => ({ published: { version, title: "Conditions v" + version, body: "Texte de la version " + version, published_at: "2026-10-01T10:00:00Z" } });
 
 test("model : exact ?version=N, version checked, null ⇒ missing, errors, invalid ⇒ no request", async () => {

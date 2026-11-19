@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // Appointment reminder panel mounted for real (React root, StrictMode, local Chromium): one GET
 // on mount, an instant after the appointment is refused locally (0 POST), a valid local instant
 // posts once; fits 360 px with 44 px targets in light and dark. Skipped without Chromium.
@@ -13,7 +14,7 @@ import { build } from "esbuild";
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const JOB = "20000000-0000-4000-8000-000000000001";
 const ENTRY = `
 import { createElement as h, StrictMode } from "react";

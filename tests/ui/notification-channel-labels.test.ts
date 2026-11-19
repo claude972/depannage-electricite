@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // SYS-04 / PUB-04: the notification centre states each external channel exactly, from data already
 // loaded — « Disponible » (server reports it available), « Activé » (available AND the SAVED
 // opt-in), unavailable as before — and makes no global claim that nothing is sent. Server-rendered
@@ -8,7 +9,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { build } from "esbuild";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const ENTRY = `
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";

@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // ENT-13 — contracts model: strict parsers (ROOT 201057a), URLs, controller (pagination beyond 50 +
 // dedup, 422 cursor ⇒ page 1, 401/403/404 refusal incl. sites-only scope, 503 Retry-After, late reply).
 import test from "node:test";
@@ -6,7 +7,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { createContracts, detailUrl, listInitial, listUrl, parseContract, parseContracts, type ListState } from "../../components/features/enterprise-contracts/model";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const ORG = "0a000000-0000-4000-8000-000000000001";
 const C = (n: number) => "c0000000-0000-4000-8000-" + String(n).padStart(12, "0");
 const item = (n: number, org = ORG) => ({ id: C(n), organization_id: org, title: "Contrat " + n, reference: "REF-" + n, starts_on: "2026-01-01", ends_on: n % 2 ? null : "2026-12-31", status: "active", created_at: "2026-11-07T10:00:00.123456+00:00" });

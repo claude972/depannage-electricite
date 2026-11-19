@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // PUB-02 ROOT final contract, REAL mounts in Chromium at 390 px: BookingConfirm (+ the shared
 // sendReviewedBooking used by the app, real api(), real booking draft in sessionStorage) and the public
 // BookingWizard recap. Demonstration: click with V2 → 409 estimate_review_required (server now V3) → V3
@@ -18,7 +19,7 @@ const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_module
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
 const skip = available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)";
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const ENTRY = `
 import { createElement as h, StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";

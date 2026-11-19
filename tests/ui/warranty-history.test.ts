@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // ADM-10 / PUB-06 — warranty history model: strict parser (Astra b8301be), URL, claim proof,
 // controller (pages beyond 100 + dedup, 422 cursor ⇒ page 1, 401/403/404 clear, late reply dropped).
 import test from "node:test";
@@ -6,7 +7,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { claimAllowed, createHistory, historyInitial, historyUrl, parseHistory, type HistoryState } from "../../components/features/warranty-corrective/warranty-history";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const D = "d0000000-0000-4000-8000-000000000001";
 const W = (n: number) => "e0000000-0000-4000-8000-" + String(n).padStart(12, "0");
 const kase = (n: number, status = "resolved", dossier = D) => ({ id: W(n), intervention_id: dossier, client_id: "c0000000-0000-4000-8000-000000000001", description: "Disjoncteur qui saute encore " + n, status, resolution: "", created_at: "2026-11-07T10:00:00.123456+00:00", updated_at: "2026-11-07T10:00:00.123456+00:00", terms_version: 2 });

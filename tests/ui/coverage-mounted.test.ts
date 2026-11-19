@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // Postal coverage mounted for real (React root, StrictMode, local Chromium) + real-app wiring.
 // Public check: invalid ⇒ 0 call; valid ⇒ exactly one GET; editing the code drops a stale reply;
 // nothing written to storage. Editor: empty list, add/dedupe/remove, explicit confirmation, one POST
@@ -18,7 +19,7 @@ const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_module
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
 const skip = available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)";
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const UID = "10000000-0000-4000-8000-0000000000ad";
 const ENTRY = `
 import { createElement as h, StrictMode } from "react";

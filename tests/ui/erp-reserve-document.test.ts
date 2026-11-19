@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // E67 (UI): optional private document of the SAME site linked to a lifted ERP reserve, mounted in
 // Chromium (real React root, StrictMode, real ErpPanel/useSubmit). Only `context.run` and
 // window.fetch are injected. Expected: the lift stays possible without a document (no key sent);
@@ -16,7 +17,7 @@ import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 import { erpChecklistPayload } from "../../lib/features/site-operations/schemas";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);

@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // FIN-08 saved payment methods (client « Mon profil »). Real model + SSR + a Chromium mount of the
 // real panel (fake api) + real-app demo wiring.
 import test from "node:test";
@@ -173,7 +174,7 @@ test("états : 403 refus honnête, 503 réessai, vide, pagination after, démo s
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const ENTRY = `
 import { createElement as h, StrictMode } from "react";
 import { createRoot } from "react-dom/client";

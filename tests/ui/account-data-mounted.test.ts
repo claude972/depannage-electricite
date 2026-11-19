@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // Account data panel mounted for real (React root, StrictMode, local Chromium): one GET per page,
 // a real browser download of one JSON file (object URL revoked); an identity change mid-collection
 // downloads nothing; the erasure goes through the explicit confirmation, POSTs once with the fenced
@@ -17,7 +18,7 @@ const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_module
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
 const skip = available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)";
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const UID = "10000000-0000-4000-8000-0000000000aa";
 const T = "2026-11-01T10:00:00+00:00";
 const ENTRY = `

@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // Operational reminders mounted for real (React root, StrictMode, local Chromium) + artisan wiring.
 // Credential panel: state as returned, explicit date + time ⇒ one POST with the command already stored
 // under courant-private-op-reminders:, cancel behind a confirmation; no form when the server says
@@ -18,7 +19,7 @@ const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_module
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
 const skip = available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)";
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const UID = "10000000-0000-4000-8000-0000000000ab";
 const CRED = "60000000-0000-4000-8000-000000000001";
 const ENTRY = `

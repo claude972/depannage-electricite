@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // ART-10 — strict parser of the server performance report and wiring of the three live mounts
 // (Overview summary, Profile block, Performance page) to session.loadArtisanPerformance.
 import test from "node:test";
@@ -11,7 +12,7 @@ import {
   parseArtisanPerformance,
 } from "../../components/features/artisan-performance/model";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const read = (p: string) => readFileSync(path.join(ROOT, p), "utf8");
 
 // Shape returned by the artisan_performance RPC (Postgres timestamptz JSON, +00:00 offsets).

@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // Energy consolidation panel mounted for real (React root, local Chromium), StrictMode: the exact
 // GET is sent once per submit; a reply that arrives after an identity change is never applied; the
 // form and the result fit 360 px with 44 px targets. Skipped — never passed — without Chromium.
@@ -13,7 +14,7 @@ import { build } from "esbuild";
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const ORG = "10000000-0000-4000-8000-000000000001", S1 = "20000000-0000-4000-8000-000000000001";
 const ENTRY = `
 import { createElement as h, StrictMode } from "react";

@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // ART-07 — artisan quotes list model: strict parser (contract 76151e2 / 42708ad), URL, Retry-After,
 // controller (pagination + dedup, 422 cursor ⇒ page 1, 401/403 ⇒ cleared, late replies dropped).
 import test from "node:test";
@@ -7,7 +8,7 @@ import path from "node:path";
 import { parseQuoteDetail, quoteDetailUrl } from "../../components/features/artisan-quotes/detail";
 import { createQuotes, parseQuotes, quotesInitial, quotesUrl, retryAfterSeconds, type QuotesState } from "../../components/features/artisan-quotes/model";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const Q = (n: number) => "b0000000-0000-4000-8000-" + String(n).padStart(12, "0");
 const I = (n: number) => "a0000000-0000-4000-8000-" + String(n).padStart(12, "0");
 const item = (n: number, status = "sent") => ({ id: Q(n), intervention_id: I(n), status, total_cents: 10000 + n, created_at: "2026-11-07T10:00:00.123456+00:00", accepted_at: status === "accepted" ? "2026-11-07T11:00:00Z" : null, intervention: { id: I(n), category: "panel", status: "quoted" } });

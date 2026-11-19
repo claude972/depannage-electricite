@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // Card-hold return / pending attempt: dedicated state independent of the draft, cleared only on
 // « confirmed » / « cancelled », identity-bound, never a financial success from the URL.
 import test from "node:test";
@@ -61,7 +62,7 @@ test("controller: URL cancel claims nothing financial; return kept without draft
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const APP = `
 import { createElement as h, useState } from "react";
 import { createRoot } from "react-dom/client";

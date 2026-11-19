@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // Shared helper (not a test file): real ArtisanSpace bundled with esbuild and mounted in live mode on a
 // fake Session (StrictMode, ThemeProvider), served with globals.css. Fields the screen under test does
 // not use fall back to inert values: unknown session methods resolve null, unknown data lists are [],
@@ -7,7 +8,7 @@ import { createServer, type Server } from "node:http";
 import path from "node:path";
 import { build } from "esbuild";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 
 /** `setup` is browser code run before mount; it may define window.seed = { data, session } overrides. */
 export async function serveLiveArtisan(setup: string) {
