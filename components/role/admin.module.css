@@ -2082,6 +2082,7 @@ button.row:hover {
 @media (max-width: 600px) {
   .table td {
     min-width: 0;
+    overflow-wrap: anywhere;
   }
   .table td > * {
     min-width: 0;
