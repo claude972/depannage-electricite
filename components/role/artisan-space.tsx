@@ -1,4 +1,5 @@
 "use client";
+import { ReviewContestationPanel } from "../features/review-contestation/review-contestation-panel";
 import { DemoBanner } from "../app/demo-banner";
 // Artisan space (role "artisan"). Presentational: every mutation goes through `session`.
 // Master references: M35 (shell + dashboard), M67 (offer), M34 (quote), M14 (documents),
@@ -1663,6 +1664,9 @@ function WorkDossier({ session, intervention: i }: { session: Session; intervent
               payment panel below shows the state (and keeps historical declarations honest). */}
           {["completed", "paid"].includes(i.status) && (
             <PaymentPanel session={session} intervention={i} />
+          )}
+          {session.data.reviews.filter(review => review.intervention_id === i.id).map(review =>
+            <ReviewContestationPanel key={review.id} reviewId={review.id} context={session.mutationContext} demo={session.mode === "demo"} />
           )}
           <section className="panel" aria-labelledby="dossier-messages">
             <h2 id="dossier-messages">Échanges</h2>

@@ -29,7 +29,7 @@ const operatorProfiles: Row[] = [
   { id: uuid(21), full_name: "Artisan de test", role: "artisan" },
   { id: uuid(22), full_name: "Gestionnaire de test", role: "manager" },
 ];
-function harness(actor: keyof typeof ACCESS | null, env: Record<string, string> = {}, rejectedRpc?: { name: string; code: string; message: string }) {
+function harness(actor: keyof typeof ACCESS | null, env: Record<string, string> = {}, rejectedRpc?: { name: string; code: string; message: string }, fixtures: Record<string, Row[]> = {}) {
   const calls: { rpc?: string; args?: Row; table?: string; url: URL; method: string }[] = [];
   const fetch: typeof globalThis.fetch = async (input, init) => {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url); const table = url.pathname.split("/").at(-1)!; const method = init?.method ?? "GET";
@@ -44,6 +44,7 @@ function harness(actor: keyof typeof ACCESS | null, env: Record<string, string> 
     let rows: Row[] = table === "platform_audit" ? audit : table === "platform_refund_requests" ? refunds : table === "platform_settings" ? [{ key: "commission_bps", value: { bps: 1500 }, version: 2 }] : [];
     if (table === "platform_operator_grants") rows = operatorGrants;
     if (table === "profiles") rows = operatorProfiles;
+    if (table in fixtures) rows = fixtures[table];
     for (const [key, value] of url.searchParams) {
       if (key === "or") { const m = /^\(created_at\.lt\."([^"]+)",and\(created_at\.eq\."([^"]+)",id\.lt\.([^)]+)\)\)$/.exec(value); assert.ok(m, value); rows = rows.filter((r) => String(r.created_at) < m[1] || (String(r.created_at) === m[2] && String(r.id) < m[3])); }
       else if (["select", "order", "limit"].includes(key)) continue;
@@ -188,4 +189,30 @@ test("protected operator and refund writes translate only the dedicated SQL MFA 
   const response = await h.route("finance/refund-requests").POST(h.request("/finance/refund-requests", cases[3].body));
   assert.equal(response.status, 403);
   assert.equal((await response.json()).code, undefined);
+});
+
+
+test("review contestation history is bounded and restricted to the assigned artisan, never a moderator shortcut", async () => {
+  const reviewId = uuid(90), intervention = uuid(91);
+  const fixtures = {
+    reviews: [{ id: reviewId, intervention_id: intervention, rating: 2, body: "Avis synthétique." }],
+    interventions: [{ id: intervention, artisan_id: uuid(1) }],
+    platform_review_contestations: Array.from({ length: 53 }, (_, n) => ({ id: uuid(200+n), review_id: n === 52 ? uuid(99) : reviewId, contested_by: n === 51 ? uuid(2) : uuid(1), request_id: uuid(400+n), reason: "Motif synthétique de contestation.", status: "dismissed", created_at: new Date(Date.UTC(2026,10,1,0,n)).toISOString(), decided_at: null, decision_note: "" })),
+  };
+  const h = harness("none", {}, undefined, fixtures);
+  const response = await h.route("reviews/[id]").GET(h.request("/reviews/"+reviewId), h.ctx(reviewId));
+  assert.equal(response.status, 200); assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+  const body = await response.json(); assert.equal(body.contestations.length, 50); assert.equal(body.limited, true);
+  assert.ok(body.contestations.every((row: Row) => row.review_id === reviewId && row.contested_by === uuid(1)));
+  const request = h.calls.find(call => call.table === "platform_review_contestations")!;
+  assert.equal(request.url.searchParams.get("limit"), "50");
+  assert.equal(request.url.searchParams.get("order"), "created_at.desc,id.desc");
+  assert.equal(request.url.searchParams.get("contested_by"), "eq."+uuid(1));
+  assert.ok(!h.calls.some(call=>call.rpc === "platform_access"));
+  for (const actor of ["none", "moderator", "admin", null]) {
+    const denied = harness(actor, {}, undefined, { ...fixtures, interventions: [{ id: intervention, artisan_id: uuid(2) }] });
+    const result = await denied.route("reviews/[id]").GET(denied.request("/reviews/"+reviewId), denied.ctx(reviewId));
+    assert.equal(result.status, actor === null ? 401 : 404);
+    assert.ok(!denied.calls.some(call=>call.table === "platform_review_contestations"));
+  }
 });
