@@ -110,3 +110,13 @@
 .confirm p {
   margin: 0;
 }
+/* Responsive (19/11) : la colonne implicite du bloc prenait la largeur de la liste déroulante des
+   grilles (libellé long) et élargissait le dossier à 562 px à 390 px et moins. */
+.block,
+.list {
+  grid-template-columns: minmax(0, 1fr);
+}
+.row > * {
+  min-width: 0;
+  max-width: 100%;
+}

@@ -91,3 +91,7 @@ D15 corrige neuf méthodes notifications/assistance qui ignoraient le Bearer mob
 ## Complément responsive du 19 novembre 2026
 
 Le lot responsive est livré sur l’alias de recette : déploiement `dpl_XBAvbniLcY38To3W4XGjd6JZn3c8`, source GitHub `4ec961c`. 81 vues et 30 états interactifs ont donné 858 mesures sans défaut, complétées par 28 contrôles après bascule de l’alias. Suite UI : 1 178 réussites, puis sept tests ciblés complémentaires réussis ; TypeScript et job CI applicatif réussis. Voir `RESPONSIVE_WEB_2026-11-19.md` pour la portée exacte, les limites navigateur et les preuves. Cela ne clôture pas les réserves commerciales ou de configuration déjà identifiées.
+
+## Complément parcours entreprise et retours
+
+Rapports : 21 contrôles API réussis et export CSV réel identique au serveur. Grilles : publication synthétique v2, devis existant maintenu en v1, vérifiés API et interface. Retours : messages de connexion et Stripe corrigés, 22 tests ciblés réussis et trois retours anonymes vérifiés en ligne. Les états de paiement restent fondés sur le serveur. Voir `CLOTURE_PARCOURS_WEB_2026-11-19.md`. Les réserves commerciales et natives restent ouvertes.
