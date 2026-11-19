@@ -16,6 +16,15 @@ test("entreprise : site obligatoire dans la demande, site actif présélectionn�
     assert.equal(await site.getAttribute("required"), "", "site required");
     assert.equal(await site.locator("option").first().innerText(), "Choisir un site");
     assert.equal(await page.getByText("Adresse personnelle ou autre lieu").count(), 0);
+    await site.selectOption("");
+    await page.getByRole("button", { name: "Continuer", exact: true }).first().click();
+    await page.getByText("Choisissez le site professionnel concerné par cette demande.", { exact: true }).waitFor({ state: "visible" });
+    assert.equal(await site.getAttribute("aria-invalid"), "true");
+    assert.ok(await site.getAttribute("aria-describedby"), "error associated with site control");
+    const validSite = await site.locator("option").nth(1).getAttribute("value");
+    await site.selectOption(validSite!);
+    assert.notEqual(await site.getAttribute("aria-invalid"), "true");
+    assert.equal(await page.getByText("Choisissez le site professionnel concerné par cette demande.", { exact: true }).count(), 0);
     assert.deepEqual(errors, []);
   });
 });

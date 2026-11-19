@@ -86,7 +86,7 @@ test("Chromium : liste paginée par curseur, libellé d’observation, revue con
       assert.equal(await page.locator("[data-reconciliation-event]").count(), 50);
       const first = await page.locator("[data-reconciliation-event]").first().innerText();
       assert.match(first, /Observation du fournisseur \(lecture\)/i);
-      assert.match(first, /Associée au transfert enregistré[\s\S]*n’est pas la preuve d’un versement bancaire/);
+      assert.match(first, /correspond exactement au transfert déjà enregistré[\s\S]*n’est pas la preuve d’un versement bancaire/);
       assert.match(first, /123,45 €/);
       // Matched observation: the proven dossier link opens the dossier.
       await page.locator("[data-reconciliation-event]").first().getByRole("button", { name: "Examiner" }).click();
@@ -99,7 +99,7 @@ test("Chromium : liste paginée par curseur, libellé d’observation, revue con
       await page.getByRole("button", { name: "Examiner" }).click();
       await page.getByLabel("Note de revue (obligatoire)").fill("Versement agrégé vérifié");
       await page.getByRole("button", { name: "Enregistrer une revue…" }).click();
-      assert.match(await page.locator('[role="group"]').innerText(), /ne crée aucun paiement, transfert ni remboursement, ne force aucun rattachement/);
+      assert.match(await page.locator('[role="group"]').innerText(), /ne crée aucun paiement, transfert, remboursement ni facture, ne force aucun rattachement/);
       const layout = (await page.evaluate(SMALL)) as { sw: number; small: string[] };
       assert.equal(layout.sw, 360, theme);
       assert.deepEqual(layout.small, [], theme);

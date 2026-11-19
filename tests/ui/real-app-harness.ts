@@ -50,11 +50,14 @@ export async function withApp(run: (open: (route: string, width?: number) => Pro
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}/`;
   const pw = await import(pathToFileURL(path.join(PW, "index.mjs")).href);
-  const browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true });
+  let browser: Awaited<ReturnType<typeof pw.chromium.launch>> | undefined;
   try {
+    browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true, timeout: 30_000 });
     await run(async (route, width = 1280) => {
-      const context = await browser.newContext({ viewport: { width, height: 900 } });
+      const context = await browser!.newContext({ viewport: { width, height: 900 } });
       const page = await context.newPage();
+      page.setDefaultTimeout(20_000);
+      page.setDefaultNavigationTimeout(30_000);
       const errors: string[] = [];
       page.on("pageerror", (e: Error) => errors.push(e.message));
       api.length = 0;
@@ -63,8 +66,10 @@ export async function withApp(run: (open: (route: string, width?: number) => Pro
       return { page, errors, api };
     });
   } finally {
-    await browser.close();
-    server.close();
+    try { await browser?.close(); } finally {
+      server.closeAllConnections();
+      server.close();
+    }
   }
 }
 
