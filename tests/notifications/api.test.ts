@@ -90,3 +90,23 @@ test("preferences expose defaults, honest channel availability and strict saves"
   assert.equal((await routes({ rpcData: {} }).save({ muted_kinds: [], email_enabled: false, sms_enabled: false, push_enabled: false, expected_version: 0 })).status, 503);
   const foreign = routes(); assert.equal((await foreign.save({ muted_kinds: [], email_enabled: false, sms_enabled: false, push_enabled: false, expected_version: 0 }, "https://foreign.example.test")).status, 403);
 });
+
+test("native notification routes forward the request to verified Bearer authentication", async () => {
+  const cases: [string, string, unknown?][] = [
+    ["app/api/notifications/route.ts", "GET"],
+    ["app/api/notifications/route.ts", "POST", {action:"mark_read",ids:[uuid(1,"60000000")]}],
+    ["app/api/notifications/preferences/route.ts", "GET"],
+    ["app/api/notifications/preferences/route.ts", "POST", {muted_kinds:[],email_enabled:false,sms_enabled:false,push_enabled:false,expected_version:0}],
+    ["app/api/notifications/summary/route.ts", "GET"],
+  ];
+  for (const [path, method, body] of cases) {
+    const h = harness({role:"client",tables:{notifications:rows},rpcData:{updated:1,unread_count:0,latest_created_at:null,preferences:{user_id:me,muted_kinds:[],email_enabled:false,sms_enabled:false,push_enabled:false,version:1}}});
+    const request = h.request('/api/notifications',body);
+    request.headers.set('Authorization','Bearer head.payload.signature');
+    const result = await (h.load(path)[method] as Handler)(request);
+    assert.equal(result.status,200,path+' '+method);
+    assert.equal(h.authenticationRequests.length,1);
+    assert.equal(h.authenticationRequests[0],request,path+' '+method);
+    assert.ok(h.requests.filter(r=>r.table==='notifications').every(r=>r.url.searchParams.get('recipient_id')===`eq.${me}`));
+  }
+});

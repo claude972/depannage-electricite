@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export async function GET(request: Request) {
   try {
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     if (new URL(request.url).searchParams.size) throw new ApiError(422, "Aucun paramètre n’est attendu.");
     const result = await db.rpc("notification_summary");
     dbError(result.error);

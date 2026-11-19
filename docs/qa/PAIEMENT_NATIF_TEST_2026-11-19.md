@@ -35,3 +35,7 @@ Dans le dossier `preuves/` frère du clone de finalisation :
 ## Limites
 
 Le rapprochement de la preuve fournisseur et de la commission figée est demandé dans la session de recette Web, encore à documenter. Le formulaire Stripe Android n’a pas été exécuté (premier lancement de Chrome bloqué sur son acceptation de conditions) ; le paiement a été terminé sur iOS. Cette preuve croisée ne vaut pas validation de tous les parcours natifs, ni validation de production.
+
+## Contrôle supplémentaire et binaire D14
+
+L'artisan affecté relit le paiement paid et une seule tentative ; le compte client tiers reçoit 404 sur le même devis. Preuve `native-paid-isolation-readback-20261119.json`. Ce contrôle ne transforme pas un paiement client en preuve de versement bancaire artisan. SHA-256 du bundle iOS D14 : `cd1e4bdf4b0862d61a8c9e9998f02fc704b87820980cf57d5ac5586aa5a70ede`.

@@ -39,7 +39,7 @@ async function view(preferences: unknown, emailVerified: boolean, pushEligible: 
 }
 export async function GET(request: Request) {
   try {
-    const { db, user } = await authenticatedClient();
+    const { db, user } = await authenticatedClient(request);
     if (new URL(request.url).searchParams.size) throw new ApiError(422, "Aucun paramètre n’est attendu.");
     const row = await db.from("notification_preferences").select("user_id,muted_kinds,email_enabled,sms_enabled,push_enabled,version,updated_at").eq("user_id", user.id).maybeSingle();
     dbError(row.error);
@@ -49,7 +49,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     assertOrigin(request);
-    const { db, user } = await authenticatedClient();
+    const { db, user } = await authenticatedClient(request);
     if (new URL(request.url).searchParams.size) throw new ApiError(422, "Aucun paramètre n’est attendu.");
     const data = await validated(request, preferencesSchema);
     const result = await db.rpc("save_notification_preferences", {

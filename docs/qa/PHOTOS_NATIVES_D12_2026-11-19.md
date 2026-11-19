@@ -11,3 +11,7 @@ La cause de l’échec du fournisseur Photos du simulateur n’est pas encore é
 ## Vérification du candidat iOS
 
 Build propre D12 installé, bundle SHA-256 `7f4240af329939fd790751aac3afe5139b2917eefbcb69089a48456a671662c5`. Sélecteur ouvert avec succès (`ios-final-picker-jpeg-open-20261119`, exit 0), JPEG synthétique sélectionné, mais aucun téléversement après 60 s (`ios-final-jpeg-selected-20261119`, échec). Le nouveau message explicite est visible dans `preuves/ios-d12-final-message.png`. La lecture serveur `ios-d12-final-readback-20261119.json` confirme toujours exactement deux photos Android. Aucun diagnostic temporaire dans ce binaire final.
+
+## Reprise après redémarrage du simulateur
+
+Le 19 novembre à 09:24, avec le binaire D14, la sélection du PNG synthétique échoue encore après redémarrage complet du simulateur. Le message D12 reste visible, l'application permet de réessayer et le serveur conserve exactement les deux documents Android. `ios-photo-after-reboot-v2-20261119.redacted.log`, capture `ios-photo-reboot-v2-state-20261119.png`, lecture `ios-photo-after-reboot-readback-20261119.json`. Le premier essai après redémarrage n'avait pas atteint la photothèque : saisie XCTest tronquée de la référence, puis pilote corrigé pour vérifier la référence complète avant recherche. La cause native reste ouverte ; aucun upload iOS n'est attesté.

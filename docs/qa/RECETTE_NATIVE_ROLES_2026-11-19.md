@@ -87,3 +87,7 @@ Le candidat D12 corrige le rejet vide du sélecteur : le simulateur affiche main
 ## Complément paiement et retour iOS — 19 novembre 09:20
 
 INT-44B1D4 payé en Stripe TEST depuis iOS après réalisation Android : serveur paid 10850 centimes, une seule tentative. Confirmation affichée dans le dossier natif. Le défaut D14 de fermeture du navigateur iOS est corrigé dans ceda27d et vérifié avec abandon d'un autre Checkout synthétique INT-A9155E : retour au dossier, une tentative pending et paid_at nul. Voir `PAIEMENT_NATIF_TEST_2026-11-19.md`. L'APK Android reste D8 ; aucun alignement binaire implicite.
+
+## Modification du profil iOS — 19 novembre
+
+Sur le binaire D14, le champ Prénom vidé désactive Enregistrer. Le compte client synthétique est modifié de « Audit Astra » vers « Audit Astra iOS » ; après enregistrement puis relance complète, le nom modifié reste affiché et `/api/workspace` confirme les champs exacts. Le nom initial est ensuite restauré par la même interface et relu au serveur. Journaux `ios-profile-edit-v2-20261119.redacted.log` et `ios-profile-restore-20261119.redacted.log` : réussis ; lecture `ios-profile-edit-readback-20261119.json`. Le premier test utilisait un intitulé d'accessibilité incomplet et a échoué avant toute modification ; le pilote utilise désormais l'intitulé complet déjà observé. Cela ne valide ni le carnet d'adresses Web, ni les autres préférences.

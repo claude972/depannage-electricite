@@ -32,7 +32,7 @@ const noRights: Rights = { can_read_all: false, can_reply_all: false, can_set_st
 const allRights: Rights = { can_read_all: true, can_reply_all: true, can_set_status_all: true };
 const rightsFromScopes = (scopes: string[]): Rights => { const read = scopes.includes("support_read"); return { can_read_all: read, can_reply_all: read && scopes.includes("support_reply"), can_set_status_all: read && scopes.includes("support_status") }; };
 type Options = {
-  role?: string | null; revoked?: boolean; rpcError?: string; rpcData?: unknown; missingCount?: boolean;
+  native?: boolean; role?: string | null; revoked?: boolean; rpcError?: string; rpcData?: unknown; missingCount?: boolean;
   /** Operator scopes held (non-admin): the RPC answer is computed exactly like 018 (reply/status require read). */
   scopes?: string[];
   /** Raw RPC answer for support_operator_permissions (malformed/inconsistent cases); overrides role/scopes. */
@@ -41,6 +41,7 @@ type Options = {
   rightsError?: { status: number; code: string };
 };
 function harness(options: Options = {}) {
+  const authenticationRequests: (Request | undefined)[] = [];
   const role = options.role === undefined ? "client" : options.role;
   const requests: { table: string; args?: Record<string, unknown>; url: URL }[] = [];
   const rights: Rights = role === "admin" ? allRights : rightsFromScopes(options.scopes ?? []);
@@ -71,7 +72,7 @@ function harness(options: Options = {}) {
   class ApiError extends Error { constructor(public status: number, message: string) { super(message); } }
   const helpers = {
     ApiError,
-    authenticatedClient: async () => { if (role === null) throw new ApiError(401, "Session requise"); return { db, user: { id: user } }; },
+    authenticatedClient: async (request?: Request) => { authenticationRequests.push(request); if (role === null) throw new ApiError(401, "Session requise"); return { db, user: { id: user } }; },
     assertOrigin: (request: Request) => { const origin = request.headers.get("origin"); if (origin && origin !== new URL(request.url).origin) throw new ApiError(403, "Origine refusée"); },
     dbError: (error: { code: string } | null) => { if (error) throw new ApiError(({ P0001: 409, "42501": 403, "22023": 422, "53300": 429 } as Record<string, number>)[error.code] ?? 503, "Commande refusée"); },
     apiError: (error: unknown) => Response.json({ error: error instanceof Error ? error.message : "Erreur" }, { status: error instanceof ApiError ? error.status : error instanceof SyntaxError ? 400 : 500 }),
@@ -82,10 +83,10 @@ function harness(options: Options = {}) {
   const permissions = compile("../lib/features/support/permissions.ts", { "@/lib/supabase/server": helpers });
   const imports = { "@/lib/supabase/server": helpers, "@/lib/supabase/validation": validation, "@/lib/features/support/permissions": permissions };
   const list = compile("../app/api/support/route.ts", imports), detail = compile("../app/api/support/[id]/route.ts", imports);
-  const request = (path: string, body?: unknown, origin = "https://app.example.test") => new Request(`https://app.example.test${path}`, body === undefined ? undefined : { method: "POST", headers: { origin, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const request = (path: string, body?: unknown, origin = "https://app.example.test") => new Request(`https://app.example.test${path}`, { method: body === undefined ? "GET" : "POST", headers: { ...(options.native ? { authorization: "Bearer native-test-token" } : {}), ...(body === undefined ? {} : { origin, "Content-Type": "application/json" }) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   type ListHandler = (r: Request) => Promise<Response>; type DetailHandler = (r: Request, c: { params: Promise<{ id: string }> }) => Promise<Response>;
   return {
-    requests, permissions,
+    requests, permissions, authenticationRequests,
     list: (params: URLSearchParams | string = "") => (list.GET as ListHandler)(request(`/api/support?${params}`)),
     create: (body: unknown, origin?: string) => (list.POST as ListHandler)(request("/api/support", body, origin)),
     detail: (id = String(tickets[0].id), params: URLSearchParams | string = "") => (detail.GET as DetailHandler)(request(`/api/support/${id}?${params}`), { params: Promise.resolve({ id }) }),
@@ -185,4 +186,16 @@ test("creator rights preserved with all-false rights: own ticket readable/replya
   const foreign = tickets.find(t => t.creator_id === other)!; assert.equal((await h.detail(String(foreign.id))).status, 404);
   assert.equal(h.requests.filter(r => r.table === "support_operator_permissions").length, 2, "the rights probe only runs for visible tickets");
   assert.equal((await harness({ role: "client", revoked: true }).detail()).status, 404, "revoked linked ticket stays invisible whatever the RPC answers");
+});
+
+
+test("native support list, detail, creation and reply preserve Bearer authentication", async () => {
+  const h = harness({native:true});
+  assert.equal((await h.list()).status, 200);
+  assert.equal((await h.detail()).status, 200);
+  assert.equal((await h.create({request_id:uuid(900),subject:"Recette native",body:"Demande synthétique de vérification",intervention_id:null})).status, 200);
+  assert.equal((await h.mutate({action:"reply",expected_version:1,body:"Réponse synthétique"})).status, 200);
+  assert.equal(h.authenticationRequests.length, 4);
+  for (const request of h.authenticationRequests) assert.equal(request?.headers.get("authorization"), "Bearer native-test-token");
+  assert.ok(h.requests.filter(r => r.table === "support_tickets" && !r.url.searchParams.has("id")).every(r => r.url.searchParams.get("creator_id") === `eq.${user}`));
 });
