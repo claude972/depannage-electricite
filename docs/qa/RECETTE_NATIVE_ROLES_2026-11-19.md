@@ -83,3 +83,7 @@ Le bouton Stripe TEST crée une tentative et ouvre Chrome Android. Le navigateur
 ## Suite iOS — D12 et limite persistante de la photothèque
 
 Le candidat D12 corrige le rejet vide du sélecteur : le simulateur affiche maintenant « Cette photo n’a pas pu être sélectionnée. Réessayez ou choisissez une autre image. ». Le JPEG synthétique échoue également, avant envoi. Lecture API du 19 novembre : INT-0E073E conserve exactement les deux JPEG Android. La tentative n’est pas une réussite iOS. Voir [D12 et hash du binaire propre](PHOTOS_NATIVES_D12_2026-11-19.md). Tous les diagnostics temporaires ont été retirés. Le candidat Android D8 demeure distinct ; aucun rebuild Android D12 n’est encore revendiqué.
+
+## Complément paiement et retour iOS — 19 novembre 09:20
+
+INT-44B1D4 payé en Stripe TEST depuis iOS après réalisation Android : serveur paid 10850 centimes, une seule tentative. Confirmation affichée dans le dossier natif. Le défaut D14 de fermeture du navigateur iOS est corrigé dans ceda27d et vérifié avec abandon d'un autre Checkout synthétique INT-A9155E : retour au dossier, une tentative pending et paid_at nul. Voir `PAIEMENT_NATIF_TEST_2026-11-19.md`. L'APK Android reste D8 ; aucun alignement binaire implicite.
