@@ -45,6 +45,32 @@ test("RequestForm: « Continuer » focuses and reveals the next step title (390 
     const firstFocus = await page.evaluate(() => document.activeElement?.tagName);
     assert.notEqual(firstFocus, "H2", "no focus move on first render");
     await page.locator("textarea").first().fill("Le disjoncteur saute dès que le four est allumé.");
+    // Hold the browser's byte read to exercise the real asynchronous selection window.
+    await page.evaluate(() => {
+      const original = Blob.prototype.arrayBuffer;
+      (window as any).releasePhoto = null;
+      Blob.prototype.arrayBuffer = function () {
+        const blob = this;
+        return new Promise<ArrayBuffer>(resolve => {
+          (window as any).releasePhoto = async () => resolve(await original.call(blob));
+        });
+      };
+    });
+    const input = page.locator('input[type="file"]');
+    await input.setInputFiles({ name: "recette.jpg", mimeType: "image/jpeg", buffer: Buffer.from([255,216,255,224,0,16,74,70,73,70,0,1]) });
+    await page.getByText("Vérification des photos…").waitFor();
+    assert.equal(await input.isDisabled(), true);
+    assert.equal(await page.getByRole("button", { name: "Continuer" }).isDisabled(), true);
+    await page.evaluate(() => (window as any).releasePhoto());
+    await page.getByRole("button", { name: "Retirer recette.jpg" }).waitFor();
+    assert.equal(await input.isDisabled(), false);
+    await input.setInputFiles({ name: "faux.png", mimeType: "image/png", buffer: Buffer.from("not-a-valid-image") });
+    await page.getByText("Vérification des photos…").waitFor();
+    assert.equal(await page.getByRole("button", { name: "Retirer recette.jpg" }).isDisabled(), true);
+    await page.evaluate(() => (window as any).releasePhoto());
+    await page.getByText(/faux.png : le contenu ne correspond/).waitFor();
+    assert.equal(await page.getByRole("button", { name: "Retirer faux.png" }).count(), 0);
+    assert.equal(await page.getByRole("button", { name: "Retirer recette.jpg" }).isDisabled(), false);
     await page.getByRole("button", { name: "Continuer" }).click();
     await page.getByText("Où faut-il intervenir ?").waitFor();
     await page.waitForTimeout(100);
