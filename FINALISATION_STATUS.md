@@ -30,6 +30,9 @@ Légende : **synthétique** = mode démo (localStorage, aucun serveur) · **rée
 | Artisan : missions, devis, planning (écriture réversible), photos, compte rendu | **vérifié réel** | à faire | à faire | `real-art`, `real-plan`, `s2`, `s4*` | — |
 | Admin | **vérifié isolé** : 77/77 tests routes + UI montée ; revues SQL pglite (tableau de bord 19/19, messagerie 20/20 ; ensemble des 92 revues `tests/sql-*review*.mjs` : 92/92, aucun saut, `preuves/admin-isole/sql-reviews-summary.txt`) ; preview candidate en démo : 14 vues à 390 et 1440, 0 erreur, 0 écriture serveur | à faire | à faire | `preuves/admin-isole/` | **réel bloqué** : aucun compte admin de recette autorisé (fixture Astra rétrogradée, non réactivée) ; approbation d'artisan non jouable en démo (dossier absent, refus attendu) |
 
+## Correctif rapprochement automatique Checkout — recette 19/11 : PASS
+Commit `ed22f0a5` (revu Codex, points 1–11b), déploiement `dpl_9qgdnBYFk6brxrFd7XoAEUGmAssm` (`5zggqivyj`) sous l'alias de recette, migration `20261119120000_checkout_provider_link` appliquée seule à la recette. Paiement `INT-5B12D9` rattaché par le nouveau bouton : transfert et Fee associés, `commission_withheld` unique 2 213 c, règlements 23 870 c sans doublon, rejeu `existing`, droits 403/401, admin 35/35. Le rapprochement automatique traite désormais les futurs paiements depuis le webhook signé. Rapport : `livraison/preuves/stripe-test/correctif-checkout/RAPPORT.md` ; technique : `docs/CHECKOUT_AUTOMATIC_RECONCILIATION.md`.
+
 ## Consolidation 18/11 soir — Stripe test et recette native
 
 ### Incident de procédure (à lire)
