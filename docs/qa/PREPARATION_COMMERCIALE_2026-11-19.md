@@ -46,3 +46,11 @@ Les correctifs web D1/D3/D4/D5 et la reprise réseau D2 sont documentés dans CO
 ### Sessions Android et iOS
 
 Les trois rôles passent sur les deux plateformes virtuelles : connexion, lecture, restauration après relance, profil et déconnexion. Voir [preuves et limites](RECETTE_NATIVE_ROLES_2026-11-19.md). La couverture complète des écritures métier natives reste à terminer.
+
+## Actualisation — parcours métier et corrections D9 à D13
+
+Le candidat Android D8 a parcouru INT-44B1D4 jusqu’au devis accepté, déplacement, rapport avec photos avant/après, clôture et réception signée par le client. Les montants et statuts ont été relus au serveur ; aucun travail réel. Le paiement de ce dossier reste pending après ouverture du navigateur à son premier démarrage. Détails dans la recette native, sans promotion en paiement confirmé.
+
+Les suites Web complémentaires vérifient photos multiples, remplacement/examen de justificatif, rendez-vous et conflits de version, réaffectation et retrait des droits de l’ancien artisan, retrait/réinvitation d’un membre et premières opérations de site. Le rapport intermédiaire est conservé dans RECETTE_WEB_SUITE_INTERMEDIAIRE_2026-11-19.md ; ses succès ciblés ne ferment pas les variantes manquantes de la matrice.
+
+D9 ajoute le journal administratif ; D10 actualise les accès d’entreprise visibles ; D11 corrige une erreur Leaflet après sortie de la carte ; D13 expose la contestation d’avis artisan. Tous passent leurs tests ciblés locaux, les validations preview restent à rapprocher. CI 215 et 216 entièrement réussies, y compris PostgreSQL isolé. D12 rend l’échec du sélecteur iOS explicite, mais le téléversement iOS reste non validé. Ces preuves ne suffisent toujours pas à déclarer une ouverture commerciale prête.
