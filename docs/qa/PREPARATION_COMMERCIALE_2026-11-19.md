@@ -86,3 +86,8 @@ D15 corrige neuf méthodes notifications/assistance qui ignoraient le Bearer mob
 ### Photo iOS : scénario nominal débloqué
 
 À 14:00 UTC, le même binaire D14 ajoute correctement la photo JPEG synthétique sur un simulateur APFS dédié, conservé sur disque externe. La photo est relue au serveur et les comptes tiers/non attribués sont refusés. Les essais précédents HFS+ restent des échecs historiques ; ce succès nominal ne couvre pas encore tous les formats ni le rapport iOS. Voir `PHOTOS_NATIVES_D12_2026-11-19.md`.
+
+
+## Complément responsive du 19 novembre 2026
+
+Le lot responsive est livré sur l’alias de recette : déploiement `dpl_XBAvbniLcY38To3W4XGjd6JZn3c8`, source GitHub `4ec961c`. 81 vues et 30 états interactifs ont donné 858 mesures sans défaut, complétées par 28 contrôles après bascule de l’alias. Suite UI : 1 178 réussites, puis sept tests ciblés complémentaires réussis ; TypeScript et job CI applicatif réussis. Voir `RESPONSIVE_WEB_2026-11-19.md` pour la portée exacte, les limites navigateur et les preuves. Cela ne clôture pas les réserves commerciales ou de configuration déjà identifiées.
