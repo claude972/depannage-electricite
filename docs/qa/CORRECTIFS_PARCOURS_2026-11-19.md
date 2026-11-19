@@ -14,7 +14,7 @@ La matrice intègre le rapport courant des quatre rôles. Les scénarios déclar
 
 ## Navigation native et profil de recette
 
-Le nouveau passage iOS a observé une barre basse visible mais inaccessible aux appuis après connexion. La capture `ios-screen-layout-failure-20261119.png` identifie finalement une alerte système « Enregistrer le mot de passe ? » au-dessus de l'application. Les essais de changement de conteneur/navigation ont été retirés : ils ne prouvaient pas la cause. Le pilote choisit désormais « Plus tard » et exige une cible visible avant appui. La recette complète des trois rôles reste à terminer. Le correctif RNHostView des fenêtres de profil est distinct et déjà vérifié.
+Le nouveau passage iOS a observé une barre basse visible mais inaccessible aux appuis après connexion. La capture `ios-screen-layout-failure-20261119.png` identifie finalement une alerte système « Enregistrer le mot de passe ? » au-dessus de l'application. Les essais de changement de conteneur/navigation ont été retirés : ils ne prouvaient pas la cause. Le pilote choisit désormais « Plus tard » et exige une cible visible avant appui. La passe iOS `ios-three-roles-final-20261119` réussit pour client, artisan et entreprise : connexion, lectures propres au rôle, restauration après relance et déconnexion. Le diagnostic a aussi identifié l’espace insécable du titre système ; sa reconnaissance ne dépend plus de cette ponctuation. Le correctif RNHostView des fenêtres de profil est distinct et déjà vérifié.
 
 Les profils EAS simulator/device désactivent désormais EXPO_PUBLIC_HOME_SUPPORT_PREVIEW : le délai d'exemple « 20 min » n'est pas une promesse validée. Les scripts de reconstruction locaux utilisent la même valeur false.
 
@@ -27,3 +27,7 @@ La suite Chromium a révélé deux attentes textuelles périmées du test d'obse
 Reprise ciblée des deux fichiers : `web-regressions-replay-20261119.log`, 4/4 réussis, aucun ignoré. Contrôle renforcé du site obligatoire (message visible, aria-invalid, association au champ, disparition après sélection) : `web-site-validation-20261119.log`, 1/1 réussi.
 
 Reprise réseau : 8 tests ciblés passent (rayon monté, tableau administrateur et ordonnanceur), aucun ignoré. Le test simule deux signaux online et vérifie une seule relecture, aucun POST.
+
+## Complément CI et lectures réseau
+
+Les 24 tests ciblés offres disponibles, sélection de proximité et coordinateur de relecture passent sans omission (`web-online-offers-20261119.log`). Le run GitHub 208 a signalé une attente périmée du contrat EAS : il exigeait encore le mode de démonstration de l’assistance. L’attente est alignée sur `false`, pour garder désactivée la promesse illustrative de délai ; les huit tests de `release-contract.test.ts` passent localement sans omission. La relance CI reste à vérifier.

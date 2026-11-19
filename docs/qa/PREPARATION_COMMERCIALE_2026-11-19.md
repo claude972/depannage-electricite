@@ -36,3 +36,9 @@ Voir l'[audit de configuration](AUDIT_EXPLOITATION_2026-11-19.md) pour les const
 - iOS : après reproduction dans ios-sheet-fix-v2-20261119, le pont RNHostView et son enfant non aplati (collapsable=false) corrigent les appuis. XCTest ios-sheet-fix-v3-20261119 réussit : fermeture Adresses/Sécurité/Mes données, prénom vide interdit, fermeture du formulaire et déconnexion. Les nouveaux binaires ciblent l’alias de recette courant.
 
 La demande du propriétaire de vérifier tous les parcours est suivie dans le plan complémentaire et la matrice des 76 capacités. Les brouillons commerciaux ne remplacent pas ces contrôles.
+
+## Passe complémentaire des rôles natifs
+
+Sur le binaire iOS reconstruit avec l’alias de recette courant et HOME_SUPPORT_PREVIEW=false, XCTest ios-three-roles-final-20261119 réussit pour client, artisan et entreprise : connexion, demandes/missions/devis/sites selon rôle, restauration de session après relance et déconnexion. La boîte système de sauvegarde du mot de passe est refusée par « Plus tard » ; aucun mot de passe n’est enregistré. Ces contrôles ne valident pas toutes les écritures métier natives.
+
+Les correctifs web D1/D3/D4/D5 et la reprise réseau D2 sont documentés dans CORRECTIFS_PARCOURS_2026-11-19.md. Les tests GitHub du premier lot passent intégralement (run 206).
