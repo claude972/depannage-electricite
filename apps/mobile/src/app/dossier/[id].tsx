@@ -176,7 +176,7 @@ export default function Dossier() {
         <Copy kind="subtitle">Compte rendu enregistré</Copy><Copy>{report.summary}</Copy><Copy kind="muted">{report.signature_name}</Copy>
         {receipt&&<Copy>Remis et signé par {receipt.signature_name} le {timestamp(receipt.signed_at)}.</Copy>}
         {owner&&['completed','paid'].includes(job.status)&&report.report_revision&&!receipt&&<>
-          <Host matchContents><Switch label="J’accuse réception du compte rendu" value={ack} onValueChange={setAck}/></Host>
+          <Host matchContents={Platform.OS!=='ios'} style={Platform.OS==='ios'?{width:'100%',height:48}:undefined} ignoreSafeArea={Platform.OS==='ios'?'all':undefined}><Switch label="J’accuse réception du compte rendu" value={ack} onValueChange={setAck}/></Host>
           <Field label="Vos nom et prénom" value={name} onChangeText={setName} maxLength={120}/>
           <Action label="Signer le compte rendu" disabled={busy||!ack||!signature.safeParse(name).success} onPress={()=>operation({action:'sign_report',acknowledged:true,signature_name:name.trim(),report_revision:report.report_revision})}/>
         </>}
