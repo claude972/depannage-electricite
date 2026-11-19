@@ -1869,7 +1869,7 @@ export function ReviewForm({
   busy: boolean;
   onSubmit: (values: { rating: number; body: string }) => Promise<void>;
 }) {
-  const [rating, setRating] = useState(5);
+  const [rating, setRating] = useState<number | null>(null);
   const [body, setBody] = useState("");
   if (existing)
     return (
@@ -1888,6 +1888,7 @@ export function ReviewForm({
       className="panel review-panel"
       onSubmit={(e) => {
         e.preventDefault();
+        if (busy || rating === null) return;
         void onSubmit({ rating, body });
       }}
     >
@@ -1895,10 +1896,13 @@ export function ReviewForm({
       <p>Votre retour porte sur cette intervention terminée et réglée.</p>
       <fieldset className="rating-options">
         <legend>Votre note sur cinq</legend>
+        <p>Choisissez une note pour enregistrer votre avis.</p>
         {[1, 2, 3, 4, 5].map((n) => (
           <label key={n}>
             <input
               type="radio"
+              required
+              disabled={busy}
               name="rating"
               value={n}
               checked={rating === n}
@@ -1919,7 +1923,7 @@ export function ReviewForm({
           placeholder="Ce qui vous a été utile, ce qui pourrait être amélioré…"
         />
       </Field>
-      <button className="button primary" type="submit" disabled={busy}>
+      <button className="button primary" type="submit" disabled={busy || rating === null}>
         Enregistrer mon avis
       </button>
     </form>

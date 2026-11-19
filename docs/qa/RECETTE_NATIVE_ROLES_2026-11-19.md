@@ -91,3 +91,7 @@ INT-44B1D4 payé en Stripe TEST depuis iOS après réalisation Android : serveur
 ## Modification du profil iOS — 19 novembre
 
 Sur le binaire D14, le champ Prénom vidé désactive Enregistrer. Le compte client synthétique est modifié de « Audit Astra » vers « Audit Astra iOS » ; après enregistrement puis relance complète, le nom modifié reste affiché et `/api/workspace` confirme les champs exacts. Le nom initial est ensuite restauré par la même interface et relu au serveur. Journaux `ios-profile-edit-v2-20261119.redacted.log` et `ios-profile-restore-20261119.redacted.log` : réussis ; lecture `ios-profile-edit-readback-20261119.json`. Le premier test utilisait un intitulé d'accessibilité incomplet et a échoué avant toute modification ; le pilote utilise désormais l'intitulé complet déjà observé. Cela ne valide ni le carnet d'adresses Web, ni les autres préférences.
+
+## Android aligné D15
+
+Compilation Release réussie le 19 novembre à partir de `897325c`, incluant D12 et D14. APK `domdepannage-android-d15-20261119.apk`, SHA-256 `1589c248dac47980e3e24ff0961497b4c0eb5effa834184c4bf66582710bbb05`. Les fichiers du seul AVD de recette ont été déplacés vers le second volume externe après refus de démarrage pour manque de place ; l’ancien chemin conserve un lien. Recette UI de cet APK à poursuivre : une compilation réussie ne valide pas ses parcours.
