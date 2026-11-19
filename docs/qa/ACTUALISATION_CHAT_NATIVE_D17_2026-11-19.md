@@ -16,3 +16,7 @@ Il s’agit d’une relecture périodique, pas d’une connexion temps réel par
 - iOS reconstruit et installé sur le simulateur APFS : XCTest `ios-chat-d17-20261119` réussi. Le message artisan est envoyé seulement après le signal de préparation de l’écran ; il apparaît sans quitter la conversation et le brouillon reste intact.
 
 Les messages sont explicitement synthétiques. Le dossier payé conserve son statut et ses données financières.
+
+## Complément d’envoi
+
+La réception D17 reste validée. Le test d’envoi iOS a révélé le masquage du bouton par le clavier, corrigé séparément dans D20. Après D20, double appui sur Envoyer, champ vidé, message unique relu par client et artisan, tiers 404. Voir `CLAVIER_IOS_D20_2026-11-19.md`.
