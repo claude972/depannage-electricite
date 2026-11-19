@@ -19,3 +19,7 @@ Ce relevé distingue les preuves de recette des conditions d'ouverture réelle. 
 La correction financière est vérifiée sur la candidate de recette. Elle ne transforme pas ces éléments non vérifiés en contrôles réussis et n'autorise pas à annoncer une application entièrement prête pour une ouverture commerciale.
 
 Références : RECETTE_NATIVE_2026-11-18.md, RAPPROCHEMENT_STRIPE_TEST_2026-11-18.md, capture finance-ui/rapprochement-apres.png dans la livraison privée de recette. Les constats de configuration ci-dessus sont ceux de la recette, pas une lecture d'une configuration de production.
+
+## Reprise du 19 novembre, heure de Martinique
+
+Les [brouillons commerciaux](../lancement/README.md) ont été créés à la demande du propriétaire. La [préparation technique complémentaire](PREPARATION_COMMERCIALE_2026-11-19.md) suit Next16.4.6, les correctifs CI, les tests sur disque externe et la demande Android relue sur iOS. Le [plan de vérification complète](PLAN_VERIFICATION_COMPLETE_2026-11-19.md) et sa matrice des 76 capacités ajoutent explicitement tous les parcours aux tâches en cours. Ces ajouts ne constituent pas un feu vert de lancement.
