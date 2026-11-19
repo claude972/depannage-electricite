@@ -1894,9 +1894,9 @@ export function ReviewForm({
     >
       <h2>Comment s’est passée l’intervention ?</h2>
       <p>Votre retour porte sur cette intervention terminée et réglée.</p>
+      <p>Choisissez une note pour enregistrer votre avis.</p>
       <fieldset className="rating-options">
         <legend>Votre note sur cinq</legend>
-        <p>Choisissez une note pour enregistrer votre avis.</p>
         {[1, 2, 3, 4, 5].map((n) => (
           <label key={n}>
             <input
