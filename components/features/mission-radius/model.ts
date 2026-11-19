@@ -124,6 +124,7 @@ export type ConfirmedRadius = { version: number; active: boolean };
 export function createRadiusController({ api, store, context, get, set, onConfirmed }: { api: () => RadiusApi; store: () => Store | null; context: Context; get: () => View; set: (v: View) => void; onConfirmed: (p: ConfirmedRadius) => void }) {
   let inFlight = false;
   let loadSeq = 0;
+  let lastReadError: string | null = null;
   let pendingFor: string | null = null;
   const identity = () => ({ uid: context.userId(), gen: context.generation() });
   const same = (a: { uid: string | null; gen: number }) => context.userId() === a.uid && context.generation() === a.gen;
@@ -150,8 +151,15 @@ export function createRadiusController({ api, store, context, get, set, onConfir
     if (my !== loadSeq || !same(who)) return false;
     if (r.status === 401 || r.status === 403) return forbid(r.status), false;
     const v = r.status === 200 ? parseView(r.body) : null;
-    if (!v) return set({ ...get(), phase: get().data ? get().phase : "error", error: statusError(r.status === 200 ? 0 : r.status, r.retryAfterS) }), false;
-    set({ ...get(), phase: "ready", data: v, error: get().phase === "error" ? "" : get().error });
+    if (!v) {
+      lastReadError = statusError(r.status === 200 ? 0 : r.status, r.retryAfterS);
+      set({ ...get(), phase: get().data ? get().phase : "error", error: lastReadError });
+      return false;
+    }
+    // Loading changes the phase before this response arrives. Clear only the
+    // failed read's message; a conflict or uncertain write remains actionable.
+    set({ ...get(), phase: "ready", data: v, error: get().error === lastReadError ? "" : get().error });
+    lastReadError = null;
     confirm(v);
     return true;
   };

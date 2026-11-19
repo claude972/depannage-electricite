@@ -173,6 +173,7 @@ test("Chromium : erreur du rayon rend le panneau replie visible puis retour rese
     assert.equal((await state(page)).radius.length, beforeReconnect + 1, "duplicate online signals share one read");
     await page.evaluate(() => window.dispatchEvent(new Event("online")));
     assert.equal((await state(page)).radius.length, beforeReconnect + 1, "ready data is not reloaded by the error recovery hook");
+    assert.equal(await page.locator("[data-mission-radius-error]").count(), 0, "successful online reread clears the previous read error");
     assert.equal((await state(page)).radius.some((call) => call.startsWith("POST")), false);
   } finally { await browser.close(); server.close(); }
 });
