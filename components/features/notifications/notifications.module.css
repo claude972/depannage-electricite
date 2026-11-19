@@ -278,3 +278,14 @@
   background: var(--ui-surface);
   color: var(--ui-text);
 }
+
+/* Responsive (19/11) : à 320 px la colonne implicite de la grille prenait la largeur minimale de la
+   barre de filtres (335 px) et poussait toute la page. La colonne peut maintenant rétrécir et les
+   filtres passent à la ligne. */
+.root {
+  grid-template-columns: minmax(0, 1fr);
+}
+.filters {
+  flex-wrap: wrap;
+  max-width: 100%;
+}

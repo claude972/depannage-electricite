@@ -3076,3 +3076,18 @@
 /* Consistent section and card typography across connected profiles. */
 :global(.ui-v2) .main h2 { font-size: 18px; font-weight: 500; line-height: 26px; }
 :global(.ui-v2) .main h3 { font-size: 16px; font-weight: 600; line-height: 1.4; }
+
+/* Responsive (19/11) : le tableau « Budget et engagements par site » était rogné par le panneau
+   (overflow: hidden) dès 1024 px, colonnes coupées sans défilement possible. */
+.tablePanel[data-report] {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+/* Responsive (19/11) : une étiquette de site au nom long ne se repliait pas et élargissait la page
+   du dossier (423 px à 390 px). */
+.actions :global(.tag) {
+  max-width: 100%;
+  height: auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

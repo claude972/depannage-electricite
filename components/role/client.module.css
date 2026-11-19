@@ -1945,3 +1945,10 @@
   .stepper { gap: 0; }
   .stepper li { font-size: 11px; letter-spacing: -.2px; hyphens: auto; -webkit-hyphens: auto; }
 }
+
+/* Responsive (19/11) : le sélecteur de version de devis prenait la largeur de son libellé le plus
+   long (322 px) et sortait de l'écran à 320 px. */
+.inlineSelect select {
+  min-width: 0;
+  max-width: 100%;
+}
