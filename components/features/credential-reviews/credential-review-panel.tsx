@@ -29,6 +29,8 @@ export type CredentialReviewPanelProps = {
   api?: CrApi;
   context?: CrContext;
   demo?: boolean;
+  /** O1 : signale la décision courante lue (null = aucune décision ou lecture non aboutie). */
+  onCurrentDecision?: (credentialId: string, decision: Decision | null) => void;
   /** Tests / injection only. */
   store?: CrStore;
   newId?: () => string | null;
@@ -47,7 +49,7 @@ export function CredentialReviewPanel(props: CredentialReviewPanelProps) {
   return <Inner key={`${ctx.userId() ?? "-"}|${ctx.generation()}|${props.demo ? "demo" : "live"}|${props.mode}|${props.credentialId}`} {...props} />;
 }
 
-function Inner({ credentialId, mode, api, context = DEFAULT_CR_CONTEXT, demo = false, store, newId, initial }: CredentialReviewPanelProps) {
+function Inner({ credentialId, mode, api, context = DEFAULT_CR_CONTEXT, demo = false, store, newId, initial, onCurrentDecision }: CredentialReviewPanelProps) {
   const uid = useId();
   const [state, setRaw] = useState<CrState>(initial ?? (demo ? { ...CR_INITIAL, phase: "demo" } : CR_INITIAL));
   const ref = useRef(state);
@@ -84,6 +86,16 @@ function Inner({ credentialId, mode, api, context = DEFAULT_CR_CONTEXT, demo = f
   const [decision, setDecision] = useState<Decision | "">("");
   const [reason, setReason] = useState("");
   const [errors, setErrors] = useState<{ decision?: string; reason?: string }>({});
+  // O1 : la carte hôte affiche la décision courante à la place de « Transmis ». Rien n'est déduit
+  // sans lecture aboutie : tant que la page n'est pas lue, la décision signalée est null.
+  const currentDecision: Decision | null = state.page && state.page.current_version > 0
+    ? state.reviews.find((r) => r.version === state.page!.current_version)?.decision ?? null
+    : null;
+  const report = useRef(onCurrentDecision);
+  report.current = onCurrentDecision;
+  useEffect(() => {
+    report.current?.(credentialId, currentDecision);
+  }, [credentialId, currentDecision]);
 
   if (state.phase === "demo") return <p className={styles.note} role="note" data-cr="demo">{CR_COPY.demo}</p>;
   if (state.phase === "loading") return <p className={styles.muted} role="status" data-cr="loading">{CR_COPY.loading}</p>;

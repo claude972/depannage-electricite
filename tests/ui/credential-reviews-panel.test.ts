@@ -171,7 +171,10 @@ test("démo : aucun appel ; câblage admin et artisan ; clé, jetons, pas d’UU
   const admin = readFileSync("components/role/admin-space.tsx", "utf8");
   assert.match(admin, /<CredentialReviewPanel credentialId=\{c\.id\} mode="admin" context=\{session\.mutationContext\} demo=\{session\.mode === "demo"\} \/>/);
   const artisan = readFileSync("components/role/artisan-space.tsx", "utf8");
-  assert.match(artisan, /<CredentialReviewPanel credentialId=\{s\.state\.credential\.id\} mode="artisan" context=\{session\.mutationContext\} demo=\{session\.mode === "demo"\} \/>/);
+  assert.match(artisan, /<CredentialReviewPanel credentialId=\{s\.state\.credential\.id\} mode="artisan" context=\{session\.mutationContext\} demo=\{session\.mode === "demo"\} onCurrentDecision=\{noteDecision\} \/>/);
+  // O1 : la pastille de la carte suit la décision courante signalée par le panneau, sinon reste « Transmis ».
+  assert.match(artisan, /decision \? DECISION_LABEL\[decision\] : state\.label/);
+  assert.match(artisan, /s\.state\.key === "pending" \? decisions\[s\.state\.credential\.id\] \?\? null : null/);
   assert.doesNotMatch(artisan, /aucune validation individuelle/);
   const view = readFileSync("components/features/credential-reviews/credential-review-panel.tsx", "utf8");
   const model = readFileSync("components/features/credential-reviews/credential-reviews-model.ts", "utf8");

@@ -9,6 +9,8 @@ const jobStatuses = ['requested', 'assigned', 'quoted', 'accepted', 'in_progress
 const jobSchema = z.object({
   id: uuid, site_id: uuid, category: z.enum(['outage', 'panel', 'socket', 'lighting', 'diagnostic']),
   status: z.enum(jobStatuses), created_at: timestamp,
+  // O10 : l'urgence déclarée du dossier, pour la signaler dans la fiche du site.
+  urgency: z.enum(['urgent', 'scheduled']),
 });
 const complianceSchema = z.object({
   id: uuid, site_id: uuid, title: z.string().min(1).max(160),
@@ -56,7 +58,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       if (!visible.data || visible.data.id !== site) throw new ApiError(404, 'Site introuvable.');
     }
     await access();
-    const fields = jobs ? 'id,site_id,category,status,created_at' : 'id,site_id,title,kind,due_on,status,notes';
+    const fields = jobs ? 'id,site_id,category,status,created_at,urgency' : 'id,site_id,title,kind,due_on,status,notes';
     let query = db.from(jobs ? 'interventions' : 'compliance_records').select(fields).eq('site_id', site);
     const states = kind === 'open' ? jobStatuses.slice(0, 5) : kind === 'past' ? jobStatuses.slice(5) :
       kind === 'upcoming' ? ['pending', 'scheduled'] : kind === 'completed' ? ['completed'] : null;

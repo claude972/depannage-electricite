@@ -2373,6 +2373,11 @@ function AppointmentPanel({
       setError("La fin du créneau doit suivre son début.");
       return;
     }
+    // O3 : un créneau passé est refusé par le serveur ; le dire avant tout envoi.
+    if (start <= Date.now()) {
+      setError("Ce créneau est déjà passé : choisissez une date et une heure à venir.");
+      return;
+    }
     setError("");
     const sentVersion = slotRevision;
     const ok = await session.operate(intervention.id, {
@@ -2847,6 +2852,7 @@ function SiteInterventionsPanel({ session, siteId, headingId, title = "Intervent
                     {shortId(i.id)} · {dateTime(i.created_at)}
                   </small>
                 </section>
+                {i.urgency === "urgent" && <Tag tone="red">Urgent</Tag>}
                 <Badge status={i.status} />
                 <Icon name="arrow" size={16} />
               </button>

@@ -123,6 +123,7 @@ import {
   type MissionSegment,
 } from "./artisan-lists";
 import { CredentialReviewPanel } from "../features/credential-reviews/credential-review-panel";
+import { DECISION_LABEL, type Decision } from "../features/credential-reviews/credential-reviews-model";
 import { ArtisanQuotes } from "../features/artisan-quotes/artisan-quotes";
 import { useArtisanPerformance, LivePerformanceSummary, LivePerformanceGrid, LiveRatingLine, livePerformanceSubtitle } from "../features/artisan-performance";
 import { CredentialReminderPanel } from "../features/operational-reminders/operational-reminder-panel";
@@ -214,6 +215,7 @@ const CREDENTIAL_KINDS: { kind: CredentialKind; title: string; description: stri
     description: "Titre, habilitation ou certificat justifiant vos compétences.",
   },
 ];
+const DECISION_TONE: Record<Decision, Tone> = { accepted: "green", changes_requested: "amber", rejected: "red" };
 const CREDENTIAL_KIND_LABEL: Record<CredentialKind, string> = {
   registration: "Kbis / inscription",
   liability: "Assurance RC Pro",
@@ -1813,6 +1815,11 @@ function AppointmentPanel({
       setError("Choisissez une date et une heure de début.");
       return;
     }
+    // O3 : un créneau passé est refusé par le serveur ; le dire sur le champ avant tout envoi.
+    if (s.getTime() <= Date.now()) {
+      setError("Ce créneau est déjà passé : choisissez une date et une heure à venir.");
+      return;
+    }
     setError("");
     const end = new Date(s.getTime() + Number(duration) * 3600000);
     const sentVersion = version;
@@ -2773,6 +2780,11 @@ function Documents({
   const personal = session.data.documents.filter((d) => !d.intervention_id);
   const today = localDate(new Date());
   const status = dossier?.artisan_profile?.application_status;
+  // O1 : décision courante de chaque pièce, signalée par son panneau de revue (lecture serveur).
+  const [decisions, setDecisions] = useState<Record<string, Decision | null>>({});
+  const noteDecision = useCallback((credentialId: string, decision: Decision | null) => {
+    setDecisions((prev) => (prev[credentialId] === decision ? prev : { ...prev, [credentialId]: decision }));
+  }, []);
   const states = CREDENTIAL_KINDS.map((k) => ({
     ...k,
     state: credentialState(dossier?.credentials ?? [], k.kind, today),
@@ -2822,10 +2834,11 @@ function Documents({
                   document={session.data.documents.find((d) => d.id === s.state.credential?.document_id)}
                   busy={session.busy}
                   onLink={() => setLinking(s.kind)}
+                  decision={s.state.credential && s.state.key === "pending" ? decisions[s.state.credential.id] ?? null : null}
                   review={
                     s.state.credential ? (
                       <>
-                        <CredentialReviewPanel credentialId={s.state.credential.id} mode="artisan" context={session.mutationContext} demo={session.mode === "demo"} />
+                        <CredentialReviewPanel credentialId={s.state.credential.id} mode="artisan" context={session.mutationContext} demo={session.mode === "demo"} onCurrentDecision={noteDecision} />
                         <CredentialReminderPanel credentialId={s.state.credential.id} context={session.mutationContext} demo={session.mode === "demo"} />
                       </>
                     ) : undefined
@@ -2882,6 +2895,7 @@ function CredentialCard({
   busy,
   onLink,
   review,
+  decision,
 }: {
   title: string;
   description: string;
@@ -2891,6 +2905,8 @@ function CredentialCard({
   onLink: () => void;
   /** ART-03: read-only decisions of this credential (history, current decision, reason). */
   review?: ReactNode;
+  /** O1 : décision courante lue par le panneau de revue ; absente ⇒ pastille de transmission. */
+  decision?: Decision | null;
 }) {
   const iconClass = state.key === "pending" ? styles.credBlue : state.key === "expired" ? styles.credAmber : styles.credRed;
   const icon = state.key === "pending" ? "clock" : state.key === "expired" ? "refresh" : "warning";
@@ -2912,7 +2928,7 @@ function CredentialCard({
       </div>
       {/* M14 : colonne d’état à droite — pastille réelle et date d’expiration réelle, sinon dit sans date. */}
       <div className={styles.credStatus}>
-        <Tag tone={state.tone}>{state.label}</Tag>
+        <Tag tone={decision ? DECISION_TONE[decision] : state.tone}>{decision ? DECISION_LABEL[decision] : state.label}</Tag>
         {credentialDateLabel(state) && <small>{credentialDateLabel(state)}</small>}
       </div>
       <div className={styles.credActions}>

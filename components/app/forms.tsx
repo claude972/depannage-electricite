@@ -112,6 +112,20 @@ export function PreferredAddressNote({ preferred, onClear }: { preferred: Prefer
   );
 }
 
+/** Octets de tête JPEG (FF D8 FF), PNG (89 50 4E 47) ou WebP (RIFF….WEBP). Lecture impossible ⇒ on laisse le serveur décider. */
+async function looksLikeImage(file: File): Promise<boolean> {
+  try {
+    const b = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+    if (b.length < 12) return false;
+    const jpeg = b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
+    const png = b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47;
+    const webp = b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50;
+    return jpeg || png || webp;
+  } catch {
+    return true;
+  }
+}
+
 export function RequestForm({
   initialCategory,
   categoryPreselected = true,
@@ -188,8 +202,12 @@ export function RequestForm({
   }, []);
   const [photos, setPhotos] = useState<File[]>(() => (initialPhotos ?? []).slice(0, 6));
   const [photoError, setPhotoError] = useState("");
-  function addPhotos(list: FileList | null) {
+  // O2 : le serveur refuse un fichier dont le contenu n'est pas une image (octets de tête). Le même
+  // contrôle est fait dès la sélection pour le dire tout de suite ; le serveur reste l'autorité.
+  const photoRun = useRef(0);
+  async function addPhotos(list: FileList | null) {
     if (!list) return;
+    const run = ++photoRun.current;
     const next = [...photos];
     const problems: string[] = [];
     for (const file of Array.from(list)) {
@@ -199,8 +217,10 @@ export function RequestForm({
       }
       const invalid = validateUpload(file, PHOTO_TYPES);
       if (invalid) problems.push(`${file.name} : ${invalid}`);
+      else if (!(await looksLikeImage(file))) problems.push(`${file.name} : le contenu ne correspond pas à une image JPEG, PNG ou WebP.`);
       else if (!next.some((f) => f.name === file.name && f.size === file.size)) next.push(file);
     }
+    if (run !== photoRun.current) return;
     setPhotos(next);
     setPhotoError(problems.join(" "));
   }
@@ -311,7 +331,7 @@ export function RequestForm({
                 accept="image/jpeg,image/png,image/webp"
                 multiple
                 onChange={(e) => {
-                  addPhotos(e.target.files);
+                  void addPhotos(e.target.files);
                   e.target.value = "";
                 }}
               />
