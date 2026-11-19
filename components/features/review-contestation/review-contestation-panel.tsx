@@ -15,6 +15,8 @@ function Inner({ reviewId, context, demo }: Props) {
   const pending = useRef<{ request_id: string; reason: string } | null>(null);
   const [history, setHistory] = useState<ReviewContestationHistory | null>(null);
   const [error, setError] = useState(""), [reason, setReason] = useState("");
+  // O7 : erreur de saisie affichée sous le champ et reliée à lui, distincte des erreurs de lecture/envoi.
+  const [reasonError, setReasonError] = useState("");
   const [busy, setBusy] = useState(false), [attempt, setAttempt] = useState(0);
   const [notice, setNotice] = useState("");
   const path = `/api/platform-operations/reviews/${encodeURIComponent(reviewId)}`;
@@ -39,7 +41,7 @@ function Inner({ reviewId, context, demo }: Props) {
     event.preventDefault();
     if (demo || lock.current || !alive() || !history) return;
     const value = reason.trim();
-    if (!pending.current && (value.length < 10 || value.length > 2000 || value.includes("\u0000"))) { setError("Expliquez votre contestation en 10 à 2 000 caractères."); return; }
+    if (!pending.current && (value.length < 10 || value.length > 2000 || value.includes("\u0000"))) { setError(""); setReasonError(value.length < 10 ? `Motif trop court (${value.length} caractère${value.length > 1 ? "s" : ""}) : décrivez votre contestation en au moins 10 caractères.` : "Le motif doit tenir en 2 000 caractères au plus, sans caractère non autorisé."); return; }
     if (!pending.current) pending.current = { request_id: crypto.randomUUID(), reason: value };
     const command = pending.current;
     lock.current = true; setBusy(true); setError(""); setNotice("");
@@ -75,7 +77,8 @@ function Inner({ reviewId, context, demo }: Props) {
         {history.limited && <p>Seules les 50 contestations les plus récentes sont affichées.</p>}
         {open ? <p>Une contestation est déjà ouverte pour cet avis.</p> : <form onSubmit={event => void submit(event)}>
           <label htmlFor={`${label}-reason`}>Motif de la contestation</label>
-          <textarea id={`${label}-reason`} value={reason} maxLength={2000} disabled={busy || Boolean(pending.current)} onChange={event => setReason(event.target.value)} aria-describedby={`${label}-help`} />
+          <textarea id={`${label}-reason`} value={reason} maxLength={2000} disabled={busy || Boolean(pending.current)} onChange={event => { setReason(event.target.value); if (reasonError) setReasonError(""); }} aria-invalid={reasonError ? true : undefined} aria-describedby={reasonError ? `${label}-reason-error ${label}-help` : `${label}-help`} />
+          {reasonError && <p id={`${label}-reason-error`} role="alert">{reasonError}</p>}
           <p id={`${label}-help`}>De 10 à 2 000 caractères. La plateforme examine votre demande ; l’avis n’est pas masqué automatiquement.</p>
           {pending.current && <p>Une tentative reste à confirmer. Le bouton reprend le même envoi sans créer de doublon.</p>}
           <button className="button primary" disabled={busy} type="submit">{busy ? "Envoi en cours…" : pending.current ? "Vérifier et reprendre l’envoi" : "Contester cet avis"}</button>

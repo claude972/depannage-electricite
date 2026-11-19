@@ -1,4 +1,4 @@
-# Recette Web — suite, rapport intermédiaire v4 (19/11/2026, 15:16 UTC)
+# Recette Web — suite, rapport intermédiaire v5 (19/11/2026, 15:50 UTC)
 
 Auteur : Claude (mini). La v3 complète la v2 (13:35 UTC) : D15, D16 et sa correction de largeur, rapprochement INT-44B1D4, tickets d'assistance, ENT-05/09/14. Les sections antérieures sont conservées.
 
@@ -31,7 +31,9 @@ Avant chaque copie, nos fichiers ont été comparés au parent Codex : aucune di
 | D16 note explicite (O5) | 2f96aeb | d6c83695 | — |
 | D16 largeur (W3) | 8caecfe | 65d2b78b | — |
 
-**Candidat courant (v4) : `dpl_4fH2yFC1WHEQPb6x9eb3r5sf9pYi`, n2scdfas8, commit `34e6558f` (D18 + D19), aliasé vers 15:05 UTC. Base de recette : migration D21 `20261119140000` appliquée à 15:07 UTC.**
+**Candidat courant (v5) : `dpl_9gyPq1kJRNXMqzaZvC3gq5FJGEjB`, nn2dylxph, commit `b9002dd9` (D23 + correctifs UX O1/O2/O3/O7/O10), aliasé vers 15:48 UTC. Détail dans `CORRECTIFS-UX-CLAUDE-20261119.md`.**
+
+**Candidat précédent (v4) : `dpl_4fH2yFC1WHEQPb6x9eb3r5sf9pYi`, n2scdfas8, commit `34e6558f` (D18 + D19), aliasé vers 15:05 UTC. Base de recette : migration D21 `20261119140000` appliquée à 15:07 UTC.**
 
 **Candidat précédent (v3) : `dpl_GRTVMnRGoduvNRXB1UheT88t8P4e`**
 - URL : `https://domdepannage-recette-20261112-hbqmw2992-brafas-projects.vercel.app` (commit `65d2b78b`), cible preview, READY.
@@ -170,6 +172,16 @@ Vérifications sur ce candidat ou sur a0ajqcdgg, selon le cas :
 - CLI-05 ;
 - PUB-07 et ART-02 : bloqués (confirmation par e-mail).
 
+## 1 quater. Ajouts v5
+| Id | Proposition Web | Preuve | Limites explicites |
+|---|---|---|---|
+| O1, O2, O3, O7, O10 | Corrigés (Claude), PASS en ligne | `u1-ux` ; `CORRECTIFS-UX-CLAUDE-20261119.md` ; patch `UX-O1-O2-O3-O7-O10-20261119.patch` | O3 entreprise non revu en ligne ; O1 : seul « Acceptée » observé |
+| D23 | PASS | Historique de triage « opérateur réf. cff732ca » | — |
+| FIN-03 | PASS (Web, retour sans paiement) | Checkout « Sandbox » à 130,20 € sur INT-CDD097, abandon sans saisie, serveur toujours non réglé (g1) | Retours « pending » et « reçu » non rejoués sur le Web |
+| FIN-01 | PARTIEL | Ouverture de session Checkout TEST et droits : lecteur, tiers et artisan reçoivent 404 (g2) ; paiement abouti prouvé nativement par Codex et rapproché ici (INT-44B1D4) | Paiement abouti sur le Web non rejoué : limite d'outil (aucune saisie de carte) |
+| ENT-16 | PARTIEL / BLOQUÉ | Droits de règlement prouvés ; aucune facture (émetteur plateforme non configuré) | Factures et payeur délégué : décision du propriétaire |
+| FIN-04, FIN-05, ART-11 | NON VÉRIFIÉ (Web) | — | Exigent un paiement, un échec ou un remboursement, ou l'émetteur de factures |
+
 ## 2. Défauts et observations
 | Id | État | Constat |
 |---|---|---|
@@ -178,17 +190,17 @@ Vérifications sur ce candidat ou sur a0ajqcdgg, selon le cas :
 | D10 (ex-O4) | Corrigé, vérifié | Accès entreprise non actualisés sans rechargement |
 | D11 (ex-W2) | Corrigé, vérifié | Erreur Leaflet `_leaflet_pos` après redimensionnement puis navigation |
 | D13 (ex-W1) | Corrigé, vérifié | Pas d'interface de contestation pour l'artisan |
-| O1 | Observation | La pastille d'une pièce reste « Transmis » après décision |
-| O2 | Observation | Faux fichier image non signalé à la sélection (le serveur le refuse) |
-| O3 | Observation | Date de créneau passée : message générique |
+| O1 | **Corrigé (Claude b9002dd9), vérifié** | La pastille d'une pièce reste « Transmis » après décision |
+| O2 | **Corrigé (Claude b9002dd9), vérifié** | Faux fichier image non signalé à la sélection (le serveur le refuse) |
+| O3 | **Corrigé (Claude b9002dd9), vérifié** | Date de créneau passée : message générique |
 | O5 | Observation (UX, données) | Note 5/5 présélectionnée dans le formulaire d'avis |
 | O6 | Observation | Message de validation en anglais sur `POST /api/platform-operations/reviews/[id]` |
 | W3 | Corrigé (D16 largeur), mise en page en ligne partiellement revérifiée | Option « 5 » hors écran à 390 px sur miupzl34h |
 | O8 | Observation | Liste d'attribution d'assistance : opérateurs indiscernables |
 | O9 | Corrigé (D21), vérifié | Pause de délai datée dans le futur acceptée |
-| O10 | Observation | Urgence non signalée dans la liste des interventions d'une fiche site |
+| O10 | **Corrigé (Claude b9002dd9), vérifié** | Urgence non signalée dans la liste des interventions d'une fiche site |
 | O11 | Observation | Auteur du triage affiché avec un préfixe `INT-` |
-| O7 | Observation | Contestation de 9 caractères : seule l'aide « De 10 à 2 000 caractères » reste affichée, sans message d'erreur explicite |
+| O7 | **Corrigé (Claude b9002dd9), vérifié** | Contestation de 9 caractères : seule l'aide « De 10 à 2 000 caractères » reste affichée, sans message d'erreur explicite |
 
 ## 3. Données synthétiques créées ou modifiées (recette)
 - **INT-825B29 :** photos, deux créneaux, réaffecté à « Artisan Recette » (`assigned`).

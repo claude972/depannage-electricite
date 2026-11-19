@@ -22,7 +22,7 @@ const D = (n: number) => `d0000000-0000-4000-8000-${String(n).padStart(12, "0")}
 // Server order: jobs created_at DESC (higher n = older), due dates due_on ASC (higher n = later).
 const at = (n: number) => new Date(Date.UTC(2026, 5, 1) - n * 60_000).toISOString().replace(".000", "");
 const day = (n: number) => new Date(Date.UTC(2026, 0, 1) + n * 86_400_000).toISOString().slice(0, 10);
-const job = (n: number, over: Record<string, unknown> = {}) => ({ id: J(n), site_id: SITE, category: "outage", status: "requested", created_at: at(n), ...over });
+const job = (n: number, over: Record<string, unknown> = {}) => ({ id: J(n), site_id: SITE, category: "outage", status: "requested", created_at: at(n), urgency: "scheduled", ...over });
 const due = (n: number, over: Record<string, unknown> = {}) => ({ id: D(n), site_id: SITE, title: `Échéance ${n}`, kind: "maintenance", due_on: day(n), status: "pending", notes: "", ...over });
 const page = (items: unknown[], next: string | null = null) => ({ items, page: { limit: 50, has_more: next !== null, next_cursor: next } });
 const res = (status: number, body: unknown = null) => ({ status, body });
@@ -167,7 +167,7 @@ const J = (n) => "a0000000-0000-4000-8000-" + String(n).padStart(12, "0");
 const D = (n) => "d0000000-0000-4000-8000-" + String(n).padStart(12, "0");
 const at = (n) => new Date(Date.UTC(2026, 5, 1) - n * 60000).toISOString().replace(".000", "");
 const day = (n) => new Date(Date.UTC(2026, 0, 1) + n * 86400000).toISOString().slice(0, 10);
-const job = (n, status) => ({ id: J(n), site_id: SITE, category: "outage", status, created_at: at(n) });
+const job = (n, status) => ({ id: J(n), site_id: SITE, category: "outage", status, created_at: at(n), urgency: "scheduled" });
 const due = (n, status, kind = "maintenance") => ({ id: D(n), site_id: SITE, title: "Échéance " + n, kind, due_on: day(n), status, notes: "" });
 const page = (items, next = null) => ({ items, page: { limit: 50, has_more: next !== null, next_cursor: next } });
 const mount = (opts) => {

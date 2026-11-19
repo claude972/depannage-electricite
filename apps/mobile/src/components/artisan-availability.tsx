@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Host, Switch } from '@expo/ui';
+import { Platform } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { z } from 'zod';
 import { Action, Card, Copy, ReadState } from './ui';
@@ -34,7 +35,7 @@ function Availability({ token, actor, approved, capacity, onChanged }: { token: 
     <ReadState loading={dossier.loading} error={dossier.error ?? error} onRetry={() => { setError(null); reload(); }} />
     {dossier.data && current === null && <Copy kind="muted">Complétez votre candidature sur le portail Web pour gérer votre disponibilité.</Copy>}
     {current && <>
-      <Host matchContents><Switch label="Disponible pour de nouvelles missions" value={current.available} disabled={busy || !approved} onValueChange={available => void change({ action: 'set_availability', available })} /></Host>
+      <Host matchContents={Platform.OS !== 'ios'} style={Platform.OS === 'ios' ? { width: '100%', height: 72 } : undefined} ignoreSafeArea={Platform.OS === 'ios' ? 'all' : undefined}><Switch label="Disponible pour de nouvelles missions" value={current.available} disabled={busy || !approved} onValueChange={available => void change({ action: 'set_availability', available })} /></Host>
       <Copy kind="muted">{busy ? 'Mise à jour…' : !approved ? 'Votre candidature doit être approuvée pour recevoir des offres.' : current.available ? 'Vous recevez des offres.' : 'Vous êtes indisponible. Activez votre disponibilité pour recevoir des offres.'}</Copy>
       {capacity && <>
         <Copy>Maximum actuel de missions actives : {current.capacity_limit ?? 3}</Copy>

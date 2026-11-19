@@ -112,6 +112,20 @@ export function PreferredAddressNote({ preferred, onClear }: { preferred: Prefer
   );
 }
 
+/** Octets de tête JPEG (FF D8 FF), PNG (89 50 4E 47) ou WebP (RIFF….WEBP). Lecture impossible ⇒ on laisse le serveur décider. */
+async function looksLikeImage(file: File): Promise<boolean> {
+  try {
+    const b = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+    if (b.length < 12) return false;
+    const jpeg = b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
+    const png = b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47;
+    const webp = b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50;
+    return jpeg || png || webp;
+  } catch {
+    return true;
+  }
+}
+
 export function RequestForm({
   initialCategory,
   categoryPreselected = true,
@@ -188,8 +202,14 @@ export function RequestForm({
   }, []);
   const [photos, setPhotos] = useState<File[]>(() => (initialPhotos ?? []).slice(0, 6));
   const [photoError, setPhotoError] = useState("");
-  function addPhotos(list: FileList | null) {
-    if (!list) return;
+  // O2 : le serveur refuse un fichier dont le contenu n'est pas une image (octets de tête). Le même
+  // contrôle est fait dès la sélection pour le dire tout de suite ; le serveur reste l'autorité.
+  const photoPending = useRef(false);
+  const [checkingPhotos, setCheckingPhotos] = useState(false);
+  async function addPhotos(list: FileList | null) {
+    if (!list || photoPending.current) return;
+    photoPending.current = true;
+    setCheckingPhotos(true);
     const next = [...photos];
     const problems: string[] = [];
     for (const file of Array.from(list)) {
@@ -199,10 +219,13 @@ export function RequestForm({
       }
       const invalid = validateUpload(file, PHOTO_TYPES);
       if (invalid) problems.push(`${file.name} : ${invalid}`);
+      else if (!(await looksLikeImage(file))) problems.push(`${file.name} : le contenu ne correspond pas à une image JPEG, PNG ou WebP.`);
       else if (!next.some((f) => f.name === file.name && f.size === file.size)) next.push(file);
     }
     setPhotos(next);
     setPhotoError(problems.join(" "));
+    photoPending.current = false;
+    setCheckingPhotos(false);
   }
   const [values, setValues] = useState<RequestValues>(() => {
     const fresh: RequestValues = initialValues || { category: initialCategory, description: initialDescription, address: "", postal_code: "", city: "", urgency: initialUrgency };
@@ -226,6 +249,7 @@ export function RequestForm({
   const c = category(values.category);
   function next(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (photoPending.current) return;
     if (phase === 1 && !categoryChosen) {
       setCategoryError("Choisissez le problème qui correspond à votre demande.");
       categoryChoices.current?.querySelector("button")?.focus();
@@ -306,16 +330,18 @@ export function RequestForm({
               error={photoError || undefined}
             >
               <input
+                disabled={checkingPhotos || busy}
                 key="request-photos"
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
                 multiple
                 onChange={(e) => {
-                  addPhotos(e.target.files);
+                  void addPhotos(e.target.files);
                   e.target.value = "";
                 }}
               />
             </Field>
+            {checkingPhotos && <p role="status">Vérification des photos…</p>}
             {photos.length > 0 && (
               <ul className="photo-list" aria-label="Photos sélectionnées">
                 {photos.map((f, index) => (
@@ -327,6 +353,7 @@ export function RequestForm({
                     <button
                       type="button"
                       className="icon-button"
+                      disabled={checkingPhotos || busy}
                       aria-label={`Retirer ${f.name}`}
                       onClick={() => setPhotos(photos.filter((_, j) => j !== index))}
                     >
@@ -530,7 +557,7 @@ export function RequestForm({
           ) : (
             <span />
           )}
-          <button type="submit" className="button primary" disabled={busy}>
+          <button type="submit" className="button primary" disabled={busy || checkingPhotos}>
             {busy
               ? finalStep
                 ? "Veuillez patienter…"

@@ -14,6 +14,14 @@ Statut : recette en cours, ouverture commerciale non validée. Consigne du propr
 - D22 : partage GPS synthétique Android et iOS, accès tiers refusé et arrêt en arrière-plan vérifiés ; itinéraire IGN réel reçu par API. ETA iOS visible puis retirée après arrêt ; carte encore à vérifier. Quota429 observé, disponibilité permanente non revendiquée.
 - Aucun lancement commercial, paiement LIVE ou dossier store n’est déclaré validé. Les contrôles partiels restent signalés dans la matrice.
 
+## Complément — 19 novembre, 12:35 Martinique
+
+- Nouveau paiement TEST INT-D0FA86 : refus, reprise 108,50 EUR et retour succès natif vérifiés. Rapprochement API terminé : règlement10850c et commission1845c uniques, rejeux sans doublon, zéro règlement manquant.
+- Disponibilité artisan iOS corrigée : interrupteur auparavant inactif et débordant ; nouveau binaire 9d1121c testé, serveur true → false → true.
+- Corrections web O1/O2/O3/O7/O10 et D23 intégrées ; leur preview nn2dylxph est READY et l'alias est confirmé indépendamment par Vercel. Dix-sept tests ciblés passent localement, aucun ignoré.
+- Protection additionnelle de la validation asynchrone des photos : passage à l'étape suivante et édition attendent la fin de la lecture. Test Chromium monté réussi ; cette protection additionnelle n'est pas encore déployée.
+- Données privées : 36 lectures et refus API sur trois rôles ; aucune demande d'effacement. Les limites de chaque preuve restent indiquées dans les rapports.
+
 ## Documents livrés
 
 Le dossier [lancement](../lancement/README.md) contient identité/offre, prix/commissions, conditions de service, confidentialité et exploitation/ouverture. Aucun de ces textes n'est chargé automatiquement par l'application. Les données réelles restent à renseigner ; aucune identité, couverture, garantie, commission ou assistance n'a été publiée.

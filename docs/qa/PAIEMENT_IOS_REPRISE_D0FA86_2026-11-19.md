@@ -24,4 +24,4 @@ Preuves : `ios-stripe-success-submit-visible-v2-20261119.redacted.log`, `ios-str
 
 ## Limites
 
-Le rapprochement opérateur et la commission de ce nouveau paiement restent à contrôler. Le rapprochement antérieur d’INT-44B1D4 ne le couvre pas. Aucun paiement LIVE, reversement bancaire, remboursement, carte réelle ni scénario Android Checkout supplémentaire n’est revendiqué.
+Le rapprochement opérateur de ce nouveau paiement et sa commission ont été contrôlés séparément, avec rejeux sans doublon : voir `RAPPROCHEMENT_INT_D0FA86_2026-11-19.md`. Aucun paiement LIVE, reversement bancaire, remboursement, carte réelle ni scénario Android Checkout supplémentaire n’est revendiqué.

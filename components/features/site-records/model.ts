@@ -22,7 +22,7 @@ const OPEN = ["requested", "assigned", "quoted", "accepted", "in_progress"] as c
 const PAST = ["completed", "paid", "cancelled"] as const;
 const timestamp = z.iso.datetime({ offset: true }).regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/);
 const job = z
-  .object({ id, site_id: id, category: z.enum(["outage", "panel", "socket", "lighting", "diagnostic"]), status: z.enum([...OPEN, ...PAST]), created_at: timestamp })
+  .object({ id, site_id: id, category: z.enum(["outage", "panel", "socket", "lighting", "diagnostic"]), status: z.enum([...OPEN, ...PAST]), created_at: timestamp, urgency: z.enum(["urgent", "scheduled"]) })
   .strict();
 const due = z
   .object({ id, site_id: id, title: z.string().min(1).max(160), kind: z.enum(["audit", "maintenance", "safety", "equipment", "contract"]), due_on: z.iso.date(), status: z.enum(["pending", "scheduled", "completed"]), notes: z.string().max(4000) })
