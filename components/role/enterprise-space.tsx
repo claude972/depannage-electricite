@@ -4543,7 +4543,7 @@ export function ReportsView({ c }: { c: Ctx }) {
           <span>{error}</span>
         </div>
       )}
-      <section className={cx("panel", styles.tablePanel)} aria-labelledby="report-table-title" data-report={live ? report.state.phase : "demo"}>
+      <section className={cx("panel", styles.tablePanel)} aria-labelledby="report-table-title" tabIndex={0} data-report={live ? report.state.phase : "demo"}>
         <div className={styles.tableHead}>
           <div>
             <h2 id="report-table-title">Budget et engagements par site</h2>

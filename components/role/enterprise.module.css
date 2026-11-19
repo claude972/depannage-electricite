@@ -3091,3 +3091,8 @@
   white-space: normal;
   overflow-wrap: anywhere;
 }
+
+.tablePanel[data-report]:focus-visible {
+  outline: 2px solid var(--ui-primary, #2246e5);
+  outline-offset: 2px;
+}
