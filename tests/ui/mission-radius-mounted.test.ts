@@ -21,7 +21,7 @@ const skip = available ? false : "local Playwright/Chromium not found (SKIPPED, 
 const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const UID = "10000000-0000-4000-8000-0000000000ac";
 const ENTRY = `
-import { createElement as h, StrictMode, useState } from "react";
+import { createElement as h, StrictMode, useState, useRef, useCallback } from "react";
 import { createRoot } from "react-dom/client";
 import { MissionRadiusPanel } from "./components/features/mission-radius/mission-radius-panel";
 import { AvailableMissionsPanel } from "./components/features/available-missions/available-missions-panel";
@@ -29,11 +29,12 @@ window.geo = 0;
 try {
   Object.defineProperty(navigator, "geolocation", { configurable: true, get() { window.geo++; return { getCurrentPosition() { window.geo++; }, watchPosition() { window.geo++; }, clearWatch() {} }; } });
 } catch {}
+window.failRadius = location.search.includes("offline");
 window.radiusCalls = []; window.listCalls = []; window.stored = null;
 let pref = { version: 3, reference_code: null, radius_km: null };
 const view = () => ({ preference: pref, options: [{ code: "97209", name: "Fort-de-France" }, { code: "97213", name: "Le Lamentin" }], source: { url: "https://geo.api.gouv.fr/communes", retrieved_at: "2026-11-01" }, basis: "commune_centres", unknown_postal_policy: "postal_only" });
 const radiusApi = {
-  load: async () => { window.radiusCalls.push("GET"); return { status: 200, body: view(), retryAfterS: null }; },
+  load: async () => { window.radiusCalls.push("GET"); if (window.failRadius) return { status: 503, body: null, retryAfterS: null }; return { status: 200, body: view(), retryAfterS: null }; },
   save: async (body) => {
     window.radiusCalls.push("POST " + JSON.stringify(body));
     window.stored = sessionStorage.getItem("courant-private-mission-radius:${UID}:1");
@@ -48,8 +49,11 @@ const missionsApi = {
 const ctx = { userId: () => "${UID}", generation: () => 1 };
 function Host() {
   const [radiusRev, setRadiusRev] = useState({ v: null, n: 0 });
+  const details = useRef(null);
+  const onAttention = useCallback(() => { if (details.current) details.current.open = true; }, []);
   return h("div", null,
-    h(MissionRadiusPanel, { demo: false, context: ctx, api: radiusApi, onConfirmed: (p) => setRadiusRev((prev) => (prev.v !== null && prev.v !== p.version ? { v: p.version, n: prev.n + 1 } : { v: p.version, n: prev.n })) }),
+    h("details", { ref: details, open: !location.search.includes("offline") }, h("summary", null, "Zone de recherche"),
+    h(MissionRadiusPanel, { onAttention, demo: false, context: ctx, api: radiusApi, onConfirmed: (p) => setRadiusRev((prev) => (prev.v !== null && prev.v !== p.version ? { v: p.version, n: prev.n + 1 } : { v: p.version, n: prev.n })) })),
     h(AvailableMissionsPanel, { key: "uid|1|live|" + radiusRev.n, context: ctx, api: missionsApi, onAccept: async () => false, onOpenAccepted: () => {} }));
 }
 document.documentElement.setAttribute("data-ui-theme", location.search.includes("dark") ? "dark" : "light");
@@ -150,4 +154,21 @@ test("app réelle : « Missions » artisan (démo) — note honnête du rayon, a
         await page.context().close();
       }
   });
+});
+
+
+test("Chromium : erreur du rayon rend le panneau replie visible puis reprise GET sans mutation", { skip }, async () => {
+  const { server, base } = await serve();
+  const pw = await import(pathToFileURL(path.join(PW, "index.mjs")).href);
+  const browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+    await page.goto(`${base}?offline`);
+    await page.getByRole("button", { name: "Réessayer", exact: true }).waitFor({ state: "visible" });
+    assert.equal(await page.locator("details").evaluate((el: HTMLDetailsElement) => el.open), true);
+    await page.evaluate(() => { (window as unknown as { failRadius: boolean }).failRadius = false; });
+    await page.getByRole("button", { name: "Réessayer", exact: true }).click();
+    await page.locator('[data-mission-radius-current="none"]').waitFor();
+    assert.equal((await state(page)).radius.some((call) => call.startsWith("POST")), false);
+  } finally { await browser.close(); server.close(); }
 });

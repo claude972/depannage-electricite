@@ -388,7 +388,7 @@ export function Forbidden({ onHome }: { onHome: () => void }) {
       <span className="empty-icon">
         <Icon name="lock" size={28} />
       </span>
-      <h2 id="forbidden-title">Cette page ne fait pas partie de votre espace</h2>
+      <h1 id="forbidden-title">Cette page ne fait pas partie de votre espace</h1>
       <p>
         Le lien demandé correspond à un autre rôle ou à une autre organisation.
         Aucune donnée n’a été chargée.

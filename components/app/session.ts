@@ -49,7 +49,7 @@ const ACCESS: Record<View, readonly Role[] | "public"> = {
   messages: ["client", "artisan", "manager", "admin"],
   documents: ["client", "artisan", "manager", "admin"],
   profile: ["client", "artisan", "manager", "admin"],
-  support: ["client", "artisan", "manager", "admin"],
+  support: ["client", "artisan", "manager"],
   sites: ["manager"],
   site: ["manager"],
   approvals: ["manager"],

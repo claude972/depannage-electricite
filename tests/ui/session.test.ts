@@ -21,6 +21,10 @@ test("role guard: hash views outside the role are refused, demo role grants noth
   assert.equal(canAccess("admin", "admin", "live"), true);
   assert.equal(canAccess("missions", "client", "demo"), false);
   assert.equal(canAccess("missions", "artisan", "demo"), true);
+  // Admin assistance uses the capability-gated operator queue, not customer support.
+  assert.equal(canAccess("support", "admin", "live"), false);
+  assert.equal(canAccess("support", "client", "live"), true);
+  assert.equal(canAccess("support-queue", "admin", "live"), true);
   // No session: only public views.
   assert.equal(canAccess("overview", null, "public"), false);
   assert.equal(canAccess("home", null, "public"), true);
