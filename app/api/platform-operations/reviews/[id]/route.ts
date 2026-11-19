@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 const note = z.string().max(1000).regex(/^[^\u0000]*$/);
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.enum(["hide", "restore"]), expected_version: z.number().int().min(1).nullable(), note }).strict(),
-  z.object({ action: z.literal("contest"), request_id: uuid, reason: z.string().trim().min(10).max(2000).regex(/^[^\u0000]*$/) }).strict(),
+  z.object({ action: z.literal("contest"), request_id: uuid, reason: z.string().trim().min(10, "Décrivez le motif de contestation en au moins 10 caractères.").max(2000, "Le motif de contestation ne doit pas dépasser 2 000 caractères.").regex(/^[^\u0000]*$/, "Le motif contient un caractère non autorisé.") }).strict(),
   z.object({ action: z.literal("decide"), contestation_id: uuid, decision: z.enum(["upheld", "dismissed"]), expected_version: z.number().int().min(1), note: z.string().trim().min(10).max(1000).regex(/^[^\u0000]*$/) }).strict(),
 ]);
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
