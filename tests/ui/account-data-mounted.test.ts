@@ -11,7 +11,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
-import { withApp, skip as appSkip } from "./real-app-harness";
+import { withApp, skip as appSkip, openAccountSettings } from "./real-app-harness";
 
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
@@ -154,7 +154,7 @@ test("app réelle : les paramètres du compte client montent « Mes données » 
         const origin = new URL(page.url()).origin;
         await page.goto("about:blank");
         await page.goto(`${origin}/#demo/client-profile`);
-        await page.getByRole("button", { name: "Paramètres du compte" }).click();
+        await openAccountSettings(page);
         const where = `${theme} ${width}px`;
         const panel = page.locator('[data-account-data="demo"]');
         await panel.waitFor();

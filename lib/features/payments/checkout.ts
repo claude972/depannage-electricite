@@ -5,6 +5,20 @@ import { uuid, validated } from "@/lib/supabase/validation";
 import { stripeClient, appUrl, commissionBps } from "@/lib/supabase/stripe";
 import { safeCheckoutUrl } from "@/lib/shared/stripe-checkout-url";
 
+/** Known server refusals before any provider call, told as they are (never « the dossier
+ * changed, refresh »): nothing is debited and the payer knows what unblocks the payment. */
+export const CHECKOUT_REFUSALS: Record<string, string> = {
+  "Recipient account not ready": "Le paiement n’est pas encore ouvert : le compte de règlement de l’artisan doit d’abord être validé par la plateforme. Rien n’a été débité ; réessayez plus tard ou contactez l’assistance.",
+  "Accepted completed work required": "Le paiement s’ouvre une fois le devis accepté et l’intervention terminée par l’artisan. Rien n’a été débité.",
+  "Conflicting settlement method": "Un autre mode de règlement est déjà engagé pour ce dossier. Rien n’a été débité ; contactez l’assistance pour le finaliser.",
+  "Invalid agreed amount": "Le montant convenu de ce dossier doit être vérifié avant paiement. Rien n’a été débité ; contactez l’assistance.",
+};
+export function checkoutDbError(error: { code?: string; message?: string } | null | undefined) {
+  if (error?.code === "P0001" && error.message && CHECKOUT_REFUSALS[error.message])
+    throw new ApiError(409, CHECKOUT_REFUSALS[error.message]);
+  dbError(error as Parameters<typeof dbError>[0]);
+}
+
 export const PAYMENT_HEADERS={"Cache-Control":"private, no-store","Referrer-Policy":"no-referrer"};
 const cents=z.number().int().positive().max(2147483647);
 const date=z.string().refine(s=>/^\d{4}-\d{2}-\d{2}T/.test(s)&&Number.isFinite(Date.parse(s)));
@@ -52,14 +66,14 @@ export async function createQuoteCheckout(request:Request){
   assertOrigin(request);const{db,user}=await authenticatedClient(request);const input=await validated(request,z.object({quote_id:uuid,native_test:z.literal(true).optional()}).strict());const quote_id=input.quote_id.toLowerCase();
   if(input.native_test&&!/^(sk|rk)_test_/.test(env.STRIPE_SECRET_KEY??""))
     throw new ApiError(503,"Le paiement Stripe de test est indisponible.");
-  const guard=await db.rpc("guard_phone_booking_checkout",{p_quote_id:quote_id});dbError(guard.error);
+  const guard=await db.rpc("guard_phone_booking_checkout",{p_quote_id:quote_id});checkoutDbError(guard.error);
   // Config errors precede any durable financial intent/provider operation.
   const stripe=stripeClient(),origin=appUrl(),fee=commissionBps();
   if(fee>=10000)throw new ApiError(503,"Les conditions de commission doivent être vérifiées avant paiement.");
   const live=/^(sk|rk)_live_/.test(env.STRIPE_SECRET_KEY??"");const admin=adminClient();
   // At most one verified expiry followed by one new attempt per HTTP request.
   for(let cycle=0;cycle<2;cycle++){
-   const begun=await db.rpc("begin_platform_checkout_with_saved_customer",{p_quote_id:quote_id,p_live:live});dbError(begun.error);if(!uuid.safeParse(begun.data).success)throw unavailable();
+   const begun=await db.rpc("begin_platform_checkout_with_saved_customer",{p_quote_id:quote_id,p_live:live});checkoutDbError(begun.error);if(!uuid.safeParse(begun.data).success)throw unavailable();
    let l=await read(admin,user.id,begun.data,quote_id,live);
    if(["needs_review","awaiting_bank","paid","expired"].includes(l.status))throw conflict();
    if(l.session_id){

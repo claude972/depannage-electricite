@@ -202,7 +202,7 @@ const w = window;
 const tick = (ms) => new Promise((r) => setTimeout(r, ms));
 const item = (n, over = {}) => (${item.toString().replace("ID(n)", "'a0000000-0000-4000-8000-' + String(n).padStart(12, '0')")})(n, over);
 const page = (items, cursor = null, total = items.length) => ({ items, total, page: { limit: 50, has_more: cursor !== null, next_cursor: cursor } });
-const session = (mode, opened, gen) => ({ mode, mutationContext: { userId: () => "${USER}", generation: () => gen.value }, go: () => {}, openIntervention: (id) => opened.push(id) });
+const session = (mode, opened, gen) => ({ mode, data: { quotes: [], payments: [] }, mutationContext: { userId: () => "${USER}", generation: () => gen.value }, go: () => {}, openIntervention: (id) => opened.push(id) });
 w.frames = async () => {
   const bodies = [];
   w.fetch = async (url, init) => {
@@ -372,7 +372,7 @@ test("app réelle (démo client « Mes demandes ») : filtrage local, recherche 
     const before = await page.locator(".request-row").count();
     await page.getByRole("button", { name: "Toutes" }).click();
     const all = await page.locator(".request-row").count();
-    await page.getByPlaceholder("Rechercher une intervention").fill("zzzz-aucun");
+    await page.getByPlaceholder("Rechercher une demande").fill("zzzz-aucun");
     await page.waitForTimeout(400);
     const none = await page.locator(".request-row").count();
     const empty = await page.getByText("Aucune intervention ne correspond à votre recherche.").count();

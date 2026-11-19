@@ -132,6 +132,7 @@ export default function Dossier() {
           <Copy kind="muted" selectable>Repère GPS · {access.latitude.toFixed(6)}, {access.longitude.toFixed(6)}</Copy>}
       </Card>}
       <Action secondary label="Ouvrir la conversation" onPress={()=>router.push({pathname:'/dossier/messages',params:{id}})}/>
+      <Action secondary label="Écrire à l’assistance" onPress={()=>router.push({pathname:'/dossier/assistance',params:{id}})}/>
       {owner&&['requested','assigned','quoted'].includes(job.status)&&
         <Action secondary label="Annuler ma demande" disabled={busy} onPress={()=>confirm('Annuler la demande ?', 'Le serveur vérifiera que le dossier peut être annulé.',()=>action({action:'cancel'}))}/>}
 

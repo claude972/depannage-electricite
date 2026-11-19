@@ -2326,7 +2326,7 @@
     margin-bottom: 24px;
   }
   .space :global(.page-title) > div:first-child { min-width: 0; width: 100%; }
-  .space :global(.page-title) h1 { font-size: 28px; line-height: 1.16; letter-spacing: -.65px; }
+  .space :global(.page-title) h1 { font-size: 23px; line-height: 32px; letter-spacing: -.2px; }
   .space :global(.page-title) p { max-width: 38ch; font-size: 14px; line-height: 1.55; margin-top: 8px; }
   .space :global(.page-title) > .button { width: 100%; min-height: 48px; font-size: 14px; }
   .space :global(.page-title) > div + div { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
@@ -2334,8 +2334,12 @@
 }
 
 /* Shared page hierarchy across all four workspaces. */
-.space :global(.page-title) h1 { font-size: 32px; font-weight: 700; line-height: 1.15; letter-spacing: -.8px; }
-@media (max-width: 767px) { .space :global(.page-title) h1 { font-size: 28px; letter-spacing: -.65px; } }
+.space :global(.page-title) h1,
+.space .banner h1 { font-size: 28px; font-weight: 500; line-height: 36px; letter-spacing: -.4px; }
+@media (max-width: 1023px) {
+  .space :global(.page-title) h1,
+  .space .banner h1 { font-size: 23px; line-height: 32px; letter-spacing: -.2px; }
+}
 
 .bottomItem { padding-block: 2px; gap: 3px; }
 .availabilityPanel { padding: 16px 20px; }
@@ -2351,5 +2355,5 @@
 @media (min-width: 768px) { .segmentsWrap :global(.tabs) > button { flex: 0 0 auto; padding-inline: 20px; } }
 
 /* Consistent section and card typography across connected profiles. */
-:global(.ui-v2) .space h2 { font-size: 18px; font-weight: 700; line-height: 1.35; }
+:global(.ui-v2) .space h2 { font-size: 18px; font-weight: 500; line-height: 26px; }
 :global(.ui-v2) .space h3 { font-size: 16px; font-weight: 600; line-height: 1.4; }

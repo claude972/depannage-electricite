@@ -277,7 +277,7 @@ export function BookingConfirm({
                 {[contact.first_name, contact.last_name].filter(Boolean).join(" ")}
                 {contact.email ? <><br />{contact.email}</> : null}
                 {contact.phone ? <><br />{contact.phone}</> : null}{" "}
-                <button type="button" className="text-button" disabled={sending || busy} onClick={() => setEditingContact(true)}>
+                <button type="button" className="text-button booking-contact-edit" disabled={sending || busy} onClick={() => setEditingContact(true)}>
                   Modifier mes coordonnées
                 </button>
               </>

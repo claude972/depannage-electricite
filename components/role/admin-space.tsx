@@ -2036,7 +2036,7 @@ function DossierTable<T extends RowLike>({
           render: (i) => (
             <span className={styles.cellStack}>
               {category(i.category).label}
-              <small>{i.urgency === "urgent" ? "Demande urgente" : "À planifier"}</small>
+              <small>{i.urgency === "urgent" ? "Demande urgente" : "Demande non urgente"}</small>
             </span>
           ),
         },
@@ -3482,7 +3482,7 @@ function DossierView({
               <div>
                 <h2>{c.label}</h2>
                 <span>
-                  {shortId(intervention.id)} · {intervention.urgency === "urgent" ? "Demande urgente" : "Intervention à planifier"}
+                  {shortId(intervention.id)} · {intervention.urgency === "urgent" ? "Demande urgente" : "Demande non urgente"}
                 </span>
               </div>
               <span className={styles.badges}>

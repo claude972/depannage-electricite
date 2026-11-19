@@ -1,6 +1,6 @@
 import { useEffect,useRef,useState,type ComponentRef } from 'react';
 import { Alert,TextInput } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
 import { z } from 'zod';
 import { ManagementAccess } from '@/components/management-access';
@@ -11,6 +11,7 @@ import { euros,timestamp } from '@/lib/contracts';
 import { siteSettings,siteSaved,siteTypes,siteEditValues } from '@/lib/management-contracts';
 export default function Site(){const {id}=useLocalSearchParams<{id:string}>();const auth=useSession().session;return <ManagementAccess>{auth&&z.uuid().safeParse(id).success?<Details key={auth.user.id+id} id={id} token={auth.access_token}/>:<Screen><Copy>Site introuvable.</Copy></Screen>}</ManagementAccess>;}
 function Details({id,token}:{id:string;token:string}){
+ const router=useRouter();
  const path=`/api/sites/${id}/settings`,state=useResource(path,siteSettings,token);
  const [edit,setEdit]=useState<null|{name:string;address:string;access_notes:string;version:number;hours:z.infer<typeof siteSettings>['site']['opening_hours']}>(null);
  const [error,setError]=useState<string|null>(null),[notice,setNotice]=useState<string|null>(null),[busy,setBusy]=useState(false);
@@ -42,6 +43,7 @@ function Details({id,token}:{id:string;token:string}){
  <Copy kind="muted">Les horaires existants sont conservés. Vos modifications seront enregistrées si vous disposez toujours des droits nécessaires.</Copy>
  <Action label={busy?'Enregistrement…':'Enregistrer'} disabled={busy} onPress={()=>void save()}/><Action secondary label="Annuler" disabled={busy} onPress={cancel}/>
  {error&&<Action secondary label="Recharger la version du site" disabled={busy} onPress={()=>Alert.alert('Recharger le site ?', 'Les modifications de ce formulaire seront abandonnées.',[{text:'Conserver',style:'cancel'},{text:'Recharger',onPress:()=>{cancel();state.reload();}}])}/>}</Card>:<>
+ {state.data?.can_write&&!site.archived_at&&<Action label="Nouvelle demande pour ce site" onPress={()=>router.push({pathname:"/organisation/demande",params:{site_id:site.id}})}/>}
  <Card><Copy kind="subtitle">Adresse et accès</Copy><Copy selectable>{site.address}</Copy><Copy>{site.access_notes||'Aucune consigne renseignée.'}</Copy></Card>
  <Card><Copy kind="subtitle">Budget du site</Copy><Copy>{euros(site.budget_cents)}</Copy><Copy kind="muted">Budget déclaré du site ; ce montant n’est ni une dépense constatée ni un règlement.</Copy></Card>
  <Card><Copy kind="subtitle">Horaires</Copy>{site.opening_hours.length?site.opening_hours.map((h,i)=><Copy key={i}>{['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'][h.day-1]} · {h.opens}–{h.closes}</Copy>):<Copy>Aucun horaire renseigné.</Copy>}</Card>

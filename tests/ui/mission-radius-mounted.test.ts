@@ -136,6 +136,8 @@ test("app réelle : « Missions » artisan (démo) — note honnête du rayon, a
         await page.goto("about:blank");
         api.length = 0;
         await page.goto(`${origin}/#demo/artisan-missions`);
+        // The radius panel sits in the collapsed « Zone de recherche » disclosure: open it like a user.
+        await page.getByText("Zone de recherche", { exact: false }).first().click();
         const panel = page.locator('[data-mission-radius="demo"]');
         await panel.waitFor();
         assert.match(await panel.innerText(), /aucun appel n’est fait/, where);

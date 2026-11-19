@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
 import { z } from 'zod';
@@ -12,6 +12,14 @@ export default function Conversation() {
   const id=z.uuid().safeParse(params.id).data;
   const session=useSession().session;
   const token=session?.access_token;
+  if(!id)return <Screen><Copy kind="error">Conversation introuvable.</Copy></Screen>;
+  if(!token||!session)return <Screen><Copy kind="muted">Connectez-vous pour ouvrir cette conversation.</Copy></Screen>;
+  return <ConversationThread key={`${session.user.id}:${token}:${id}`} id={id} token={token} profileId={session.user.id}/>;
+}
+
+function ConversationThread({id,token,profileId}:{id:string;token:string;profileId:string}) {
+  const pending=useRef<AbortController|null>(null);
+  useEffect(()=>()=>{pending.current?.abort();},[]);
   const [cursor,setCursor]=useState<string|null>(null);
   const [body,setBody]=useState(''), [error,setError]=useState<string|null>(null), [busy,setBusy]=useState(false);
   const intent=useRef<{body:string;id:string}|null>(null), lock=useRef(false);
@@ -21,14 +29,15 @@ export default function Conversation() {
     if(!token||!id||!body.trim()||lock.current)return;
     const text=body.trim();
     if(intent.current?.body!==text)intent.current={body:text,id:randomUUID()};
+    const controller=new AbortController();pending.current=controller;
     lock.current=true;setBusy(true);setError(null);
     try{
-      await api('/api/messages',sent,{token,method:'POST',body:{intervention_id:id,body:text,command_id:intent.current.id}});
+      await api('/api/messages',sent,{token,signal:controller.signal,method:'POST',body:{intervention_id:id,body:text,command_id:intent.current.id}});
+      if(controller.signal.aborted)return;
       setBody('');intent.current=null;setCursor(null);
-    }catch(issue){setError(issue instanceof Error?issue.message:'Envoi indisponible.');}
-    finally{lock.current=false;setBusy(false);state.reload();}
+    }catch(issue){if(controller.signal.aborted)return;setError(issue instanceof Error?issue.message:'Envoi indisponible.');}
+    finally{if(!controller.signal.aborted){pending.current=null;lock.current=false;setBusy(false);state.reload();}}
   }
-  if(!id)return <Screen><Copy kind="error">Conversation introuvable.</Copy></Screen>;
   return <Screen>
     <Copy kind="title">Conversation</Copy>
     <ReadState loading={state.loading} error={state.error} onRetry={state.reload}/>
@@ -37,7 +46,7 @@ export default function Conversation() {
       {state.data.page.next_cursor&&<Action secondary label="Voir les messages plus anciens" onPress={()=>setCursor(state.data?.page.next_cursor??null)}/>}
       {state.data.messages.length===0&&<Copy kind="muted">Aucun message.</Copy>}
       {[...state.data.messages].reverse().map(item=><Card key={item.id}>
-        <Copy kind="label">{item.author_id===session?.user.id?'VOUS':'INTERLOCUTEUR'}</Copy>
+        <Copy kind="label">{item.author_id===profileId?'VOUS':'INTERLOCUTEUR'}</Copy>
         <Copy>{item.body}</Copy>
         {item.attachment_id&&<Copy kind="muted">Pièce jointe disponible dans le dossier.</Copy>}
         <Copy kind="muted">{timestamp(item.created_at)}</Copy>

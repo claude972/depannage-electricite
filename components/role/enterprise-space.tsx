@@ -1599,7 +1599,9 @@ export function RequestsView({ c }: { c: Ctx }) {
 const isRequestCategory = (value: string): value is Category => CATEGORIES.some((cat) => cat.id === value);
 
 const SITE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-function NewRequestView({ c, siteId, initialCategory = "panel" }: { c: Ctx; siteId: string; initialCategory?: Category }) {
+function NewRequestView({ c, siteId: routeSiteId, initialCategory = "panel" }: { c: Ctx; siteId: string; initialCategory?: Category }) {
+  // Without an explicit site in the route, the site chosen in the header is the natural default.
+  const siteId = routeSiteId || (c.activeSite && !c.activeSite.archived_at && c.authority.canWriteSite(c.activeSite.id) ? c.activeSite.id : "");
   const site = c.orgSites.find((s) => s.id === siteId) || null;
   // ENT-03: a site id absent from the bootstrap cache ⇒ exact read in the ACTIVE organisation, then the
   // existing form for that site only (live). The normal path below is unchanged.
@@ -1656,6 +1658,7 @@ function NewRequestView({ c, siteId, initialCategory = "panel" }: { c: Ctx; site
                 : null
         }
         sites={writableSites}
+        siteRequired
         mode={c.session.mode}
         busy={c.session.busy}
         onBack={() => c.go("requests")}
@@ -1714,6 +1717,7 @@ function DirectNewRequest({ c, siteId, initialCategory }: { c: Ctx; siteId: stri
               initialCategory={initialCategory}
               initialValues={{ category: initialCategory, description: "", address: site.address, postal_code: "", city: "", urgency: "scheduled", site_id: site.id }}
               sites={[only]}
+              siteRequired
               mode={session.mode}
               busy={session.busy}
               onBack={() => c.go("requests")}

@@ -133,6 +133,26 @@ test("literal unicode and apostrophe search and exact UUID reference work withou
     assert.ok(body.interventions.every((r: Row) => !("address" in r) && !("description" in r) && !("phone" in r)));
   }
 });
+test("the INT-XXXXXX reference shown to clients finds its dossier (any case), and nothing else", async () => {
+  // Recette admin réelle du 16/11 : « INT-5B12D9 » (placeholder « INT-… ou ville ») renvoyait 0 dossier.
+  const target = String(fixtures[41].id); // 10000000-0000-4000-8000-000000000042
+  const reference = `INT-${target.replaceAll("-", "").slice(0, 6).toUpperCase()}`;
+  for (const q of [reference, reference.toLowerCase()]) {
+    const h = harness(); const response = await h.get(new URLSearchParams({ q }));
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.page.total, fixtures.length, q); // every fixture id starts with « 100000 »
+    assert.ok(body.interventions.every((r: Row) => String(r.id).replaceAll("-", "").startsWith(target.replaceAll("-", "").slice(0, 6))));
+    const url = h.requests.find(r => r.table === "interventions")!.url;
+    assert.equal(url.searchParams.getAll("id").sort().join(" "), "gte.10000000-0000-0000-0000-000000000000 lte.100000ff-ffff-ffff-ffff-ffffffffffff");
+  }
+  const none = await (await harness().get(new URLSearchParams({ q: "INT-ABCDEF" }))).json();
+  assert.equal(none.page.total, 0);
+  // Without « INT- », six letters stay a literal city/description search.
+  const literal = harness(); await literal.get(new URLSearchParams({ q: "facade" }));
+  assert.ok(literal.requests.find(r => r.table === "interventions")!.url.searchParams.get("or")?.includes("ilike"));
+});
+
 test("malformed cursor, duplicate/unknown parameters, wildcards and filter injection are rejected before dossier queries", async () => {
   for (const params of ["limit=0", "limit=101", "limit=01", "limit=1.5", "status=unknown", "site_id=bad", "limit=2&limit=3", "unknown=x", "cursor=", "cursor=a===", "cursor=e30", "created_from=2026-02-30T00%3A00%3A00Z", "created_from=2026-10-01T12%3A00%3A00.123456Z&created_to=2026-10-01T12%3A00%3A00.123455Z"]) {
     const h = harness(); assert.equal((await h.get(params)).status, 422, params); assert.equal(h.requests.some(r => r.table === "interventions"), false);

@@ -75,6 +75,10 @@ function toLines(lines: EditLine[]): Line[] | null {
   }
   return out;
 }
+/** Removes template lines left unchanged at 0 € (never a line the artisan priced or renamed). */
+export function withoutUnusedDefaults(lines: Line[]): Line[] {
+  return lines.filter((l) => !(l.unit_price_cents === 0 && DEFAULT_LINES.some((d) => d.label === l.label)));
+}
 function sameDraft(a: Line[] | null, aTax: number | null, b: Line[], bTax: number | null) {
   if (!a || a.length !== b.length || aTax !== bTax) return false;
   return a.every((l, i) => {
@@ -228,16 +232,17 @@ export function QuoteDraftEditor({
       setPending(null);
     }
   };
-  const save = async (base: QuoteDraftEnvelope | null = envelope) => {
+  const save = async (base: QuoteDraftEnvelope | null = envelope, override?: Line[]) => {
     setTouched(true);
-    if (!base || !parsed || tooMany) return null;
+    const toSave = override ?? parsed;
+    if (!base || !toSave || tooMany) return null;
     const result = await command(
       {
         action: "save",
         expected_version: base.version,
         assignment_token: base.assignment_token,
         base_quote_id: base.current_quote_id,
-        lines: parsed,
+        lines: toSave,
         tax_rate: taxRate,
       },
       "save",
@@ -255,10 +260,15 @@ export function QuoteDraftEditor({
     setTouched(true);
     if (!envelope || !publishable) return;
     // The server publishes the stored draft: unsaved changes are saved first, explicitly.
+    // Untouched template lines left at 0 € (« Déplacement », « Main-d’œuvre ») are not sent:
+    // the client would read them as free work. A 0 € line typed on purpose is kept.
+    const kept = parsed ? withoutUnusedDefaults(parsed) : null;
+    const trimmed = !!parsed && !!kept && kept.length > 0 && kept.length !== parsed.length;
     let base = envelope;
-    if (dirty) {
-      const saved = await save(envelope);
+    if (dirty || trimmed) {
+      const saved = await save(envelope, trimmed ? kept! : undefined);
       if (!saved) return;
+      if (trimmed) setLines(fromLines(kept!));
       base = saved;
     }
     const result = await command(

@@ -352,8 +352,8 @@ function Quote({ quoteId, context, api, store = tabStore, newId = uuid, loadMemb
       ) : (
         <div className={styles.form} data-ap-actions="">
           <label className={styles.label} htmlFor={`${uid}-n`}>Commentaire {actions.some((a) => a === "reject" || a === "request_information" || a === "respond") ? "(obligatoire pour rejeter, demander un complément ou répondre)" : "(facultatif)"}</label>
-          <textarea id={`${uid}-n`} className={styles.input} rows={3} maxLength={2000} value={note} onChange={(e) => setNote(e.target.value)} disabled={locked} />
-          {noteError && <small className={styles.error}>{noteError}</small>}
+          <textarea id={`${uid}-n`} className={styles.input} rows={3} maxLength={2000} value={note} onChange={(e) => setNote(e.target.value)} disabled={locked} aria-invalid={noteError ? true : undefined} aria-describedby={noteError ? `${uid}-ne` : undefined} />
+          {noteError && <small id={`${uid}-ne`} className={styles.error} role="alert">{noteError}</small>}
           <div className={styles.row}>
             {actions.map((a) => (
               <button key={a} type="button" className={`${styles.button} ${a === "approve" || a === "submit" ? styles.primary : ""}`} disabled={locked} onClick={() => setConfirm(a)} data-ap-action={a}>

@@ -2225,30 +2225,36 @@
     white-space: normal;
   }
 }
-/* V5-C05 à 360 / 760 : cinq indicateurs en grille lisible (2 colonnes, puis 1 sous 400 px). */
-@media (max-width: 760px) {
-  .kpis {
-    display: grid;
-    grid-auto-flow: row;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-    border: 0;
-    background: transparent;
-  }
-  .kpis > div {
-    border: 1px solid #dce4ee;
-    border-radius: 10px;
-    min-width: 0;
-  }
-  /* Le bandeau global masque son 4e indicateur sur mobile ; ici les cinq chiffres réels restent visibles. */
-  .kpis > div:nth-child(4) {
-    display: flex;
-  }
+/* Let the available workspace width determine the number of readable indicators. */
+.main .kpis {
+  display: grid;
+  grid-auto-flow: row;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 10px;
+  border: 0;
+  background: transparent;
 }
-@media (max-width: 400px) {
-  .kpis {
-    grid-template-columns: minmax(0, 1fr);
-  }
+.main .kpis > div {
+  border: 1px solid var(--ui-border, #dce4ee);
+  border-radius: 10px;
+  min-width: 0;
+}
+/* Le bandeau global masque son 4e indicateur sur mobile ; ici les cinq chiffres réels restent visibles. */
+.main .kpis > div:nth-child(4) {
+  display: flex;
+}
+:global(.ui-v2) .main .kpis {
+  background: transparent;
+}
+.main .kpis > div {
+  background: var(--ui-card, #fff);
+}
+.main .kpis section {
+  flex: 1;
+  min-width: 0;
+}
+.main .kpis section > span {
+  max-width: none;
 }
 
 /* V5-C08 : fil d’Ariane cliquable à 44 px ; section documents pleine largeur sous la grille Détails | Décision ;
@@ -3064,9 +3070,9 @@
 .memberActions :global(button) { min-width: 44px; }
 
 /* Shared page hierarchy across all four workspaces. */
-.main :global(h1) { font-size: 32px; font-weight: 700; line-height: 1.15; letter-spacing: -.8px; }
-@media (max-width: 767px) { .main :global(h1) { font-size: 28px; letter-spacing: -.65px; } }
+.main :global(h1) { font-size: 28px; font-weight: 500; line-height: 36px; letter-spacing: -.4px; }
+@media (max-width: 1023px) { .main :global(h1) { font-size: 23px; line-height: 32px; letter-spacing: -.2px; } }
 
 /* Consistent section and card typography across connected profiles. */
-:global(.ui-v2) .main h2 { font-size: 18px; font-weight: 700; line-height: 1.35; }
+:global(.ui-v2) .main h2 { font-size: 18px; font-weight: 500; line-height: 26px; }
 :global(.ui-v2) .main h3 { font-size: 16px; font-weight: 600; line-height: 1.4; }

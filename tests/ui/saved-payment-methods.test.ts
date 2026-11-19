@@ -11,7 +11,7 @@ import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { build } from "esbuild";
 import { loadModule } from "../documents/harness";
-import { withApp, skip } from "./real-app-harness";
+import { withApp, skip, openAccountSettings } from "./real-app-harness";
 import type * as Model from "../../components/features/saved-payment-methods/model";
 
 const m = loadModule("components/features/saved-payment-methods/model.ts") as unknown as typeof Model;
@@ -236,7 +236,7 @@ test("panneau monté (Chromium, StrictMode) : suppression après confirmation se
 test("app réelle (paramètres client démo) : note honnête, aucun appel /api, pas de débordement à 390", { skip }, async () => {
   await withApp(async (open) => {
     const { page, errors, api } = await open("client-profile", 390);
-    await page.getByRole("button", { name: "Paramètres du compte" }).click();
+    await openAccountSettings(page);
     await page.locator('[data-saved-methods="demo"]').waitFor();
     const r = await page.evaluate(() => ({ note: document.querySelector('[data-saved-methods="demo"]')?.textContent ?? null, overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth }));
     assert.match(r.note ?? "", /aucune banque n’est contactée/);

@@ -48,6 +48,12 @@ function readFilters(params: URLSearchParams): Filters {
   if (parsed.data.created_from && parsed.data.created_to && exactMicroseconds(parsed.data.created_from) > exactMicroseconds(parsed.data.created_to)) invalidQuery();
   return parsed.data;
 }
+// The order reference shown to clients is « INT- » + the first 6 hex digits of the dossier id
+// (shared/order-reference.ts). Only the explicit « INT- » form is a reference, so a 6-letter
+// city or description word is never mistaken for one.
+function orderPrefix(q: string): string | null {
+  return /^INT-([A-F0-9]{6})$/i.exec(q)?.[1]?.toLowerCase() ?? null;
+}
 function filterFingerprint(filters: Filters): string {
   return createHash("sha256").update(JSON.stringify(filters)).digest("hex");
 }
@@ -76,7 +82,10 @@ function filteredQuery(db: Database, filters: Filters, head = false, cursor: z.i
   if (filters.created_to) query = query.lte("created_at", filters.created_to);
   let searchExpression: string | null = null;
   if (filters.q) {
+    const prefix = orderPrefix(filters.q);
     if (uuid.safeParse(filters.q).success) query = query.eq("id", filters.q);
+    // UUIDs order by their bytes: every id starting with these 6 hex digits lies in this range.
+    else if (prefix) query = query.gte("id", `${prefix}00-0000-0000-0000-000000000000`).lte("id", `${prefix}ff-ffff-ffff-ffff-ffffffffffff`);
     else searchExpression = `description.ilike.%${filters.q}%,city.ilike.%${filters.q}%,postal_code.ilike.%${filters.q}%`;
   }
   // A single explicit logical tree keeps literal search AND cursor filtering distinct.

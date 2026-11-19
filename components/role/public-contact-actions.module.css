@@ -115,3 +115,12 @@
 @media (min-width: 1024px) {
   .actions.persistentWhatsapp { bottom: 24px; right: 24px; }
 }
+
+/* < 1024 px: WhatsApp is docked at the right end of the floating menu (same row, shared
+   centred group) instead of floating over the page content and its actions. The menus
+   shorten by 56 px through the same --dock-* geometry (client space, public pages). */
+@media (max-width: 1023px) {
+  .actions.persistentWhatsapp {
+    inset: auto calc((100% - min(100% - 24px, 426px)) / 2) calc(16px + env(safe-area-inset-bottom, 0px)) auto;
+  }
+}

@@ -137,10 +137,10 @@
   flex: 1 1 auto;
   min-width: 0;
   margin-right: 12px;
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.25;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: normal;
+  line-height: 1.55;
   overflow-wrap: normal;
 }
 .bellButton {
@@ -301,12 +301,12 @@
   border-radius: 999px;
   color: #5d6d84;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
 }
 .bottomNav button[aria-current="page"] {
   background: var(--ui-surface, #f4f6fa);
   color: var(--blue);
-  font-weight: 600;
+  font-weight: 500;
 }
 .navCount {
   position: absolute;
@@ -1397,7 +1397,7 @@
   border-top: 1px solid var(--ui-border);
 }
 :global(.ui-v2) .mobileHeader {
-  background: var(--ui-surface);
+  background: var(--ui-bg);
 }
 :global(.ui-v2) .bellButton {
   color: var(--ui-text-muted);
@@ -1823,7 +1823,7 @@
     margin-bottom: 24px;
   }
   .space :global(.page-title) > div:first-child { min-width: 0; width: 100%; }
-  .space :global(.page-title) h1 { font-size: 28px; line-height: 1.16; letter-spacing: -.65px; }
+  .space :global(.page-title) h1 { font-size: 23px; line-height: 32px; letter-spacing: -.2px; }
   .space :global(.page-title) p { max-width: 38ch; font-size: 14px; line-height: 1.55; margin-top: 8px; }
   .space :global(.page-title) > .button { width: 100%; min-height: 48px; font-size: 14px; }
   .space :global(.page-title) > div + div { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
@@ -1836,9 +1836,112 @@
 .requestAmount strong { font-size: 14px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .space :global(.request-price) { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 @media (max-width: 767px) { .requestAmount { align-items: flex-start; } }
-.space :global(.page-title) h1 { font-size: 32px; font-weight: 700; line-height: 1.15; letter-spacing: -.8px; }
-@media (max-width: 767px) { .space :global(.page-title) h1 { font-size: 28px; letter-spacing: -.65px; } }
+.space :global(.page-title) h1 { font-size: 28px; font-weight: 500; line-height: 36px; letter-spacing: -.4px; }
+@media (max-width: 1023px) { .space :global(.page-title) h1 { font-size: 23px; line-height: 32px; letter-spacing: -.2px; } }
 
 /* Consistent section and card typography across connected profiles. */
-:global(.ui-v2) .space h2 { font-size: 18px; font-weight: 700; line-height: 1.35; }
+:global(.ui-v2) .space h2 { font-size: 18px; font-weight: 500; line-height: 26px; }
 :global(.ui-v2) .space h3 { font-size: 16px; font-weight: 600; line-height: 1.4; }
+
+/* Editable profile: match the Medium labels and actions in the canonical Figma form. */
+:global(.ui-v2) .profileDetails :global(.field) label,
+:global(.ui-v2) .profileDetails :global(.button),
+:global(.ui-v2) .profileDetails :global(.text-button) {
+  font-weight: 500;
+}
+:global(.ui-v2) .profileDetails :global(.large-avatar),
+:global(.ui-v2) .space :global([data-profile-requests]) :global(.text-button) {
+  font-weight: 500;
+}
+
+/* Match the centered tablet request column in the canonical Figma flow. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .space .main > :global(.form-page),
+  .space .main > :global([data-booking-confirm]) {
+    width: 100%;
+    max-width: 608px;
+    margin-inline: auto;
+  }
+}
+
+.space :global(.form-heading) h1,
+.space :global([data-booking-confirm]) > h1 {
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 36px;
+  letter-spacing: -.4px;
+}
+@media (max-width: 1023px) {
+  .space :global(.form-heading) h1,
+  .space :global([data-booking-confirm]) > h1 {
+    font-size: 23px;
+    line-height: 32px;
+    letter-spacing: -.2px;
+  }
+}
+
+/* ---- Mobile account drawer (< 1024 px), same pattern as the other workspaces -------- */
+.menuButton {
+  margin-left: -10px;
+  margin-right: 4px;
+  flex: none;
+}
+.drawerOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(16, 23, 53, 0.45);
+}
+.drawer {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: min(300px, 86vw);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: calc(14px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  background: #fff;
+  overflow-y: auto;
+}
+.drawerHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.drawerHead strong {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--navy);
+}
+.drawer .workspaceBlock {
+  margin-top: 0;
+  border-top: 0;
+}
+@media (min-width: 1024px) {
+  .menuButton,
+  .drawerOverlay {
+    display: none;
+  }
+}
+
+/* WhatsApp docked to the right of the floating menu (public-contact-actions, < 1024 px). */
+@media (max-width: 1023px) {
+  .space .bottomNav {
+    left: calc((100% - min(100% - 24px, 426px)) / 2);
+    right: auto;
+    width: calc(min(100% - 24px, 426px) - 56px);
+    margin-inline: 0;
+  }
+}
+
+/* Request stepper: five equal columns that never exceed the card (320 px phones). */
+.stepper { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.stepper li { min-width: 0; }
+@media (max-width: 359px) {
+  .statusCard { padding-inline: 8px; }
+  .stepper { gap: 0; }
+  .stepper li { font-size: 11px; letter-spacing: -.2px; hyphens: auto; -webkit-hyphens: auto; }
+}

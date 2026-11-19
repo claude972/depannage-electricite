@@ -1,4 +1,4 @@
-import { ApiError, apiError, dbError, serverClient } from "@/lib/supabase/server";
+import { ApiError, apiError, dbError, publicClient } from "@/lib/supabase/server";
 import { postalCode, publicCoverage } from "@/lib/features/coverage/contract";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,7 @@ export async function GET(request: Request) {
     const postal = postalCode.safeParse(params.get("postal_code"));
     if (params.size !== 1 || !postal.success)
       throw new ApiError(422, "Saisissez un code postal de cinq chiffres.");
-    const db = await serverClient();
+    const db = publicClient();
     const result = await db.rpc("read_public_coverage", { p_postal_code: postal.data });
     dbError(result.error);
     const coverage = publicCoverage.safeParse(result.data);

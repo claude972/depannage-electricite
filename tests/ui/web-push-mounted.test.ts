@@ -13,7 +13,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
-import { withApp, skip as appSkip } from "./real-app-harness";
+import { withApp, skip as appSkip, openAccountSettings } from "./real-app-harness";
 
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
@@ -254,7 +254,7 @@ test("app réelle : préférences de notification (démo) — note push honnête
   await withApp(async (open) => {
     for (const width of [360, 1280]) {
       const { page, errors, api } = await open("client-profile", width);
-      await page.getByRole("button", { name: "Paramètres du compte" }).click();
+      await openAccountSettings(page);
       const panel = page.locator('[data-web-push="demo"]');
       await panel.waitFor();
       assert.equal(await panel.count(), 1);
