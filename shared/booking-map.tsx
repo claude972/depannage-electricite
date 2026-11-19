@@ -21,11 +21,13 @@ export default function BookingMap({ target, onMove }: { target: BookingMapTarge
       const instance = L.map(host.current, { center: point ? [point.latitude, point.longitude] : [BOOKING_MAP_CENTER.latitude, BOOKING_MAP_CENTER.longitude], zoom: point ? 17 : 11, scrollWheelZoom: false, zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false });
       map.current = instance;
       L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors', referrerPolicy: "strict-origin-when-cross-origin" })
-        .on("tileerror", () => setMessage("Fond de carte indisponible. Vous pouvez saisir l’adresse ci-dessous."))
-        .on("tileload", () => setMessage(""))
+        .on("tileerror", () => !disposed && setMessage("Fond de carte indisponible. Vous pouvez saisir l’adresse ci-dessous."))
+        .on("tileload", () => !disposed && setMessage(""))
         .addTo(instance);
       let previous = instance.getCenter();
       instance.on("moveend", () => {
+        // Leaflet can deliver a debounced resize event after remove().
+        if (disposed) return;
         const point = instance.getCenter();
         const moved = !point.equals(previous, 1e-7);
         previous = point;
@@ -33,7 +35,7 @@ export default function BookingMap({ target, onMove }: { target: BookingMapTarge
           latest.current({ latitude: point.lat, longitude: ((point.lng + 180) % 360 + 360) % 360 - 180 });
         }
       });
-      observer = new ResizeObserver(() => instance.invalidateSize());
+      observer = new ResizeObserver(() => { if (!disposed) instance.invalidateSize(); });
       observer.observe(host.current);
     }).catch(() => { if (!disposed) setMessage("La carte n’a pas pu charger. Saisissez l’adresse ci-dessous."); });
     return () => { disposed = true; observer?.disconnect(); map.current?.remove(); map.current = null; };
