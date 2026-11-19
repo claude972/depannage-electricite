@@ -17,3 +17,11 @@ L’inventaire des appels natifs a également vérifié les routes organisation,
 
 ## À terminer
 Déploiement de recette, puis lecture/écriture avec les comptes synthétiques et refus entre comptes. Le succès local ne vaut pas validation en ligne ni recette visuelle native.
+
+## Vérification en ligne du candidat
+
+Candidat `60ifc6p9z` / `dpl_3Xkx26iiUgfRs8Zpf9zWE5AF1mFV` READY. Lectures notifications, résumé et préférences : 200 avec Bearer client. Absence de session et jeton invalide : 401 sur les quatre familles testées. Préférences sauvegardées et relues, conflit 409 sur ancienne version, puis état initial restauré. Ticket synthétique créé, lu et complété avec réponse ; tiers refusé en lecture (404) et écriture (403). Preuve `native-auth-d15-online-20261119.json`.
+
+La clôture du ticket par le compte nommé « admin » dans le fichier de recette est refusée 403 ; `/api/workspace` confirme que ce compte a en réalité le rôle client. Ce refus est attendu. Le ticket `9610e14b-5c58-4032-933a-195216b60879` reste ouvert et sa résolution est confiée à la file opérateur existante, sans élargir les droits. La recette visuelle native et la promotion de l’alias restent à confirmer.
+
+Après promotion, l’alias `domdepannage-recette-20261112.vercel.app` renvoie lui aussi 200 pour les préférences et la liste d’assistance avec le Bearer client (preuve `native-auth-d15-alias-read-20261119.json`). Les 21 contrôles métier du candidat réussissent ; le 22e contrôle initial était la clôture avec un compte incorrectement étiqueté admin, dont le rôle client a été confirmé et le refus documenté.
