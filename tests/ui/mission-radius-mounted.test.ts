@@ -157,7 +157,7 @@ test("app réelle : « Missions » artisan (démo) — note honnête du rayon, a
 });
 
 
-test("Chromium : erreur du rayon rend le panneau replie visible puis reprise GET sans mutation", { skip }, async () => {
+test("Chromium : erreur du rayon rend le panneau replie visible puis retour reseau et reprise GET sans mutation", { skip }, async () => {
   const { server, base } = await serve();
   const pw = await import(pathToFileURL(path.join(PW, "index.mjs")).href);
   const browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true });
@@ -167,8 +167,12 @@ test("Chromium : erreur du rayon rend le panneau replie visible puis reprise GET
     await page.getByRole("button", { name: "Réessayer", exact: true }).waitFor({ state: "visible" });
     assert.equal(await page.locator("details").evaluate((el: HTMLDetailsElement) => el.open), true);
     await page.evaluate(() => { (window as unknown as { failRadius: boolean }).failRadius = false; });
-    await page.getByRole("button", { name: "Réessayer", exact: true }).click();
+    const beforeReconnect = (await state(page)).radius.length;
+    await page.evaluate(() => { window.dispatchEvent(new Event("online")); window.dispatchEvent(new Event("online")); });
     await page.locator('[data-mission-radius-current="none"]').waitFor();
+    assert.equal((await state(page)).radius.length, beforeReconnect + 1, "duplicate online signals share one read");
+    await page.evaluate(() => window.dispatchEvent(new Event("online")));
+    assert.equal((await state(page)).radius.length, beforeReconnect + 1, "ready data is not reloaded by the error recovery hook");
     assert.equal((await state(page)).radius.some((call) => call.startsWith("POST")), false);
   } finally { await browser.close(); server.close(); }
 });

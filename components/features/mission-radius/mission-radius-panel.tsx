@@ -1,4 +1,5 @@
 "use client";
+import { useOnlineReadRetry } from "../../app/use-online-read-retry";
 // Artisan mission radius (Missions › Disponibles). Reference commune chosen from the server's list +
 // radius 1–200 km, or « Effacer » (both null). Approximation between commune centres, unknown postal
 // codes matched by postal code only, data source + retrieval date — all as returned by the server.
@@ -71,6 +72,7 @@ function Live({ context, onConfirmed, onAttention, api, store = tabStore, rechec
     });
   }
   const c = ctrl.current;
+  useOnlineReadRetry(view.phase === "error" && !view.pending && !view.busy, () => c.load());
   useEffect(() => {
     c.restorePending();
     void c.load();

@@ -6,7 +6,7 @@ Périmètre : défauts D1, D3, D4 et D5 du rapport Web/PWA des rôles. Les contr
 - D3 : l'écran de refus utilise un titre principal h1.
 - D4 : le rôle administrateur ne déclare plus l'accès au formulaire d'assistance client. Sa file d'assistance opérateur reste soumise à la capacité serveur existante.
 - D5 : le choix obligatoire d'un site professionnel affiche aussi un message applicatif persistant, associé au champ par le composant Field. La validation native reste active.
-- D2 : la reprise manuelle après retour réseau est fonctionnelle. Le rafraîchissement automatique de tous les blocs n'est pas encore implémenté ; aucune commande en échec n'est rejouée implicitement.
+- D2 : au retour réseau, les lectures en erreur du rayon, des offres et du tableau administrateur sont relancées. La revalidation bornée de l’espace reçoit aussi ce signal. Les commandes, préférences en attente et refus de permission ne sont jamais rejoués automatiquement. Les autres panneaux conservent leur reprise manuelle explicite.
 
 Vérifications locales : TypeScript réussi ; suites session et rayon réussies ; deux tests Chromium exécutés sans saut (bornes/enregistrement/réinitialisation et erreur dans panneau replié/reprise GET sans mutation). Suite complète des interfaces avec navigateur réel en cours, distincte d'une recette des fournisseurs déployés.
 
@@ -14,7 +14,7 @@ La matrice intègre le rapport courant des quatre rôles. Les scénarios déclar
 
 ## Navigation native et profil de recette
 
-Le nouveau passage iOS a reproduit une barre basse visible mais inaccessible aux appuis (élément « Demandes » avec cadre valide, isHittable=false ; appui par coordonnées sans effet). Le conteneur persistant est maintenant une vue native non aplatie avec priorité d'affichage explicite. XCTest `ios-tab-layer-fix-20261119` : isHittable=true, appui au même emplacement ouvre « Mes demandes ». La recette complète des trois rôles sur le nouveau binaire reste à terminer.
+Le nouveau passage iOS a observé une barre basse visible mais inaccessible aux appuis après connexion. La capture `ios-screen-layout-failure-20261119.png` identifie finalement une alerte système « Enregistrer le mot de passe ? » au-dessus de l'application. Les essais de changement de conteneur/navigation ont été retirés : ils ne prouvaient pas la cause. Le pilote choisit désormais « Plus tard » et exige une cible visible avant appui. La recette complète des trois rôles reste à terminer. Le correctif RNHostView des fenêtres de profil est distinct et déjà vérifié.
 
 Les profils EAS simulator/device désactivent désormais EXPO_PUBLIC_HOME_SUPPORT_PREVIEW : le délai d'exemple « 20 min » n'est pas une promesse validée. Les scripts de reconstruction locaux utilisent la même valeur false.
 
@@ -25,3 +25,5 @@ La suite Chromium a révélé deux attentes textuelles périmées du test d'obse
 `web-ui-complet-20261119.log` : 1 170 tests, 1 168 réussis, 2 échecs, aucun ignoré. Les échecs sont l'attente textuelle financière périmée et un timeout de lancement de Chrome dans le test des panneaux de profil. Le harnais borne désormais lancement/actions/navigation et ferme le serveur même si Chrome ne démarre pas. Le processus de test resté ouvert après ce timeout a été arrêté ; cet échec n'est pas supprimé du bilan.
 
 Reprise ciblée des deux fichiers : `web-regressions-replay-20261119.log`, 4/4 réussis, aucun ignoré. Contrôle renforcé du site obligatoire (message visible, aria-invalid, association au champ, disparition après sélection) : `web-site-validation-20261119.log`, 1/1 réussi.
+
+Reprise réseau : 8 tests ciblés passent (rayon monté, tableau administrateur et ordonnanceur), aucun ignoré. Le test simule deux signaux online et vérifie une seule relecture, aucun POST.
