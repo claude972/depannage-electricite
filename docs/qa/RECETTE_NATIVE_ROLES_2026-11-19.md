@@ -49,3 +49,33 @@ CI GitHub 211, commit `01e79c3087f02cb8859d3be5e9c488e2e8ebbcf9` : `check` et Po
 Le build iOS contenant D7 réussit et retrouve INT-0E073E par la recherche de commande (`ios-current-photo-picker-replay-20261119.redacted.log`, XCTest 0). La sélection de la fixture échoue ensuite avant l’envoi : le fichier ImagePicker `.png` existe mais mesure zéro octet. La relecture API conserve les deux JPEG Android. Capture `ios-photo-upload-result-20261119.png` ; test `ios-photo-upload-20261119` en échec, sans le compter comme validation. Le bundle testé porte le SHA-256 `84c8a9a64e4ec01a728a1b648c1b90172b0240cf8be4a6a4d6c4d73cb9079c22`.
 
 Le sélecteur Expo installé prend par défaut le chemin de copie directe `.current` lorsque quality=1. Les trois sélections de bibliothèque demandent maintenant explicitement la représentation `Compatible`, qui passe par le décodage des données. Un helper commun prépare le JPEG et transforme les exceptions natives de conversion (qui exposaient un chemin local) en message invitant à réessayer. Six tests ciblés passent : préparation/réessai sans chemin local, multipart natif/web et ticket de reprise Android. TypeScript mobile passe. **Validation native du correctif D8 encore en cours.**
+
+#### Candidat D8 et limite de la recette iOS
+
+Sources `fdaa441`, CI GitHub 213 entièrement réussie (check et PostgreSQL isolé). Les builds iOS et Android réussissent ; bundle iOS `1fea31225017a6c016c4fc94c72e65bb22da495f3e5d02db04e0eb5038315fcc` ; APK `domdepannage-android-photo-compatible-20261119.apk`, SHA-256 `8c1eb5abac29796033ad3267361282e693a32d2d5e001e08e82612ba2a138f76`, certificat interne attendu.
+
+Les essais iOS `ios-photo-compatible-20261119` puis `ios-compatible-continuous-20261119` sont interrompus par un crash de **Recette-Runner**, confirmé par `xcresulttool get test-results summary`. L’essai intermédiaire de sélection seul ne crée pas de document, sans erreur affichée : il ne valide pas l’envoi. La cause n’est pas assimilée à un plantage applicatif. La recette photo iOS reste ouverte ; le simulateur est arrêté pour poursuivre les parcours Android indépendants.
+
+### Nouvelle chaîne native compatible avec la qualification artisan
+
+Sur le candidat Android `8c1eb5a`, création UI du dossier synthétique `INT-44B1D4` (`44b1d49b-0a8a-46ba-bc79-05019b830587`), catégorie `socket`, description `RECETTE NATIVE 20261119 MATCH - prise synthetique, ne pas intervenir`. Relecture API : exactement un dossier, `requested` ; projection artisan : `eligible=true` et une offre pour cet identifiant. Le dossier précédent `INT-0E073E` de catégorie `outage` reste correctement exclu pour cet artisan qualifié uniquement `socket`.
+
+Sans photo, l’interface ouvre directement le dossier : le pilote qui attendait la confirmation intermédiaire a été corrigé dans la recette, sans modification de l’application. Captures `android-socket-progress-20261119.png` et `android-socket-request-created-current-20261119.png`. La suite acceptation/devis/rapport reste en cours.
+
+#### Attribution et devis Android
+
+Sur INT-44B1D4, ouverture de l’offre par lien profond vers l’identifiant vérifié (la liste affiche les offres, mais la sélection d’une carte précise n’est pas couverte par cette étape). Acceptation réelle via le bouton natif : état `assigned`, lecture client et artisan affecté autorisée, tiers 404 (`android-match-assignment-readback-20261119.log`).
+
+Le formulaire refuse l’envoi vide avec un message explicite. Une ligne synthétique à 100 € HT et TVA d’essai 8,5 % est ensuite envoyée par l’interface ; relecture : un seul devis `sent`, 10 850 centimes TTC, dossier `quoted` (`android-match-quote-readback-20261119.log`). Captures de validation et d’envoi conservées. Les taux utilisés sont des données de test, pas une validation de règles fiscales commerciales.
+
+Le client accepte ce devis par l’interface Android : état `accepted`, montant accepté figé 10 850 centimes (`android-match-accepted-readback-20261119.log`). L’artisan signale son départ puis son arrivée et démarre l’intervention ; API : `in_progress`, `travel_stage=on_site` (`android-match-start-readback-20261119.log`). Le GPS et le calcul d’ETA ne sont pas couverts par ces déclarations de déplacement.
+
+#### Rapport et clôture Android
+
+Le rapport vide est refusé. Deux fixtures explicitement synthétiques et distinctes sont sélectionnées par la photothèque système ; les deux JPEG `avant.jpg` et `apres.jpg` sont persistés, puis associés à la révision du rapport. Preuve `android-match-report-readback-20261119.log`, captures `android-report-before-photo-current-20261119.png`, `android-socket-report-saved-current-20261119.png`. La clôture par l’interface passe ensuite le dossier à `completed`. Cela vérifie le troisième appel photo concerné par D7 sur Android, avec le candidat D8, sans conclure pour iOS.
+
+#### Réception client et retour du paiement non payé
+
+La signature est désactivée avant saisie du nom et accusé de réception. Le client signe ensuite ; la relecture confirme une réception correspondant exactement à la révision du rapport (`android-match-completed-receipt-readback-20261119.log`).
+
+Le bouton Stripe TEST crée une tentative et ouvre Chrome Android. Le navigateur de cet émulateur demande sa première acceptation des conditions d’utilisation : cette étape n’est pas franchie. Retour système à l’application : « Règlement en attente de confirmation », puis vérification manuelle du règlement. Le dossier reste `completed`, un seul paiement `pending` à 10 850 centimes, `paid_at=null`, une tentative (`android-match-payment-attempt-readback-20261119.log`). **Aucun paiement réussi ni rapprochement de ce nouveau dossier n’est annoncé.** Le test de paiement réussi natif reste ouvert ; ce blocage d’initialisation du navigateur est distinct d’un défaut applicatif.
