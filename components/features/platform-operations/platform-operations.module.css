@@ -131,3 +131,9 @@
 :global(.ui-v2) .view :global(.unavailable) { border-color: var(--ui-border); background: var(--ui-surface); color: var(--ui-text-muted); }
 :global(.ui-v2) .view :global(.unavailable) strong { color: var(--ui-text); }
 :global(.ui-v2) .view :global(.page-loader) { color: var(--ui-text-muted); }
+/* Responsive (19/11) : une liste déroulante de filtre prenait la largeur de son option la plus
+   longue et élargissait la page (Remboursements : 357 px à 320 px). Les champs des barres d'outils
+   et des formulaires peuvent maintenant rétrécir avec leur conteneur. */
+.toolbar { min-width: 0; max-width: 100%; }
+.toolbar label { grid-template-columns: minmax(0, 1fr); min-width: 0; max-width: 100%; }
+.toolbar select, .toolbar input, .form select, .form input, .form textarea { min-width: 0; max-width: 100%; }
