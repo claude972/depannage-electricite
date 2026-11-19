@@ -1,3 +1,4 @@
+import { createJpegUpload } from '@/lib/photo-upload';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Platform } from 'react-native';
 import { randomUUID } from 'expo-crypto';
@@ -60,9 +61,7 @@ export function ReportEditor({ draftKey, token, id, report, required, onSaved }:
     const temporary = await openReportPhoto(photo);
     try {
       if (signal.aborted) return;
-      const data = new FormData();
-      data.append('intervention_id', id);
-      data.append('file', { uri: temporary.uri, name: side === 'before' ? 'avant.jpg' : 'apres.jpg', type: 'image/jpeg' } as unknown as Blob);
+      const data = await createJpegUpload(id, temporary, side === 'before' ? 'avant.jpg' : 'apres.jpg');
       const result = await api('/api/documents', fileSaved, { token: currentToken.current, method: 'POST', body: data, signal });
       await draft.update(current => ({ ...current, [side]: result.document.id, [pendingField[side]]: null, command: null }));
       releaseReportPhoto(photo);

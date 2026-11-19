@@ -42,3 +42,7 @@ La demande du propriétaire de vérifier tous les parcours est suivie dans le pl
 Sur le binaire iOS reconstruit avec l’alias de recette courant et HOME_SUPPORT_PREVIEW=false, XCTest ios-three-roles-final-20261119 réussit pour client, artisan et entreprise : connexion, demandes/missions/devis/sites selon rôle, restauration de session après relance et déconnexion. La boîte système de sauvegarde du mot de passe est refusée par « Plus tard » ; aucun mot de passe n’est enregistré. Ces contrôles ne valident pas toutes les écritures métier natives.
 
 Les correctifs web D1/D3/D4/D5 et la reprise réseau D2 sont documentés dans CORRECTIFS_PARCOURS_2026-11-19.md. Les tests GitHub du premier lot passent intégralement (run 206).
+
+### Sessions Android et iOS
+
+Les trois rôles passent sur les deux plateformes virtuelles : connexion, lecture, restauration après relance, profil et déconnexion. Voir [preuves et limites](RECETTE_NATIVE_ROLES_2026-11-19.md). La couverture complète des écritures métier natives reste à terminer.

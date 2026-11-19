@@ -6,6 +6,7 @@ import { File } from 'expo-file-system';
 import { REQUEST_PHOTO_LABEL } from '../../../../shared/request-details';
 import { Action, Card, Copy } from './ui';
 import { api } from '@/lib/api';
+import { createJpegUpload } from '@/lib/photo-upload';
 import { detail, fileSaved } from '@/lib/contracts';
 import { discardTemporaryPhoto, openReportPhoto, releaseReportPhoto, stageReportPhoto } from '@/lib/draft-photos';
 import type { PendingPhoto } from '@/lib/intervention-drafts';
@@ -95,10 +96,8 @@ export function BookingPhotoReceipt({ id, token, photo, onSent }: {
       const file = await openReportPhoto(photo);
       try {
         if (signal.aborted) return;
-        const body = new FormData();
-        body.append('intervention_id', id);
-        if (Platform.OS === 'web') body.append('file', await (await fetch(file.uri, { signal })).blob(), name);
-        else body.append('file', { uri: file.uri, name, type: 'image/jpeg' } as unknown as Blob);
+        const source = Platform.OS === 'web' ? await (await fetch(file.uri, { signal })).blob() : file;
+        const body = await createJpegUpload(id, source, name);
         await api('/api/documents', fileSaved, { ...options, method: 'POST', body });
         if (!signal.aborted) { await latest.current.onSent(); releaseReportPhoto(photo); }
       } finally { discardTemporaryPhoto(file); }

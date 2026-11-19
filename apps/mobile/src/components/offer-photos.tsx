@@ -1,3 +1,4 @@
+import { createJpegUpload } from '@/lib/photo-upload';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Platform } from 'react-native';
 import { useFocusEffect } from 'expo-router';
@@ -76,10 +77,8 @@ export function OfferPhotoConsent({ id, token, documents, onUploaded }: {
         { compress:.74, format:ImageManipulator.SaveFormat.JPEG });
       try {
         if (signal.aborted) return;
-        const body = new FormData();
-        body.append('intervention_id', id);
-        if (Platform.OS === 'web') body.append('file', await (await fetch(image.uri, { signal })).blob(), 'photo-demande.jpg');
-        else body.append('file', { uri:image.uri, name:'photo-demande.jpg', type:'image/jpeg' } as unknown as Blob);
+        const source = Platform.OS === 'web' ? await (await fetch(image.uri, { signal })).blob() : new File(image.uri);
+        const body = await createJpegUpload(id, source, 'photo-demande.jpg');
         await api('/api/documents', fileSaved, { token, method:'POST', body, signal });
         onUploaded();
       } finally {
