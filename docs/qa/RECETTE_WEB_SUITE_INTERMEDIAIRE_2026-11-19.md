@@ -1,4 +1,4 @@
-# Recette Web — suite, rapport intermédiaire v3 (19/11/2026, 14:32 UTC)
+# Recette Web — suite, rapport intermédiaire v4 (19/11/2026, 15:16 UTC)
 
 Auteur : Claude (mini). La v3 complète la v2 (13:35 UTC) : D15, D16 et sa correction de largeur, rapprochement INT-44B1D4, tickets d'assistance, ENT-05/09/14. Les sections antérieures sont conservées.
 
@@ -31,7 +31,9 @@ Avant chaque copie, nos fichiers ont été comparés au parent Codex : aucune di
 | D16 note explicite (O5) | 2f96aeb | d6c83695 | — |
 | D16 largeur (W3) | 8caecfe | 65d2b78b | — |
 
-**Candidat courant : `dpl_GRTVMnRGoduvNRXB1UheT88t8P4e`**
+**Candidat courant (v4) : `dpl_4fH2yFC1WHEQPb6x9eb3r5sf9pYi`, n2scdfas8, commit `34e6558f` (D18 + D19), aliasé vers 15:05 UTC. Base de recette : migration D21 `20261119140000` appliquée à 15:07 UTC.**
+
+**Candidat précédent (v3) : `dpl_GRTVMnRGoduvNRXB1UheT88t8P4e`**
 - URL : `https://domdepannage-recette-20261112-hbqmw2992-brafas-projects.vercel.app` (commit `65d2b78b`), cible preview, READY.
 - **Alias `domdepannage-recette-20261112.vercel.app` → hbqmw2992** (promu après non-régression, vers 14:20 UTC).
 - Historique de l'alias : o4n1lx6jm → a0ajqcdgg (13:08) → qay300bx3 (13:28) → **60ifc6p9z / D15** (`dpl_3Xkx26iiUgfRs8Zpf9zWE5AF1mFV`, ~13:56) → hbqmw2992.
@@ -138,6 +140,36 @@ Vérifications sur ce candidat ou sur a0ajqcdgg, selon le cas :
 - **ENT-07 :** équipement relié à un ticket.
 - **Archivage de site (ENT-03).**
 
+## 1 ter. Ajouts v4
+| Id | Proposition Web | Preuve | Limites explicites |
+|---|---|---|---|
+| D18 | PASS | Motifs de 9 et de 2 001 caractères : 422 en français ; contestations 3 → 3 (d18-19) | — |
+| D19 | PASS | 390 et 1280 px : huit opérateurs distincts par référence, un seul « (vous) », nom accessible complet ; attributions existantes non modifiées (d19b) | O11 : auteur du triage affiché « opérateur INT-xxxxxx » |
+| D21 | PASS | Migration appliquée sur la recette seule ; début et reprise futurs : 422 sans mutation ; valeurs passées acceptées (d21-http, `CORRECTIF-D21-PAUSE-SLA-20261119.md`) | La pause future antérieure (`SYNTH-SLA-B`) est conservée telle quelle |
+| ENT-06 | PARTIEL+ | Demande urgente synthétique INT-B3B9AD sur le site restauration, visible sur la fiche ; dossier de délai relié au ticket ; ouverture jeudi hors calendrier → réponse due lun. 23/11 09:00, résolution 12:00 (n16, n18) | O10 : la liste des interventions de la fiche site ne signale pas l'urgence ; pas de tableau de bord propre à la restauration |
+| ENT-07 | PARTIEL+ | Équipement critique « chambre froide » sur le site restauration, relu (n10) | Aucun lien direct équipement ↔ ticket trouvé dans le formulaire de demande |
+| ENT-11 | PASS | Calendrier lundi 08:00–17:00, règle 60/240 min. A : réponse « Respecté » (30 min), résolution « Dépassé » (6 h contre 4 h, échéance 13:00). B : échéances 23/11 08:30 et 11:30, puis 09:00 et 12:00 après 30 min ouvrées de pause. Réponse antérieure à l'ouverture refusée. Indicateurs : 2 mesurables, 1 dépassé, 1 en cours (n12, n14) | Calendrier d'un seul jour ; jours fermés non testés |
+| ENT-15 | PASS | Écran : total 4 000,00 € / 434,00 € / 0,00 € / 5. CSV serveur (`/api/reports?format=csv`) : mêmes sommes par colonne. Énergie consolidée office 01/09–31/10 : 2 234,75 kWh avec « coût incomplet ». Lecteur limité à son site (p1, p2) | Filtres par site et comparaison de périodes non rejoués ; CSV énergie non relu |
+
+**Données synthétiques ajoutées :**
+- sites SYNTHETIQUE R1341 (syndic, restauration) et leurs objets ;
+- INT-B3B9AD : demande urgente, **laissée en « Recherche d'un artisan »** ;
+- dossiers de délai SYNTH-SLA-A, SYNTH-SLA-B et SYNTH-SLA-INT-B3B9AD ;
+- ticket « RECETTE D19 » résolu ;
+- avis 4/5 sur INT-44B1D4.
+
+**Dossiers réservés Codex, non touchés :** INT-0E073E, INT-A9155E, INT-D0FA86. INT-44B1D4 n'a reçu que l'avis D16 et le rapprochement, tous deux demandés.
+
+**Restent sans preuve Web :**
+- flux de paiement TEST : FIN-01, 03, 04, 05 et ART-11 ;
+- ENT-16 ;
+- ENT-13 : devis calculé depuis la grille ;
+- archivage de site (ENT-03) ;
+- ART-12 ;
+- PUB-04, 05, 10 ;
+- CLI-05 ;
+- PUB-07 et ART-02 : bloqués (confirmation par e-mail).
+
 ## 2. Défauts et observations
 | Id | État | Constat |
 |---|---|---|
@@ -153,6 +185,9 @@ Vérifications sur ce candidat ou sur a0ajqcdgg, selon le cas :
 | O6 | Observation | Message de validation en anglais sur `POST /api/platform-operations/reviews/[id]` |
 | W3 | Corrigé (D16 largeur), mise en page en ligne partiellement revérifiée | Option « 5 » hors écran à 390 px sur miupzl34h |
 | O8 | Observation | Liste d'attribution d'assistance : opérateurs indiscernables |
+| O9 | Corrigé (D21), vérifié | Pause de délai datée dans le futur acceptée |
+| O10 | Observation | Urgence non signalée dans la liste des interventions d'une fiche site |
+| O11 | Observation | Auteur du triage affiché avec un préfixe `INT-` |
 | O7 | Observation | Contestation de 9 caractères : seule l'aide « De 10 à 2 000 caractères » reste affichée, sans message d'erreur explicite |
 
 ## 3. Données synthétiques créées ou modifiées (recette)
