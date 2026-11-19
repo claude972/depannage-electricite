@@ -222,3 +222,14 @@ L'application n'est pas déclarée complètement fonctionnelle.
 - `CORRECTIF-D21-PAUSE-SLA-20261119.md`
 
 Preuves : `livraison/preuves/recette-web-suite-20261119/`.
+
+### Mise à jour 15:50 UTC
+- **Candidat courant :** `dpl_9gyPq1kJRNXMqzaZvC3gq5FJGEjB` (nn2dylxph, commit `b9002dd9`), aliasé.
+- **Ajouts :**
+  - D23 (Codex) ;
+  - correctifs UX O1, O2, O3, O7 et O10 (Claude), vérifiés en ligne.
+- **Finance Web :**
+  - FIN-03, retour sans paiement : PASS ;
+  - droits de règlement : PASS.
+- **Limite d'outil :** aucun paiement par carte saisi par Claude sur le Web. FIN-01 (Web), FIN-04 et ART-11 restent sans preuve Web. FIN-05 et ENT-16 sont bloqués par l'émetteur de factures non configuré.
+- **Détail :** `livraison/CORRECTIFS-UX-CLAUDE-20261119.md`.
