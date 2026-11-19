@@ -77,7 +77,7 @@ type Any = any;
 const S77 = "50000000-0000-4000-8000-000000000077";
 const vertCalls = (calls: string[]) => calls.filter((u) => u.includes("/energy") || u.includes("/co-ownership"));
 
-test("Chromium 390 : fiche directe ⇒ énergie du site exact, copropriété seulement syndic ; lecteur sans écriture ; hors périmètre / archivé / démo ⇒ rien ; changement de site ; fiche normale intacte", { skip }, async () => {
+test("Chromium 390 : fiche directe ⇒ énergie du site exact, copropriété seulement syndic ; lecteur sans écriture ; hors périmètre / démo ⇒ rien ; archives en lecture seule ; changement de site ; fiche normale intacte", { skip }, async () => {
   const { server, url } = await serve();
   const pw = await import(pathToFileURL(path.join(PW, "index.mjs")).href);
   const browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true });
@@ -117,7 +117,7 @@ test("Chromium 390 : fiche directe ⇒ énergie du site exact, copropriété seu
     assert.equal(await v.page.locator("[data-co-add]").count(), 0, "viewer ⇒ no co-ownership write");
     assert.ok(((await v.page.evaluate("document.documentElement.scrollWidth")) as number) <= 390);
     // Other organisation / archived / demo ⇒ no panel, no read, no probe.
-    for (const cfg of [{ org: "other" }, { archived: true }, { demo: true }]) {
+    for (const cfg of [{ org: "other" }, { demo: true }]) {
       const x = await open(cfg);
       await x.page.waitForTimeout(600);
       assert.deepEqual(vertCalls((await x.page.evaluate("window.calls")) as string[]), [], JSON.stringify(cfg) + " ⇒ no energy / co-ownership read");
@@ -125,6 +125,13 @@ test("Chromium 390 : fiche directe ⇒ énergie du site exact, copropriété seu
       assert.deepEqual(await x.page.evaluate("window.probes"), [], JSON.stringify(cfg) + " ⇒ no probe");
       assert.deepEqual(x.errors, []);
     }
+    // Archived syndic history remains readable even if the API advertises can_write.
+    const archived = await open({ archived: true });
+    await archived.page.locator('[data-co-panel="ready"]').waitFor();
+    assert.equal(await archived.page.locator('[data-co-add]').count(), 0);
+    assert.equal(await archived.page.locator('[data-co-readonly]').count(), 1);
+    assert.equal(await archived.page.locator('[data-energy-panel]').count(), 0);
+    assert.deepEqual(archived.errors, []);
     // Normal (cached) sheet unchanged: both panels for a syndic site.
     const n = await open({ normal: true });
     await n.page.locator('[data-energy-panel="ready"]').waitFor();
