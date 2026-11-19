@@ -181,3 +181,44 @@ Scripts : `livraison/scripts-recette/` (lib.mjs + s1…s5, b1…b9, cleanup). Pr
 ## Correctif sécurité et recette des rôles — 19/11 (Claude)
 - Next 16.4.3 → 16.4.6 (fichiers package de Codex, commit 214ec0d2) déployé en preview `dpl_G8TQpwy2NZj9PeLiq5AL1iCkxv9x` (qeqpc4bbs), alias de recette déplacé après smoke public/finance et admin 35/35 : `livraison/DEPLOIEMENT-SECURITE-RESULTAT-20261119.md`.
 - Recette Web/PWA des quatre rôles sur ce candidat (6 comptes synthétiques, 390/1440 ; parcours particulier→artisan et entreprise de bout en bout, sans paiement) et rapprochement avec les 76 capacités : `livraison/RECETTE-WEB-PWA-ROLES-20261119.md`. Web : PASS 9, PARTIEL 32, BLOQUÉ 6, DÉSACTIVÉ 2, NON VÉRIFIÉ 27. Défauts D1–D5 consignés, non corrigés (aucune modification runtime demandée).
+
+## Recette Web — suite et correctifs D1–D21 — 19/11 (15:16 UTC)
+**Candidat de recette courant**
+- `dpl_4fH2yFC1WHEQPb6x9eb3r5sf9pYi` (n2scdfas8, commit `34e6558f`), cible preview.
+- Alias `domdepannage-recette-20261112.vercel.app`.
+- Aucune production, aucun LIVE.
+
+**Correctifs Codex intégrés à l'identique et vérifiés en ligne :** D1–D6, D9, D10, D11, D13, D15, D16 (+ largeur), D18, D19.
+
+**D21 (pause de délai future)**
+- Écrit ici : commit `ab4e0d5a`.
+- Relu par Codex.
+- Migration `20261119140000` appliquée sur la recette seule.
+- Refus HTTP vérifiés sans mutation.
+
+**Capacités prouvées côté Web dans ce lot, avec limites écrites**
+- ART-03, CLI-02, CLI-04, ADM-03, ENT-02 / SYS-03 ;
+- ENT-05, ENT-08, ENT-09, ENT-10, ENT-11, ENT-14, ENT-15 ;
+- CLI-10, ADM-06, ADM-07 ;
+- FIN-06, sur INT-44B1D4 en TEST.
+
+**Capacités partielles :** ART-05, ADM-02, ENT-04, ENT-06, ENT-07, ENT-13, SYS-05, SYS-08.
+
+**Capacités bloquées par le moyen de test :** PUB-07 et ART-02 (confirmation par e-mail).
+
+**Sans preuve Web à ce stade**
+- FIN-01, 03, 04, 05 et ART-11 ;
+- ENT-16 ;
+- ART-12 ;
+- PUB-04, 05, 10 ;
+- CLI-05.
+
+L'application n'est pas déclarée complètement fonctionnelle.
+
+**Rapports dans `livraison/`**
+- `RECETTE-WEB-SUITE-INTERMEDIAIRE-20261119.md` (v4)
+- `DEPLOIEMENT-PARCOURS-RESULTAT-20261119.md`
+- `RAPPROCHEMENT-INT-44B1D4-20261119.md`
+- `CORRECTIF-D21-PAUSE-SLA-20261119.md`
+
+Preuves : `livraison/preuves/recette-web-suite-20261119/`.
