@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react';
-import { Alert, View, type ScrollViewInstance } from 'react-native';
+import { Alert, Linking, Platform, View, type ScrollViewInstance } from 'react-native';
 import { Host, Switch } from '@expo/ui';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { openBrowserAsync } from 'expo-web-browser';
+import { dismissBrowser, openBrowserAsync } from 'expo-web-browser';
 import { z } from 'zod';
 import { Action, BookingProgress, Card, Copy, Field, ReadState, Screen } from '@/components/ui';
 import { NativeApprovalWorkflow } from '@/components/native-approval-workflow';
@@ -13,7 +13,7 @@ import { MissionTracking } from '@/components/mission-tracking';
 import { OfferPhotoConsent } from '@/components/offer-photos';
 import { PaymentReturnStatus } from '@/components/payment-return-status';
 import { deviceDrafts } from '@/lib/device-drafts';
-import { paymentReturnKey } from '@/lib/payment-return';
+import { paymentReturnKey, withPaymentBrowserReturn } from '@/lib/payment-return';
 import { api, useResource } from '@/lib/api';
 import { categories, creation, detail, euros, link, operations, signature, success, timestamp } from '@/lib/contracts';
 import { dossierAmount, dossierStep, DOSSIER_STEPS, jobStatus, paymentLabel } from '@/lib/job-presentation';
@@ -71,7 +71,12 @@ export default function Dossier() {
       const checkout=new URL(result.url);
       if(checkout.origin!=='https://checkout.stripe.com'||!/(?:^|\/)cs_test_/.test(checkout.pathname)||checkout.username||checkout.password)
         throw Error('L’application de recette accepte uniquement un paiement Stripe de test.');
-      await openBrowserAsync(checkout.toString());
+      if (Platform.OS === 'ios') {
+        await withPaymentBrowserReturn(id, () => openBrowserAsync(checkout.toString()),
+          onUrl => Linking.addEventListener('url', event => onUrl(event.url)), dismissBrowser);
+      } else {
+        await openBrowserAsync(checkout.toString());
+      }
       setReturnEpoch(value=>value+1);
     });
   }
