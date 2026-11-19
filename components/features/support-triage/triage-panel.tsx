@@ -134,7 +134,7 @@ export function SupportTriagePanel({ ticketId, resolved, demo, context, fetcher 
                     {e.action === "assign" ? (e.assigned_to ? "Attribution" : "Attribution retirée") : e.escalated ? "Escalade" : "Escalade levée"}
                   </strong>
                   <span className={styles.hint}>
-                    {dateTime(e.created_at)} · par l’opérateur {shortId(e.actor_id)} · version {e.version}
+                    {dateTime(e.created_at)} · par l’opérateur réf. {e.actor_id.slice(-8)} · version {e.version}
                   </span>
                   <span>Motif : {e.reason}</span>
                 </li>
