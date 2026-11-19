@@ -1,3 +1,7 @@
+## Rapprochement Stripe TEST — complément du 18 novembre 2026
+
+Le règlement INT-5B12D9 de 130,20 € est inscrit au ledger. Les preuves de capture et de commission de 22,13 € sont qualifiées par relecture Stripe. Rejeu sans doublon ; transfert comparé aux références exactes et note de revue enregistrée (v2). Portes temporaires refermées et alias `bswte5fe6` restauré, vérifié HTTP 200. Le matcher automatique Checkout reste limité : observation du transfert toujours `needs_review / unlinked_transfer`, aucune écriture `commission_withheld` créée. Voir [le rapport de rapprochement](docs/qa/RAPPROCHEMENT_STRIPE_TEST_2026-11-18.md). Les constats antérieurs ci-dessous sont conservés comme historique.
+
 # DomDépannage — suivi de finalisation (Claude)
 
 Mis à jour : 2026-11-18 soir (consolidation Stripe test + recette native Codex) — Claude Opus 5.5.
