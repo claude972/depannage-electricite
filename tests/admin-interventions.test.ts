@@ -28,6 +28,11 @@ const fixtures: Row[] = Array.from({ length: 237 }, (_, i) => ({
   travel_stage: "planned", completed_at: null, paid_at: null,
 }));
 const quoteFixtures: Row[] = Array.from({ length: 53 }, (_, i) => ({ id: identifier(i + 1, "40000000"), intervention_id: fixtures[0].id, artisan_id: identifier(2, "20000000"), lines: [{ label: "Test", quantity: 1, unit_price_cents: 10000 }], subtotal_cents: 10000, tax_rate: 20, tax_cents: 2000, total_cents: 12000, status: "rejected", created_at: `2026-10-01T12:00:00.${String(i).padStart(6, "0")}Z`, accepted_at: null }));
+const auditFixtures: Row[] = Array.from({ length: 54 }, (_, i) => ({
+  id: 1000 + i, intervention_id: i === 53 ? fixtures[1].id : fixtures[0].id,
+  actor_id: identifier(1, "20000000"), action: i === 52 ? "admin_reassigned" : "accept_mission",
+  created_at: `2026-10-01T12:00:00.${String(i).padStart(6, "0")}Z`,
+}));
 function splitTopLevel(value: string): string[] {
   const out: string[] = []; let depth = 0, quoted = false, start = 0;
   for (let i = 0; i < value.length; i++) {
@@ -55,13 +60,14 @@ function matchLogic(row: Row, expression: string): boolean {
   const values = splitTopLevel(group[2]);
   return group[1] === "and" ? values.every(v => matchLogic(row, v)) : values.some(v => matchLogic(row, v));
 }
-function harness(role: string | null = "admin", options: { providerCap?: number; missingCount?: boolean } = {}) {
+function harness(role: string | null = "admin", options: { providerCap?: number; missingCount?: boolean; auditFailure?: boolean } = {}) {
   const requests: { table: string; url: URL; method: string }[] = [];
   const fetch: typeof globalThis.fetch = async (input, init) => {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
     const table = url.pathname.split("/").at(-1)!; const method = init?.method ?? "GET";
     requests.push({ table, url, method });
-    let rows = table === "profiles" ? [{ role, id: identifier(1, "20000000") }] : table === "quotes" ? [...quoteFixtures] : [...fixtures];
+    if (table === "audit_log" && options.auditFailure) return Response.json({ message: "unavailable", code: "XX000" }, { status: 503 });
+    let rows = table === "profiles" ? [{ role, id: identifier(1, "20000000") }] : table === "quotes" ? [...quoteFixtures] : table === "audit_log" ? [...auditFixtures] : [...fixtures];
     for (const [key, value] of url.searchParams) {
       if (key === "or") rows = rows.filter(row => matchLogic(row, `or${value}`));
       else if (!["select", "order", "limit"].includes(key)) rows = rows.filter(row => matchAtom(row, `${key}.${value}`));
@@ -103,7 +109,7 @@ test("admin route gates every list/detail read before querying dossiers and mark
     const h = harness(role); const response = await h.get(`id=${fixtures[0].id}`);
     assert.equal(response.status, role === null ? 401 : 403);
     assert.equal(response.headers.get("Cache-Control"), "private, no-store");
-    assert.equal(h.requests.some(r => r.table === "interventions" || r.table === "quotes"), false);
+    assert.equal(h.requests.some(r => r.table === "interventions" || r.table === "quotes" || r.table === "audit_log"), false);
   }
 });
 test("237 dossiers paginate exactly once through tied and microsecond-distinct timestamps with stable filtered total", async () => {
@@ -194,4 +200,31 @@ test("client dossier filtering is server-side, rejects malformed UUID and binds 
  assert.equal(foreign.status,422);
  const invalid=await h.get('client_id=not-a-uuid');assert.equal(invalid.status,422);
  const absent=await h.get(`client_id=${identifier(9,"20000000")}`);assert.equal(absent.status,200);assert.equal((await absent.json()).interventions.length,0);
+});
+
+
+test("admin dossier audit is scoped, bounded, ordered and includes reassignment without private extra fields", async () => {
+  const h = harness(); const response = await h.get(`id=${fixtures[0].id}`);
+  assert.equal(response.status, 200); assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+  const { audit } = await response.json();
+  assert.equal(audit.status, "ok"); assert.equal(audit.items.length, 50); assert.equal(audit.limit, 50); assert.equal(audit.limited, true);
+  assert.equal(audit.items[0].action, "admin_reassigned"); assert.equal(audit.items[0].id, "1052");
+  assert.equal(audit.items.some((row: any) => row.id === "1053"), false);
+  assert.deepEqual(Object.keys(audit.items[0]).sort(), ["action", "actor_id", "created_at", "id"]);
+  const request = h.requests.find(r => r.table === "audit_log")!;
+  assert.equal(request.url.searchParams.get("intervention_id"), `eq.${fixtures[0].id}`);
+  assert.equal(request.url.searchParams.get("order"), "created_at.desc,id.desc");
+});
+
+test("audit read failure is explicit while the admin dossier remains readable; retry can recover", async () => {
+  const failed = await harness("admin", { auditFailure: true }).get(`id=${fixtures[0].id}`);
+  assert.equal(failed.status, 200); const body = await failed.json();
+  assert.equal(body.intervention.id, fixtures[0].id); assert.deepEqual(body.audit, { status: "error" });
+  assert.equal((await (await harness().get(`id=${fixtures[0].id}`)).json()).audit.status, "ok");
+});
+
+test("an empty dossier audit is distinguishable from a provider failure", async () => {
+  const response = await harness().get(`id=${fixtures[2].id}`);
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).audit, { status: "ok", items: [], limit: 50, limited: false });
 });

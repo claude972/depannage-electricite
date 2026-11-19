@@ -10,6 +10,10 @@ const listFields = "id,client_id,artisan_id,site_id,category,city,postal_code,ur
 const detailFields = `${listFields},description,address,estimate_min_cents,estimate_max_cents,travel_stage,completed_at,paid_at`;
 const quoteFields = "id,intervention_id,artisan_id,lines,subtotal_cents,tax_rate,tax_cents,total_cents,status,created_at,accepted_at";
 const timestamp = z.iso.datetime({ offset: true }).regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/);
+const auditRows = z.array(z.object({
+  id: z.union([z.number().int().positive().safe(), z.string().regex(/^[1-9]\d*$/)]).transform(String),
+  actor_id: uuid.nullable(), action: z.string().min(1).max(200), created_at: timestamp,
+})).max(50);
 const filtersSchema = z.object({
   status: z.enum(["requested", "assigned", "quoted", "accepted", "in_progress", "completed", "paid", "cancelled"]).nullable(),
   category: z.enum(["outage", "panel", "socket", "lighting", "diagnostic"]).nullable(),
@@ -23,6 +27,16 @@ const filtersSchema = z.object({
 }).strict();
 type Filters = z.infer<typeof filtersSchema>;
 type Database = Awaited<ReturnType<typeof authenticatedClient>>["db"];
+async function readAudit(db: Database, id: string) {
+  try {
+    const result = await db.from("audit_log").select("id,actor_id,action,created_at", { count: "exact" })
+      .eq("intervention_id", id).order("created_at", { ascending: false }).order("id", { ascending: false }).limit(50);
+    const rows = auditRows.safeParse(result.data);
+    if (result.error || !rows.success || result.count === null || !Number.isSafeInteger(result.count) || result.count < rows.data.length)
+      return { status: "error" as const };
+    return { status: "ok" as const, items: rows.data, limit: 50, limited: result.count > rows.data.length };
+  } catch { return { status: "error" as const }; }
+}
 const cursorSchema = z.object({ v: z.literal(1), created_at: timestamp, id: uuid, filters: z.string().regex(/^[a-f0-9]{64}$/) }).strict();
 
 function invalidQuery(): never {
@@ -119,7 +133,8 @@ export async function GET(request: Request) {
       const quotes = await db.from("quotes").select(quoteFields, { count: "exact" }).eq("intervention_id", id)
         .order("created_at", { ascending: false }).order("id", { ascending: false }).limit(50);
       dbError(quotes.error);
-      return Response.json({ intervention: job.data, quotes: quotes.data ?? [], quotes_limit: 50, quotes_limited: exactCount(quotes.count) > (quotes.data?.length ?? 0) }, { headers: privateHeaders });
+      const audit = await readAudit(db, id!);
+      return Response.json({ intervention: job.data, quotes: quotes.data ?? [], quotes_limit: 50, quotes_limited: exactCount(quotes.count) > (quotes.data?.length ?? 0), audit }, { headers: privateHeaders });
     }
 
     const rawLimit = params.get("limit") ?? "25";

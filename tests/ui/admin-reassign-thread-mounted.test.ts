@@ -71,7 +71,7 @@ window.respond = async (url, init) => {
 };
 window.seed = { data: { interventions: [], quotes: [], messages: [] }, session: {
   loadAdminOverview: async () => JSON.parse(JSON.stringify(overview)),
-  loadAdminIntervention: async (id) => ({ intervention: intervention(id), quotes: [], quotes_limit: 20, quotes_limited: false }),
+  loadAdminIntervention: async (id) => window.detailFail ? null : ({ intervention: intervention(id), quotes: [], quotes_limit: 20, quotes_limited: false, audit: window.audit }),
   loadOperations: async () => null,
   loadAdminDirectory: async (kind, params) => {
     window.dirCalls.push({ kind, ...params });
@@ -311,5 +311,27 @@ test("ADM-07 P2 : rafale > 25 sans recouvrement ⇒ le fil repart de la nouvelle
     await page.waitForFunction("document.querySelectorAll('[data-message-id]').length === 63");
     const ids12 = (await page.evaluate("[...document.querySelectorAll('[data-message-id]')].map((e) => e.dataset.messageId)")) as string[];
     assert.equal(new Set(ids12).size, 63, "no duplicate");
+  });
+});
+
+
+test("ADM-03 : journal visible de réaffectation, auteur, limite, erreur et reprise sans faux état vide", { skip }, async () => {
+  await run(async page => {
+    await page.getByText("Le journal du dossier est momentanément indisponible.", { exact: true }).waitFor();
+    await page.evaluate(`window.audit = { status: "ok", items: [{ id: "42", actor_id: window.uid, action: "admin_reassigned", created_at: "2026-11-19T12:07:12Z" }], limit: 50, limited: true }`);
+    await page.getByRole("button", { name: "Recharger le journal", exact: true }).click();
+    await page.getByText("Artisan réaffecté · Vous (administrateur)", { exact: true }).waitFor();
+    await page.getByText("Affichage limité aux 50 dernières actions.", { exact: true }).waitFor();
+    await page.evaluate(`window.detailFail = true; window.seed.session.data = { ...window.seed.data }; window.rerender()`);
+    await page.getByText("La dernière lecture a échoué : ce journal provient de la lecture précédente.", { exact: true }).waitFor();
+    assert.equal(await page.getByText("Artisan réaffecté · Vous (administrateur)", { exact: true }).count(), 1);
+    await page.evaluate(`window.detailFail = false; window.audit = { status: "error" }`);
+    await page.evaluate(`window.seed.session.data = { ...window.seed.data }; window.rerender()`);
+    await page.getByText("Le journal du dossier est momentanément indisponible.", { exact: true }).waitFor();
+    assert.equal(await page.getByText("Artisan réaffecté · Vous (administrateur)", { exact: true }).count(), 0);
+    await page.evaluate(`window.audit = { status: "ok", items: [], limit: 50, limited: false }`);
+    await page.getByRole("button", { name: "Recharger le journal", exact: true }).click();
+    await page.getByText("Aucune action enregistrée dans le journal de ce dossier.", { exact: true }).waitFor();
+    assert.equal(await page.getByText("Le journal du dossier est momentanément indisponible.", { exact: true }).count(), 0);
   });
 });
