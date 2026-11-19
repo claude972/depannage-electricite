@@ -24,12 +24,22 @@ Sur iOS, la proposition système d’enregistrer le mot de passe empêchait le p
 
 La création native avec photo et les écritures suivantes restent en cours.
 
-## Parcours avec photo : défaut D7 en cours de vérification
+## Parcours avec photo : défaut D7 et vérification progressive
 
 Android crée exactement un dossier `INT-0E073E` (UUID `0e073e8b-9b73-4cc2-be3d-7f7257415038`) à partir du formulaire natif avec une image explicitement synthétique. La photo est sélectionnée mais son envoi échoue ; deux reprises restent en échec et la relecture serveur montre zéro document. La demande elle-même reste persistée, état `requested`. Les comptes tiers et artisan non affecté reçoivent 404 sur son détail privé.
 
 Diagnostic local sans données sensibles : échec à l’étape `upload`, statut transport 0. Le convertisseur Expo `convertFormDataAsync` installé rejette les parties React Native qui ne portent qu’une URI. Trois appels sont concernés : photo de demande, photo privée/partagée et photos avant/après du rapport. Une première adaptation par Blob construit depuis ArrayBuffer échoue également : le Blob React Native ne prend pas en charge ce constructeur.
 
-Le correctif utilise un véritable `File` Expo, avec nom multipart stable redéfini, sans renommer le fichier temporaire ni changer sa responsabilité de nettoyage. Le Web conserve un Blob standard. Deux tests ciblés passent, dont une simulation qui interdit la construction du Blob natif ; TypeScript mobile passe. **La preuve sur appareils virtuels après cette dernière correction reste à obtenir : ne pas annoncer D7 résolu ni promouvoir le binaire intermédiaire.**
+Le correctif utilise un véritable `File` Expo, avec nom multipart stable redéfini, sans renommer le fichier temporaire ni changer sa responsabilité de nettoyage. Le Web conserve un Blob standard. Deux tests ciblés passent, dont une simulation qui interdit la construction du Blob natif ; TypeScript mobile passe. Les preuves Android après correction figurent ci-dessous. La validation iOS et les photos de rapport restent à obtenir ; les binaires intermédiaires ne sont pas des candidats de livraison.
 
 L’APK diagnostic et la première tentative ne sont pas des livraisons finales. Les APK générés ont été déplacés vers le volume externe Stockage 2, avec des liens aux chemins précédents.
+
+### Reprise Android validée après correctif D7
+
+APK `domdepannage-android-photo-fix-v2-20261119.apk`, SHA-256 `2da5dea06b953c9dbb9677e6d749bdc05aaf804d96b92854461c9d7d78860b2e`, sources `9117e14` : build Gradle réussi, certificat interne attendu. Après installation par-dessus le binaire précédent et réouverture de la demande, la photo en attente est récupérée. La relecture API confirme exactement un dossier correspondant et exactement un document JPEG (`8df0d915-0bde-4e38-94ab-372fc2bab18f`). Preuves : `android-photo-recovered-v2-current-20261119.png`, `native-create-readback-final-20261119.log`. La relecture du même dossier après relance ne propose plus de reprise photo. Les autres envois natifs et la validation iOS restent à compléter.
+
+### Ajout privé Android et contrôle continu
+
+Le sélecteur système ajoute ensuite volontairement une seconde photo au même dossier. La relecture API confirme deux JPEG, état `requested` conservé : `android-private-photo-readback-20261119.log` et `android-private-photo-added-current-20261119.png`. Le contrôle après relance utilise un dump ADB frais ; le pilote rejette désormais les dumps dont la racine est absente pour éviter de relire un ancien écran.
+
+CI GitHub 211, commit `01e79c3087f02cb8859d3be5e9c488e2e8ebbcf9` : `check` et PostgreSQL isolé réussis. La reconstruction iOS du correctif a échoué sur le délai de cinq secondes du scanner de modules Expo ; relance en cours avec le simulateur Android arrêté, sans modification des dépendances.

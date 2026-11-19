@@ -47,4 +47,16 @@ Preuves dans `preuves/correctifs-parcours-20261119/` (journaux horodatés, captu
 
 ## Contrôle complémentaire Codex
 
-Le connecteur Vercel confirme le 19 novembre l’alias sur `dpl_2BYA232KTSnTrL7wSw1skQg8pv6j`. D6 est corrigé localement : le contrôleur suit le message de la dernière lecture en échec, puis l’efface au succès sans supprimer les avertissements de commande. Les 12 tests rayon (modèle et Chromium) passent sans omission, dont reprise à froid, reprise avec données déjà chargées, conservation d’un enregistrement incertain et disparition du message après retour réseau. La publication de ce complément reste à vérifier.
+Le connecteur Vercel confirme le 19 novembre l’alias sur `dpl_2BYA232KTSnTrL7wSw1skQg8pv6j`. D6 est corrigé localement : le contrôleur suit le message de la dernière lecture en échec, puis l’efface au succès sans supprimer les avertissements de commande. Les 12 tests rayon (modèle et Chromium) passent sans omission, dont reprise à froid, reprise avec données déjà chargées, conservation d’un enregistrement incertain et disparition du message après retour réseau. Le complément est désormais publié et vérifié ; résultats ci-dessous.
+
+## Correctif D6 (consigne `CORRECTIF-D6-CODEX-20261119.md`)
+- **Fichiers.** Notre `model.ts` était identique au parent Codex (aucune divergence). Il a été copié depuis le commit 0bcba56 : SHA-256 `9c0fd8f0…4146`, conforme à la consigne. `tests/ui/mission-radius.test.ts` a été aligné de la même façon (identique au parent avant copie). Commit Claude `ec03dfb9`.
+- **Contrôles locaux.** `tsc --noEmit` : code de sortie 0. Tests rayon et session : 21/21 PASS.
+- **Candidat.** `dpl_CraUJc16vLbXGG1nDYYCpxX5bmmb` (o4n1lx6jm), READY, cible preview.
+  - D6 manuel et D6 retour réseau : **PASS** (`ready`, plus de message résiduel, formulaire affiché).
+  - Non-régression D1, D3, D4 et D5 : 12/12 PASS. D2 : 10/10 PASS.
+- **Alias.** `domdepannage-recette-20261112.vercel.app` pointe désormais sur ce candidat.
+- **Preuves** : `preuves/correctifs-parcours-20261119/candidat-o4n1lx6jm/`.
+- **Dossier natif.** INT-0E073E (Codex) n'a pas été touché.
+
+Codex a confirmé indépendamment l’alias via le connecteur Vercel : `dpl_CraUJc16vLbXGG1nDYYCpxX5bmmb`, URL candidate `https://domdepannage-recette-20261112-o4n1lx6jm-brafas-projects.vercel.app`.

@@ -8,7 +8,7 @@ Périmètre : défauts D1, D3, D4 et D5 du rapport Web/PWA des rôles. Les contr
 - D5 : le choix obligatoire d'un site professionnel affiche aussi un message applicatif persistant, associé au champ par le composant Field. La validation native reste active.
 - D2 : au retour réseau, les lectures en erreur du rayon, des offres et du tableau administrateur sont relancées. La revalidation bornée de l’espace reçoit aussi ce signal. Les commandes, préférences en attente et refus de permission ne sont jamais rejoués automatiquement. Les autres panneaux conservent leur reprise manuelle explicite.
 
-Vérifications locales : TypeScript réussi ; suites session et rayon réussies ; deux tests Chromium exécutés sans saut (bornes/enregistrement/réinitialisation et erreur dans panneau replié/reprise GET sans mutation). Suite complète des interfaces avec navigateur réel en cours, distincte d'une recette des fournisseurs déployés.
+Vérifications locales : TypeScript réussi ; suites session et rayon réussies ; deux tests Chromium exécutés sans saut (bornes/enregistrement/réinitialisation et erreur dans panneau replié/reprise GET sans mutation). Le bilan de la suite complète des interfaces avec navigateur réel figure ci-dessous ; il reste distinct de la recette des fournisseurs déployés.
 
 La matrice intègre le rapport courant des quatre rôles. Les scénarios déclarés PASS avec une variante explicitement non rejouée restent PARTIEL dans la matrice consolidée.
 
@@ -30,4 +30,4 @@ Reprise réseau : 8 tests ciblés passent (rayon monté, tableau administrateur 
 
 ## Complément CI et lectures réseau
 
-Les 24 tests ciblés offres disponibles, sélection de proximité et coordinateur de relecture passent sans omission (`web-online-offers-20261119.log`). Le run GitHub 208 a signalé une attente périmée du contrat EAS : il exigeait encore le mode de démonstration de l’assistance. L’attente est alignée sur `false`, pour garder désactivée la promesse illustrative de délai ; les huit tests de `release-contract.test.ts` passent localement sans omission. La relance CI reste à vérifier.
+Les 24 tests ciblés offres disponibles, sélection de proximité et coordinateur de relecture passent sans omission (`web-online-offers-20261119.log`). Le run GitHub 208 a signalé une attente périmée du contrat EAS : il exigeait encore le mode de démonstration de l’assistance. L’attente est alignée sur `false`, pour garder désactivée la promesse illustrative de délai ; les huit tests de `release-contract.test.ts` passent localement sans omission. La relance GitHub 209 (`44514447588`) est entièrement réussie : vérifications applicatives, builds et contrôles PostgreSQL isolés.
