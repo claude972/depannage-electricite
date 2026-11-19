@@ -27,3 +27,12 @@ La recette physique a été interrompue à la demande du propriétaire qui repre
 ## Conditions d'ouverture encore absentes
 
 Voir l'[audit de configuration](AUDIT_EXPLOITATION_2026-11-19.md) pour les constats de recette datés : profil/garantie non publiés, couverture inconnue, barème fermé, environnement commercial et domaine absents, notifications externes inactives. Restent également Stripe LIVE distinct, preuve de restauration hébergée avec fichiers privés, réception d'alertes, liens Auth/e-mail distribués, signatures et dossiers des stores. Le paiement et le rapprochement TEST réussis ne remplacent pas ces preuves.
+
+## Actualisation de la recette
+
+- GitHub Actions run 44462059347 (commit 5e35d461) : contrôles applicatifs et suite SQL isolée réussis.
+- Preview de sécurité READY : https://domdepannage-recette-20261112.vercel.app, déploiement dpl_G8TQpwy2NZj9PeLiq5AL1iCkxv9x. Rapport du mini : 35/35 contrôles administratifs, largeurs 1440 et 390, contrôle du refus client, aucune erreur JavaScript. Cela ne ferme pas tous les parcours des quatre rôles.
+- Défaut tactile reproduit dans les fenêtres de profil natives. Ajout du pont RNHostView requis par Expo UI : Android vérifie la fermeture des fenêtres Adresses, Sécurité et Mes données et le lancement du navigateur par le lien du carnet. Le navigateur du simulateur affiche son premier démarrage : aucune gestion d’adresse web encore validée.
+- iOS : après reproduction dans ios-sheet-fix-v2-20261119, le pont RNHostView et son enfant non aplati (collapsable=false) corrigent les appuis. XCTest ios-sheet-fix-v3-20261119 réussit : fermeture Adresses/Sécurité/Mes données, prénom vide interdit, fermeture du formulaire et déconnexion. Les nouveaux binaires ciblent l’alias de recette courant.
+
+La demande du propriétaire de vérifier tous les parcours est suivie dans le plan complémentaire et la matrice des 76 capacités. Les brouillons commerciaux ne remplacent pas ces contrôles.
