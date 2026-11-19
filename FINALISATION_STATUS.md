@@ -1,3 +1,9 @@
+## État actuel — correctif Checkout livré le 19 novembre 2026 UTC
+
+Le blocage du rapprochement est corrigé et déployé sur l’[alias de recette](https://domdepannage-recette-20261112.vercel.app), déploiement `5zggqivyj` / `dpl_9qgdnBYFk6brxrFd7XoAEUGmAssm`, source Claude `ed22f0a5`, runtime revu et publié par Codex dans la PR #9. Migration versionnée appliquée. Reprise produit INT-5B12D9 HTTP 200 : les deux observations sont `matched`, une seule commission de 22,13 € est inscrite ; après rejeu, deux règlements pour 238,70 € restent inchangés. Les portes temporaires des anciennes preuves restent fermées.
+
+Validation : 45 tests applicatifs et 248 contrôles SQL PASS ; build cloud READY. [Rapport détaillé](docs/qa/CORRECTIF_CHECKOUT_2026-11-19.md) et [limites de préparation](docs/qa/ETAT_PREPARATION_2026-11-19.md). Cette validation de recette n’est pas une ouverture commerciale : paramètres live/commerciaux et parcours natifs complets sur appareils physiques/distribution restent à valider. Les sections suivantes sont l’historique, notamment les anciennes observations non rapprochées désormais résolues.
+
 ## Rapprochement Stripe TEST — complément du 18 novembre 2026
 
 Le règlement INT-5B12D9 de 130,20 € est inscrit au ledger. Les preuves de capture et de commission de 22,13 € sont qualifiées par relecture Stripe. Rejeu sans doublon ; transfert comparé aux références exactes et note de revue enregistrée (v2). Portes temporaires refermées et alias `bswte5fe6` restauré, vérifié HTTP 200. Le matcher automatique Checkout reste limité : observation du transfert toujours `needs_review / unlinked_transfer`, aucune écriture `commission_withheld` créée. Voir [le rapport de rapprochement](docs/qa/RAPPROCHEMENT_STRIPE_TEST_2026-11-18.md). Les constats antérieurs ci-dessous sont conservés comme historique.

@@ -26,4 +26,17 @@ Migration additive : `supabase/migrations/20261119120000_checkout_provider_link.
 
 ## Livraison et preuve en ligne
 
-À ce point du journal : code validé localement ; build et déploiement de recette, reprise du paiement INT-5B12D9 et vérification du registre **en cours**. Aucun résultat cloud supplémentaire n’est annoncé ici. Cette section sera complétée avec le déploiement exact et les résultats constatés.
+Le correctif est déployé en recette depuis le commit Claude `ed22f0a5` (les neuf sources du manifeste correspondent au code revu et publié par Codex). Build Vercel **READY**, `dpl_9qgdnBYFk6brxrFd7XoAEUGmAssm`, [preview 5zggqivyj](https://domdepannage-recette-20261112-5zggqivyj-brafas-projects.vercel.app). L’[alias de recette](https://domdepannage-recette-20261112.vercel.app) résout ce déploiement, vérifié indépendamment par le connecteur Vercel. Migration versionnée appliquée et enregistrée dans la base de recette.
+
+La reprise via le nouveau bouton a répondu **HTTP 200**. Le relevé SQL en lecture seule après reprise et rejeu constate :
+
+- paiement TEST `6f496d43-041b-4208-93c3-6aa9e2d64be0` / INT-5B12D9 : **13 020 c**, liaison `linked`, `livemode=false` ;
+- charge `ch_3UdIpeDtnDJqPYEI1ahRJxcc`, transfert `tr_3UdIpeDtnDJqPYEI1VfS3p3Z`, destination `acct_1UcWCTDtnDk5Qn8R` ;
+- Fee `fee_1UdIpiDtnDk5Qn8R8RI1PqO5` : **une seule** écriture `commission_withheld`, **2 213 c** ;
+- observation Fee `matched / linked_checkout_fee`, version 2 ; observation Transfer `matched / linked_checkout_transfer`, version 3 ; deux réassociations historisées ;
+- deux règlements `payment_settled` inchangés : 13 020 c et 10 850 c, total **23 870 c** ;
+- porte des anciennes preuves `charge_proof_enabled=false`.
+
+Les preuves privées expurgées sont conservées sur disque externe dans `preuves/correctif-checkout/` du dossier de finalisation Codex ; notamment `etat-avant.json` et `etat-apres.json`. Aucun nouvel encaissement Stripe n’a été effectué. Les réponses HTTP expurgées confirment `commission=recorded` puis `commission=existing`, sans nouvelle réassociation. Droits en ligne : particulier refusé HTTP 403 sur reprise et détail d’observation ; sans session, reprise refusée HTTP 401. La capture du résultat du bouton montre « commission déjà inscrite (aucun doublon) ; observations réassociées : 0 ». Les captures restent dans la livraison privée.
+
+La capture `observations-liste.png` confirme visuellement les deux associations. Les versements bancaires agrégés et un transfert de test antérieur non lié restent à examiner : ils ne sont pas confondus avec le paiement cible ni artificiellement répartis entre dossiers. Le correctif ne constitue pas une preuve de réception bancaire.
