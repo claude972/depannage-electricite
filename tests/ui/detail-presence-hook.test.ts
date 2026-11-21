@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // Real React test of useDetailPresence (FASTSPLIT-DETAIL-CONSUMER-001 fixes): the hook runs in a
 // real browser (local Chromium), driven by a real React root. Skipped — never passed — when no
 // local Playwright/Chromium is available.
@@ -10,7 +11,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM =
   process.env.QA_CHROMIUM_PATH ||

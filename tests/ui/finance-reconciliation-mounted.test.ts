@@ -1,9 +1,10 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // FIN-06 observer mounted for real (React root, StrictMode, local Chromium) + real-app wiring.
 // List with the contract's cursor paging (next/previous), labels « Observation du fournisseur
 // (lecture) », detail + review behind an explicit confirmation ⇒ one POST with the command already
 // stored under courant-private-reconciliation:, result shown as returned; read-only without write;
-// 360 px light/dark, 44 px targets. Real app: platform finance (demo) shows the tab with an honest
-// note, zero /api, no page errors (360/390/1280, light/dark).
+// 320 px light/dark, 44 px targets. Real app: platform finance (demo) shows the tab with an honest
+// note, zero /api, no page errors (320/360/390/768/1280, light/dark).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
@@ -18,7 +19,7 @@ const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_module
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
 const skip = available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)";
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const UID = "10000000-0000-4000-8000-0000000000fa";
 const ENTRY = `
 import { createElement as h, StrictMode } from "react";
@@ -71,13 +72,13 @@ async function serve() {
 }
 const SMALL = `(() => ({ sw: document.documentElement.scrollWidth, small: [...document.querySelectorAll("button, select, textarea")].filter((e) => { const r = e.getBoundingClientRect(); return r.height > 0 && (r.height < 43.5 || r.width < 43.5); }).map((e) => e.textContent.trim() || e.tagName) }))()`;
 
-test("Chromium : liste paginée par curseur, libellé d’observation, revue confirmée ⇒ 1 POST (commande stockée), résultat tel que renvoyé ; 360 px clair/sombre", { skip }, async () => {
+test("Chromium : liste paginée par curseur, libellé d’observation, revue confirmée ⇒ 1 POST (commande stockée), résultat tel que renvoyé ; 320 px clair/sombre", { skip }, async () => {
   const { server, base } = await serve();
   const pw = await import(pathToFileURL(path.join(PW, "index.mjs")).href);
   const browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true });
   try {
     for (const theme of ["light", "dark"]) {
-      const page = await (await browser.newContext({ viewport: { width: 360, height: 900 } })).newPage();
+      const page = await (await browser.newContext({ viewport: { width: 320, height: 900 } })).newPage();
       const errors: string[] = [];
       page.on("pageerror", (e: Error) => errors.push(String(e)));
       await page.goto(`${base}?${theme}`);
@@ -85,7 +86,7 @@ test("Chromium : liste paginée par curseur, libellé d’observation, revue con
       assert.equal(await page.locator("[data-reconciliation-event]").count(), 50);
       const first = await page.locator("[data-reconciliation-event]").first().innerText();
       assert.match(first, /Observation du fournisseur \(lecture\)/i);
-      assert.match(first, /Associée au transfert enregistré[\s\S]*n’est pas la preuve d’un versement bancaire/);
+      assert.match(first, /correspond exactement au transfert déjà enregistré[\s\S]*n’est pas la preuve d’un versement bancaire/);
       assert.match(first, /123,45 €/);
       // Matched observation: the proven dossier link opens the dossier.
       await page.locator("[data-reconciliation-event]").first().getByRole("button", { name: "Examiner" }).click();
@@ -98,9 +99,9 @@ test("Chromium : liste paginée par curseur, libellé d’observation, revue con
       await page.getByRole("button", { name: "Examiner" }).click();
       await page.getByLabel("Note de revue (obligatoire)").fill("Versement agrégé vérifié");
       await page.getByRole("button", { name: "Enregistrer une revue…" }).click();
-      assert.match(await page.locator('[role="group"]').innerText(), /ne crée aucun paiement, transfert ni remboursement, ne force aucun rattachement/);
+      assert.match(await page.locator('[role="group"]').innerText(), /ne crée aucun paiement, transfert, remboursement ni facture, ne force aucun rattachement/);
       const layout = (await page.evaluate(SMALL)) as { sw: number; small: string[] };
-      assert.equal(layout.sw, 360, theme);
+      assert.equal(layout.sw, 320, theme);
       assert.deepEqual(layout.small, [], theme);
       await page.getByRole("button", { name: "Confirmer la revue (version 1)" }).click();
       await page.locator("[data-reconciliation-notice]").waitFor();
@@ -149,7 +150,7 @@ test("Chromium : lecture seule sans droit d’écriture (aucun formulaire de rev
 test("app réelle : finance plateforme (démo) — onglet « Observations fournisseur », note honnête, aucun /api", { skip: appSkip }, async () => {
   await withApp(async (open) => {
     for (const theme of ["light", "dark"])
-      for (const width of [360, 390, 1280]) {
+      for (const width of [320, 360, 390, 768, 1280]) {
         const where = `${theme} ${width}px`;
         const { page, errors, api } = await open("admin-platform-finance", width);
         await page.evaluate((t: string) => localStorage.setItem("courant-ui-theme", t), theme);

@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // Shared helper for the phase 2 lot B reproductions (not a test file): bundles an entry with esbuild
 // (real components + real CSS), serves it on 127.0.0.1 and runs named in-page scenarios in
 // headless Chromium. No network beyond the local page: every API is a fake injected by the entry.
@@ -8,7 +9,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 
-export const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+export const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const PW = process.env.QA_PLAYWRIGHT_PATH || path.join(homedir(), ".cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright");
 const CHROMIUM =
   process.env.QA_CHROMIUM_PATH ||

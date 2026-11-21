@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // ENT-10: the « Contrôles ERP » form MOUNTED in Chromium (real React root, <StrictMode>, real CSS,
 // the REAL onSubmit / useSubmit; only `context.run` is injected and held). While the save is in
 // flight every field and the submit are locked and a second submit sends nothing; a failure keeps
@@ -14,7 +15,7 @@ import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 import { erpChecklistPayload, commandSchema } from "../../lib/features/site-operations/schemas";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);

@@ -1,9 +1,10 @@
+import { createJpegUpload } from '@/lib/photo-upload';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Platform } from 'react-native';
 import { randomUUID } from 'expo-crypto';
 import { File } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
-import * as ImageManipulator from 'expo-image-manipulator';
+import { selectLibraryPhoto, prepareJpeg } from '@/lib/photo-preparation';
 import { Action, Card, Copy, Field, ReadState } from './ui';
 import { api } from '@/lib/api';
 import { fileSaved, signature, success } from '@/lib/contracts';
@@ -60,9 +61,7 @@ export function ReportEditor({ draftKey, token, id, report, required, onSaved }:
     const temporary = await openReportPhoto(photo);
     try {
       if (signal.aborted) return;
-      const data = new FormData();
-      data.append('intervention_id', id);
-      data.append('file', { uri: temporary.uri, name: side === 'before' ? 'avant.jpg' : 'apres.jpg', type: 'image/jpeg' } as unknown as Blob);
+      const data = await createJpegUpload(id, temporary, side === 'before' ? 'avant.jpg' : 'apres.jpg');
       const result = await api('/api/documents', fileSaved, { token: currentToken.current, method: 'POST', body: data, signal });
       await draft.update(current => ({ ...current, [side]: result.document.id, [pendingField[side]]: null, command: null }));
       releaseReportPhoto(photo);
@@ -79,7 +78,7 @@ export function ReportEditor({ draftKey, token, id, report, required, onSaved }:
       // The marker (account + dossier + side) is persisted before the native picker opens.
       const launch = () => source === 'camera'
         ? ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1 })
-        : ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1, allowsMultipleSelection: false });
+        : selectLibraryPhoto();
       const picked = await (Platform.OS === 'android' ? launchWithTicket(draftKey, side, signal, launch) : launch());
       if (!picked || picked.canceled) return;
       if (signal.aborted) return;
@@ -90,7 +89,7 @@ export function ReportEditor({ draftKey, token, id, report, required, onSaved }:
 
   async function keep(side: Side, asset: ImagePicker.ImagePickerAsset, signal: AbortSignal) {
     const actions = asset.width > 1600 ? [{ resize: { width: 1600 } }] : [];
-    const image = await ImageManipulator.manipulateAsync(asset.uri, actions, { compress: .74, format: ImageManipulator.SaveFormat.JPEG });
+    const image = await prepareJpeg(asset.uri, actions);
     let photo: PendingPhoto;
     try { photo = await stageReportPhoto(new File(image.uri)); }
     finally { if (image.uri !== asset.uri) discardTemporaryPhoto(new File(image.uri)); }

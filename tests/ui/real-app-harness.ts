@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // Shared real-app harness: CourantApp bundled with esbuild (real globals.css + module CSS), served
 // by a local server that records every /api call (answered 500), driven by single-process
 // Chromium. Used by the nominal / interactive journey tests. Not a test file itself.
@@ -8,7 +9,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM =
   process.env.QA_CHROMIUM_PATH ||
@@ -49,11 +50,14 @@ export async function withApp(run: (open: (route: string, width?: number) => Pro
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}/`;
   const pw = await import(pathToFileURL(path.join(PW, "index.mjs")).href);
-  const browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true });
+  let browser: Awaited<ReturnType<typeof pw.chromium.launch>> | undefined;
   try {
+    browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true, timeout: 30_000 });
     await run(async (route, width = 1280) => {
-      const context = await browser.newContext({ viewport: { width, height: 900 } });
+      const context = await browser!.newContext({ viewport: { width, height: 900 } });
       const page = await context.newPage();
+      page.setDefaultTimeout(20_000);
+      page.setDefaultNavigationTimeout(30_000);
       const errors: string[] = [];
       page.on("pageerror", (e: Error) => errors.push(e.message));
       api.length = 0;
@@ -62,8 +66,10 @@ export async function withApp(run: (open: (route: string, width?: number) => Pro
       return { page, errors, api };
     });
   } finally {
-    await browser.close();
-    server.close();
+    try { await browser?.close(); } finally {
+      server.closeAllConnections();
+      server.close();
+    }
   }
 }
 

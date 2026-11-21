@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // ENT-10 (P2): the REAL createSiteOperationsClient (bound / observe of components/app/features.ts)
 // composed with the REAL SiteOperationsView / Content / ErpPanel in Chromium; only `request` is
 // injected. A COMMAND answering 503 or a network failure (status 0) leaves the module state as it is,
@@ -13,7 +14,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);

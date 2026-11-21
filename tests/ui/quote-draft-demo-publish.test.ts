@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // Demo quote publication from the draft editor (QA finding on 0c2): quoteDraftCommand ran in the
 // global runner and called action(), which re-entered run() and was refused as busy ⇒ « Le devis
 // n’a pas pu être publié ». Drives the REAL app (CourantApp) in Chromium, demo artisan, no API.
@@ -11,7 +12,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM =
   process.env.QA_CHROMIUM_PATH ||

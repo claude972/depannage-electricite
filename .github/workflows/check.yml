@@ -21,7 +21,8 @@ jobs:
   isolated-sql:
     name: Isolated PostgreSQL (Auth and Storage stubs)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Full migration review suite exceeds ten minutes; retain every scenario.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

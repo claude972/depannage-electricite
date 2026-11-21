@@ -134,5 +134,11 @@ test("pagination : curseur opaque renvoyé tel quel, dédoublonnage, total du pr
   const urls: string[] = [];
   await m.createContactsApi((async (u: string) => (urls.push(u), new Response("{}", { status: 200 }))) as unknown as typeof fetch).list(SITE, cursor);
   same(urls, [`/api/sites/${SITE}/contacts?cursor=${cursor}`]);
-  assert.match(readFileSync("components/features/site-contacts/site-contacts-panel.tsx", "utf8"), /<SitePanel key=\{props\.siteId\} \{\.\.\.props\} \/>/);
+  assert.ok(readFileSync("components/features/site-contacts/site-contacts-panel.tsx", "utf8").includes("Boolean(props.readOnly)"), "archive transition resets the panel state");
+});
+
+test("archived readOnly overrides a writable API snapshot while preserving contact history", () => {
+ const html = renderToString(createElement(panel.SiteContactsPanel, {siteId: SITE, readOnly: true, initial: ready([rec(1)])}));
+ assert.match(html, /Camille/); assert.match(html, /data-contacts-readonly/);
+ assert.doesNotMatch(html, /data-contacts-add|data-contacts-form|>Modifier<|>Archiver</);
 });

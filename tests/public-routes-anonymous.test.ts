@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
@@ -6,7 +7,7 @@ import path from "node:path";
 // Recette PWA du 15/11 : avec un cookie de session révoqué, /api/public/indicative-prices et
 // /api/public/operator-profile répondaient 403 (PGRST301) et l'accueil public perdait ses données.
 // Les lectures publiques passent par un client anonyme qui ne lit jamais les cookies.
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..");
 const read = (file: string) => readFileSync(path.join(ROOT, file), "utf8");
 
 test("public read routes never forward the visitor's session cookies", () => {

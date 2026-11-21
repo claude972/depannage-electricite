@@ -71,12 +71,12 @@ test("profils EAS : même API de recette, simulateur et appareil distincts, aucu
     },
     simulator: {
       extends: "preview",
-      env: { EXPO_PUBLIC_HOME_SUPPORT_PREVIEW: "true" },
+      env: { EXPO_PUBLIC_HOME_SUPPORT_PREVIEW: "false" },
     },
     device: {
       extends: "preview",
       ios: { simulator: false, credentialsSource: "remote" },
-      env: { EXPO_PUBLIC_HOME_SUPPORT_PREVIEW: "true" },
+      env: { EXPO_PUBLIC_HOME_SUPPORT_PREVIEW: "false" },
     },
   });
   assert.equal(eas.cli.requireCommit, true);

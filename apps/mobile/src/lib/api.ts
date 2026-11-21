@@ -53,7 +53,7 @@ export async function api<T>(path: string, schema: ZodType<T>, options: {
   }
 }
 
-export function useResource<T>(path: string | null, schema: ZodType<T>, token?: string, refreshActor?: string) {
+export function useResource<T>(path: string | null, schema: ZodType<T>, token?: string, refreshActor?: string, refreshIntervalMs = 0) {
   type Read = { path: string; revision:number; token?: string; actor?: string; data: T | null; error: string | null };
   const [read, setRead] = useState<Read | null>(null);
   const [revision, setRevision] = useState(0);
@@ -68,12 +68,22 @@ export function useResource<T>(path: string | null, schema: ZodType<T>, token?: 
   useEffect(() => {
     if (!path) return;
     const controller = new AbortController();
-    void api(path, schema, { token, signal: controller.signal }).then(
-      data => { if (!controller.signal.aborted) setRead({ path, revision, token, actor: refreshActor, data, error: null }); },
-      error => { if (!controller.signal.aborted) setRead({ path, revision, token, actor: refreshActor, data: null, error: error instanceof Error ? error.message : 'Lecture indisponible.' }); },
-    );
-    return () => controller.abort();
-  }, [path, schema, token, revision, refreshActor]);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // Schedule after completion: a slow connection never overlaps its next read.
+    async function readLatest() {
+      try {
+        const data = await api(path!, schema, { token, signal: controller.signal });
+        if (!controller.signal.aborted) setRead({ path: path!, revision, token, actor: refreshActor, data, error: null });
+      } catch (error) {
+        if (!controller.signal.aborted) setRead({ path: path!, revision, token, actor: refreshActor, data: null, error: error instanceof Error ? error.message : 'Lecture indisponible.' });
+      } finally {
+        if (!controller.signal.aborted && refreshIntervalMs > 0)
+          timer = setTimeout(readLatest, refreshIntervalMs);
+      }
+    }
+    void readLatest();
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [path, schema, token, revision, refreshActor, refreshIntervalMs]);
   // A token rotation can refresh an already visible resource for the same
   // account. A different account or a denied read never inherits that data.
   const visible = read?.path === path && read.actor === refreshActor &&

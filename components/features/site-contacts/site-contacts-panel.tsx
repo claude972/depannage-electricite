@@ -23,15 +23,16 @@ import {
 } from "./contacts-model";
 import styles from "./site-contacts.module.css";
 
-type PanelProps = { siteId: string; api?: ContactsApi; context?: ContactsContext; /** Tests only. */ initial?: ContactsState; newId?: () => string | null };
+type PanelProps = { siteId: string; readOnly?: boolean; api?: ContactsApi; context?: ContactsContext; /** Tests only. */ initial?: ContactsState; newId?: () => string | null };
 /** Keyed by site: another site is a fresh panel (no list, cursor or form carried over). */
 export function SiteContactsPanel(props: PanelProps) {
-  return <SitePanel key={props.siteId} {...props} />;
+  return <SitePanel key={`${props.siteId}|${Boolean(props.readOnly)}`} {...props} />;
 }
-function SitePanel({ siteId, api, context = DEFAULT_CONTACTS_CONTEXT, initial, newId = contactUuid }: PanelProps) {
-  const [state, setStateRaw] = useState<ContactsState>(initial ?? CONTACTS_INITIAL);
+function SitePanel({ siteId, api, context = DEFAULT_CONTACTS_CONTEXT, initial, readOnly = false, newId = contactUuid }: PanelProps) {
+  const [state, setStateRaw] = useState<ContactsState>(() => { const value = initial ?? CONTACTS_INITIAL; return readOnly ? { ...value, canWrite: false, pending: null } : value; });
   const ref = useRef(state);
   const set = (next: ContactsState) => {
+    if (readOnly) next = { ...next, canWrite: false, pending: null };
     ref.current = next;
     setStateRaw(next);
   };

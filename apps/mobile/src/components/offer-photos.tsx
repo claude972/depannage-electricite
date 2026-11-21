@@ -1,9 +1,9 @@
+import { createJpegUpload } from '@/lib/photo-upload';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Platform } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Image } from 'expo-image';
-import * as ImagePicker from 'expo-image-picker';
-import * as ImageManipulator from 'expo-image-manipulator';
+import { selectLibraryPhoto, prepareJpeg } from '@/lib/photo-preparation';
 import { File } from 'expo-file-system';
 import { z } from 'zod';
 import { Action, Card, Copy, ReadState } from './ui';
@@ -69,17 +69,14 @@ export function OfferPhotoConsent({ id, token, documents, onUploaded }: {
   }
   function upload() {
     void run(async signal => {
-      const selected = await ImagePicker.launchImageLibraryAsync({ mediaTypes:['images'], quality:1, allowsMultipleSelection:false });
+      const selected = await selectLibraryPhoto();
       const asset = selected.assets?.[0];
       if (!asset || signal.aborted) return;
-      const image = await ImageManipulator.manipulateAsync(asset.uri, asset.width > 1600 ? [{resize:{width:1600}}] : [],
-        { compress:.74, format:ImageManipulator.SaveFormat.JPEG });
+      const image = await prepareJpeg(asset.uri, asset.width > 1600 ? [{resize:{width:1600}}] : []);
       try {
         if (signal.aborted) return;
-        const body = new FormData();
-        body.append('intervention_id', id);
-        if (Platform.OS === 'web') body.append('file', await (await fetch(image.uri, { signal })).blob(), 'photo-demande.jpg');
-        else body.append('file', { uri:image.uri, name:'photo-demande.jpg', type:'image/jpeg' } as unknown as Blob);
+        const source = Platform.OS === 'web' ? await (await fetch(image.uri, { signal })).blob() : new File(image.uri);
+        const body = await createJpegUpload(id, source, 'photo-demande.jpg');
         await api('/api/documents', fileSaved, { token, method:'POST', body, signal });
         onUploaded();
       } finally {

@@ -288,43 +288,45 @@ export function QuoteDocumentsPanel(props: QuoteDocumentsPanelProps) {
 
 function LinesTable({ lines, subtotal, taxRate, tax, total, caption }: { lines: QuoteLine[]; subtotal: number; taxRate: number; tax: number; total: number; caption: string }) {
   return (
-    <table className={styles.lines}>
-      <caption className="sr-only">{caption}</caption>
-      <thead>
-        <tr>
-          <th scope="col">Prestation</th>
-          <th scope="col" className={styles.num}>
-            Qté × PU HT
-          </th>
-          <th scope="col">Montant HT</th>
-        </tr>
-      </thead>
-      <tbody>
-        {lines.map((line, index) => (
-          <tr key={index}>
-            <td>{line.label}</td>
-            <td className={styles.num}>
-              {line.quantity} × {formatEuro(line.unit_price_cents)}
-            </td>
-            <td>{formatEuro(line.quantity * line.unit_price_cents)}</td>
+    <div className={styles.linesScroll} role="region" aria-label={caption} tabIndex={0}>
+      <table className={styles.lines}>
+        <caption className="sr-only">{caption}</caption>
+        <thead>
+          <tr>
+            <th scope="col">Prestation</th>
+            <th scope="col" className={styles.num}>
+              Qté × PU HT
+            </th>
+            <th scope="col">Montant HT</th>
           </tr>
-        ))}
-      </tbody>
-      <tfoot>
-        <tr>
-          <td colSpan={2}>Sous-total HT</td>
-          <td>{formatEuro(subtotal)}</td>
-        </tr>
-        <tr>
-          <td colSpan={2}>TVA {formatTaxRate(taxRate)}</td>
-          <td>{formatEuro(tax)}</td>
-        </tr>
-        <tr className={styles.total}>
-          <td colSpan={2}>Total TTC</td>
-          <td>{formatEuro(total)}</td>
-        </tr>
-      </tfoot>
-    </table>
+        </thead>
+        <tbody>
+          {lines.map((line, index) => (
+            <tr key={index}>
+              <td>{line.label}</td>
+              <td className={styles.num}>
+                {line.quantity} × {formatEuro(line.unit_price_cents)}
+              </td>
+              <td>{formatEuro(line.quantity * line.unit_price_cents)}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colSpan={2}>Sous-total HT</td>
+            <td>{formatEuro(subtotal)}</td>
+          </tr>
+          <tr>
+            <td colSpan={2}>TVA {formatTaxRate(taxRate)}</td>
+            <td>{formatEuro(tax)}</td>
+          </tr>
+          <tr className={styles.total}>
+            <td colSpan={2}>Total TTC</td>
+            <td>{formatEuro(total)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
   );
 }
 

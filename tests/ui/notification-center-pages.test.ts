@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // Notification centre MOUNTED in Chromium (real React root, <StrictMode>, fake client with held
 // replies): a « Toutes » continuation held by the network is dropped after switching to « Non lues »
 // (rows, cursor, loading, error), one continuation in flight, reload fence, and a confirmed mark
@@ -11,7 +12,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);

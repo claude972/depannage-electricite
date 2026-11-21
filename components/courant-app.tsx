@@ -582,33 +582,35 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
         // Same-tab return from the signup email with a request prepared before: open its
         // confirmation (never an automatic POST), as the login chain does.
         const resume = mode === "live" && pendingDraft !== null;
-        setNotice(
-          resume
-            ? "Votre adresse est confirmée. Vérifiez votre demande puis confirmez son envoi."
-            : mode === "live"
-              ? "Votre adresse est confirmée. Votre espace est chargé."
-              : "Votre adresse est confirmée. Connectez-vous pour ouvrir votre espace.",
-        );
         if (resume) navigate("new");
         if (mode === "public") {
           setAuthMode("login");
           navigate("auth");
         }
+        // Navigation clears feedback. Set it afterwards, and never certify an email from
+        // a forgeable URL parameter: only the independently loaded session is known here.
+        setNotice(
+          resume
+            ? "Votre session est ouverte. Vérifiez votre demande puis confirmez son envoi."
+            : mode === "live"
+              ? "Votre espace est chargé."
+              : "Connectez-vous pour vérifier votre compte et ouvrir votre espace.",
+        );
       } else {
+        if (mode === "public") navigate("auth");
         setError(
           "Ce lien de confirmation est expiré ou déjà utilisé. Demandez un nouveau lien depuis la connexion.",
         );
-        if (mode === "public") navigate("auth");
       }
       setReturnContext(null);
       return;
     }
     if (mode !== "live") {
+      setAuthMode("login");
+      navigate("auth");
       setError(
         "Connectez-vous pour relire l’état de votre retour Stripe. Aucun statut n’est déduit du lien.",
       );
-      setAuthMode("login");
-      navigate("auth");
       setReturnContext(null);
       return;
     }

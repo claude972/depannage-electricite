@@ -148,7 +148,13 @@ test("lecture seule, démo sans appel, pas d’UUID constant, clé = identité +
   assert.match(model, /crypto\.randomUUID\(\) : null\)/);
   assert.doesNotMatch(model + view, /00000000-0000-4000-8000-000000000000/);
   assert.equal((view.match(/if \(!(?:id|commandId)\) return setNoId\(true\);/g) ?? []).length, 3);
-  assert.match(view, /<SitePanel key=\{`\$\{ctx\.userId\(\) \?\? "-"\}\|\$\{ctx\.generation\(\)\}\|\$\{props\.demo \? "demo" : "live"\}\|\$\{props\.siteId\}`\} \{\.\.\.props\} \/>/);
+  assert.ok(view.includes("Boolean(props.readOnly)"), "archive transition resets the panel state");
   const css = readFileSync("components/features/site-areas/site-areas.module.css", "utf8");
   assert.doesNotMatch(css.replace(/\/\*[\s\S]*?\*\//g, ""), /#[0-9a-f]{3,6}\b|rgb\(/i); // couleurs = --ui-* uniquement
+});
+
+test("archived readOnly preserves common areas without mutation controls", () => {
+ const html = renderToString(createElement(panel.SiteAreasPanel, {siteId: SITE, readOnly: true, initial: ready(TREE)}));
+ assert.match(html, /Hall/); assert.match(html, /data-areas-readonly/);
+ assert.doesNotMatch(html, /data-areas-add|data-areas-form|>Modifier<|>Archiver<|Ajouter dessous/);
 });

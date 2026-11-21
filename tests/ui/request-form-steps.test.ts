@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // RequestForm steps in a real browser (root finding on 6df): after « Continuer » the new step title
 // takes focus and is scrolled into view (mobile 390 px). Skipped — never passed — without local Chromium.
 import test from "node:test";
@@ -9,7 +10,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM =
   process.env.QA_CHROMIUM_PATH ||

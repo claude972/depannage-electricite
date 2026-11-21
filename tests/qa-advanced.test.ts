@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -114,7 +115,7 @@ test('the actual CLI dry-run exits before cloud/browser work and never prints fi
   const app=path.join(dir,'app');await mkdir(app);await exec('git',['init','-q',app]);await exec('git',['-C',app,'-c','user.name=QA','-c','user.email=qa@qa.invalid','commit','--allow-empty','-qm','fixture']);
   const {stdout:head}=await exec('git',['-C',app,'rev-parse','HEAD']);const file=path.join(dir,'credentials.json');const secret='FAKE_PRIVATE_KEY_NO_NETWORK_123456789';
   await writeFile(file,JSON.stringify({supabase:{project_ref:REF,url:`https://${REF}.supabase.co`,publishable_key:'FAKE_PUBLIC_KEY_NO_NETWORK_123456789',service_role_key:secret}}),{mode:0o600});
-  const entry=new URL('../scripts/qa-advanced/run.mjs',import.meta.url).pathname;
+  const entry=localSourcePath(new URL('../scripts/qa-advanced/run.mjs',import.meta.url));
   const {stdout}=await exec(process.execPath,[entry,'--base-url','http://localhost:3017','--sha',head.trim(),'--app-dir',app,'--project',REF,'--credentials',file,'--out',path.join(dir,'evidence'),'--suite','api','--dry-run']);
   const plan=JSON.parse(stdout);assert.equal(plan.network,false);assert.equal(plan.sha_verified,true);assert.ok(!stdout.includes(secret));
 }));

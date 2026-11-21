@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // Review finding: mapView(snapshot, now()) was only recomputed on render, so a shown position could
 // stay visible past its freshness limit if nothing re-rendered. The real panel in a real React root
 // (local Chromium), NO re-render from outside: a position sampled 59.2 s ago must disappear on its
@@ -16,7 +17,7 @@ import type { TrackingSnapshot } from "../../lib/features/tracking/types";
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 
 const snap = (now: number, sampledAgo: number): TrackingSnapshot => ({
   server_time: new Date(now).toISOString(),

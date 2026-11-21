@@ -1,6 +1,8 @@
 import { ActivityIndicator, RefreshControl, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useColorScheme, useWindowDimensions, type ScrollViewInstance, type TextInputProps } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSegments } from 'expo-router';
+import { HeaderHeightContext } from 'expo-router/react-navigation';
+import { useContext } from 'react';
 import type { PropsWithChildren, ReactNode, Ref, ComponentRef } from 'react';
 
 const publicPalette = {
@@ -23,10 +25,12 @@ export function usePalette() {
 }
 export function Screen({ children, top=false, footer, scrollRef, refreshing=false, onRefresh }: PropsWithChildren<{ top?: boolean; footer?: ReactNode; scrollRef?: Ref<ScrollViewInstance>; refreshing?: boolean; onRefresh?: () => void }>) {
   const palette = usePalette();
+  // Navigation headers sit outside this view; root/headerless containers have no context.
+  const headerHeight = useContext(HeaderHeightContext) ?? 0;
   const [section] = useSegments();
   const edges = top ? ['top','left','right'] as const : ['left','right'] as const;
   return <SafeAreaView edges={footer || section === '(espace)' ? edges : [...edges, 'bottom']} style={[styles.flex,{backgroundColor:palette.background}]}>
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}>
       <ScrollView ref={scrollRef} contentInsetAdjustmentBehavior="automatic" refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} /> : undefined} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} contentContainerStyle={styles.screen}>
         {children}
       </ScrollView>

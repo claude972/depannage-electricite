@@ -36,6 +36,7 @@ export function MissionTracking({ id, actor, token, artisan, address }: {
   const read = useResource(path, tracking, token, actor);
   const latestToken = useRef(token); latestToken.current = token;
   const [focused, setFocused] = useState(false);
+  const focus = useRef(false);
   const [active, setActive] = useState(AppState.currentState === 'active');
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState(address), [places, setPlaces] = useState<z.infer<typeof geocodes>['candidates']>([]);
@@ -49,10 +50,12 @@ export function MissionTracking({ id, actor, token, artisan, address }: {
   const routeKey = !artisan && point?.shared && point.position_state === 'fresh' && point.destination
     ? `${point.session_id}/${point.control_version}/${point.destination_version}/${point.last_seq}` : null;
 
-  useFocusEffect(useCallback(() => { setFocused(true); reload(); return () => { foreground.current = false; setFocused(false); }; }, [reload]));
+  useFocusEffect(useCallback(() => { focus.current = true; foreground.current = AppState.currentState === 'active'; setFocused(true); reload(); return () => { focus.current = false; foreground.current = false; setFocused(false); }; }, [reload]));
   useEffect(() => {
     const subscription = AppState.addEventListener('change', state => {
-      if (state !== 'active') foreground.current = false;
+      // Permission dialogs briefly deactivate the app. Restore the guard immediately,
+      // before the permission promise continues and before React effects are flushed.
+      foreground.current = state === 'active' && focus.current;
       setActive(state === 'active');
     });
     return () => subscription.remove();
@@ -89,7 +92,7 @@ export function MissionTracking({ id, actor, token, artisan, address }: {
       const latest = current.current;
       if (!latest || latest.session_id !== owned || !foreground.current || controller.signal.aborted) return;
       try {
-        const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High, mayShowUserSettingsDialog: false });
         const accuracy = location.coords.accuracy;
         if (!foreground.current || controller.signal.aborted || current.current?.session_id !== owned) return;
         if (accuracy != null && accuracy <= 250) {
@@ -151,7 +154,8 @@ export function MissionTracking({ id, actor, token, artisan, address }: {
     run(async () => {
       if (!(await Location.requestForegroundPermissionsAsync()).granted)
         throw new Error('La permission de localisation est nécessaire pour partager le trajet.');
-      if (!foreground.current) return;
+      if (!focus.current || AppState.currentState !== 'active') throw new Error('Revenez sur cet écran pour démarrer le partage.');
+      foreground.current = true;
       const session = randomUUID();
       const started = await command('start', point.control_version, { session_id: session, consent: true, consent_policy: 'tracking-v1' });
       if (!foreground.current) {

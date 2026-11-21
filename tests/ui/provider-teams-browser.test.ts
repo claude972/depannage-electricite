@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // ART-12 provider teams MOUNTED in Chromium (real React root, <StrictMode>, real CSS, fake api
 // fixtures per server role): rights matrix rendered from the server role, invitation acceptance,
 // internal assignment only on the team's listed (already attributed) missions, technician follow-up
@@ -12,7 +13,7 @@ import { pathToFileURL } from "node:url";
 import { build } from "esbuild";
 import { withApp, skip } from "./real-app-harness";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);

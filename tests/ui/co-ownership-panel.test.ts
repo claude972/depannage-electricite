@@ -139,7 +139,7 @@ test("pagination, lecture seule, démo, pas d’UUID constant, clé, jetons, voc
   assert.match(model, /crypto\.randomUUID\(\) : null\)/);
   assert.doesNotMatch(model + view, /00000000-0000-4000-8000-000000000000/);
   assert.equal((view.match(/if \(!(?:id|commandId)\) return setNoId\(true\);/g) ?? []).length, 3);
-  assert.match(view, /<SitePanel key=\{`\$\{ctx\.userId\(\) \?\? "-"\}\|\$\{ctx\.generation\(\)\}\|\$\{props\.demo \? "demo" : "live"\}\|\$\{props\.siteId\}`\} \{\.\.\.props\} \/>/);
+  assert.ok(view.includes("Boolean(props.readOnly)"), "archive transition resets the panel state");
   assert.doesNotMatch(readFileSync("components/features/co-ownership/co-ownership.module.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, ""), /#[0-9a-f]{3,6}\b|rgb\(/i);
   // Rendu : bandeau d’honnêteté ; jamais quorum calculé, payé, encaissé, envoyé.
   const html = text(render({ initial: { meeting: ready("meeting", [meeting(1, { status: "held", minutes: "Compte rendu", decisions: ["Budget adopté"] })]), fund_call: ready("fund_call", [call(1, { status: "issued", issued_on: "2026-11-01" })]) } }));

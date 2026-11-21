@@ -3654,8 +3654,8 @@ function DirectSiteSheet({ c, id }: { c: Ctx; id: string }) {
                   void session.refresh();
                 }}
               />
-              {!archived && <SiteAreasPanel siteId={site.id} context={session.mutationContext} demo={false} />}
-              {!archived && <SiteContactsPanel siteId={site.id} context={session.mutationContext} />}
+              <SiteAreasPanel siteId={site.id} context={session.mutationContext} demo={false} readOnly={archived} />
+              <SiteContactsPanel siteId={site.id} context={session.mutationContext} readOnly={archived} />
             </div>
             {session.mode !== "demo" && (
               <SiteComplianceRecords
@@ -3688,9 +3688,8 @@ function DirectSiteSheet({ c, id }: { c: Ctx; id: string }) {
                 canWrite={state.canWrite && site.archived_at === null}
               />
             )}
-            {/* ENT-09 / ENT-05: the EXISTING energy and co-ownership panels, only for an active site proven in
-                the current organisation (rendered by the loader only then); rights stay each panel's server
-                permissions. Archived / demo / other organisation ⇒ nothing mounted, nothing read. */}
+            {/* Energy remains limited to active sites. Archived syndic records are rendered below
+                in read-only mode after the exact site and organisation access have been verified. */}
             {!archived && session.mode !== "demo" && (
               <SiteEnergyPanel
                 key={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${site.organization_id}|${site.id}`}
@@ -3722,12 +3721,13 @@ function DirectSiteSheet({ c, id }: { c: Ctx; id: string }) {
                 headingId="site-direct-attachments"
               />
             )}
-            {!archived && session.mode !== "demo" && site.type === "syndic" && (
+            {session.mode !== "demo" && site.type === "syndic" && (
               <CoOwnershipPanel
                 key={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${site.organization_id}|${site.id}`}
                 siteId={site.id}
                 context={session.mutationContext}
                 demo={false}
+                readOnly={archived}
               />
             )}
           </div>
@@ -4546,7 +4546,7 @@ export function ReportsView({ c }: { c: Ctx }) {
           <span>{error}</span>
         </div>
       )}
-      <section className={cx("panel", styles.tablePanel)} aria-labelledby="report-table-title" data-report={live ? report.state.phase : "demo"}>
+      <section className={cx("panel", styles.tablePanel)} aria-labelledby="report-table-title" tabIndex={0} data-report={live ? report.state.phase : "demo"}>
         <div className={styles.tableHead}>
           <div>
             <h2 id="report-table-title">Budget et engagements par site</h2>

@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // FASTSPLIT-MESSAGE-HISTORY-001: paginated message history. Pure merge/order/cursor tests, then
 // the real MessageCenter in a real React root in local Chromium with a fake fetch. The browser
 // part is skipped — never passed — when no local Playwright/Chromium is available.
@@ -142,7 +143,7 @@ const CHROMIUM =
   process.env.QA_CHROMIUM_PATH ||
   path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 
 const APP = `
 import { createElement as h, useState } from "react";

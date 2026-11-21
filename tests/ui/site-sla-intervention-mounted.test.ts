@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // ENT-07 — SLA case ↔ intervention link, real SiteOperationsView « Délais » (React root, StrictMode,
 // Chromium 390 and 1280) in live with an injected client and enterprise search api. Editing notes
 // keeps intervention_id; an intervention beyond page 1 is chosen and sent; errors / out-of-scope
@@ -15,7 +16,7 @@ const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_module
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
 const skip = available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)";
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const ENTRY = `
 import { createElement as h, StrictMode } from "react";
 import { createRoot } from "react-dom/client";

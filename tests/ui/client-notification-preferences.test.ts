@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // CLI-09: the client profile mounts the real notification-preferences panel (the same leaf as the
 // notification centre) instead of claiming that no preference is stored. Server-rendered with the
 // real components (esbuild bundle, react-dom/server); no browser, no network.
@@ -7,7 +8,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { build } from "esbuild";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 const ENTRY = `
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";

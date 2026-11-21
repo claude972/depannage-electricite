@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // ROOT/Astra: a quoteId key alone is not enough — A→B→A before B answers, or a late reply of the
 // unmounted A, must never reach the parent; only the latest load of the CURRENT mount applies.
 // Real QuoteApprovalPanel in a real React root (Chromium, StrictMode), deferred fake API.
@@ -13,7 +14,7 @@ import { build } from "esbuild";
 const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
 const CHROMIUM = process.env.QA_CHROMIUM_PATH || path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 
 const ENTRY = `
 import { createElement as h, StrictMode, useState } from "react";

@@ -36,17 +36,18 @@ import {
 } from "./coownership-model";
 import styles from "./co-ownership.module.css";
 
-type PanelProps = { siteId: string; api?: CoApi; context?: CoContext; demo?: boolean; /** Tests only. */ initial?: Partial<Record<CoKind, CoState>>; newId?: () => string | null; tab?: CoKind };
+type PanelProps = { siteId: string; readOnly?: boolean; api?: CoApi; context?: CoContext; demo?: boolean; /** Tests only. */ initial?: Partial<Record<CoKind, CoState>>; newId?: () => string | null; tab?: CoKind };
 /** Per site (the route is site-scoped). Keyed by uid + generation + mode + site. */
 export function CoOwnershipPanel(props: PanelProps) {
   const ctx = props.context ?? DEFAULT_CO_CONTEXT;
-  return <SitePanel key={`${ctx.userId() ?? "-"}|${ctx.generation()}|${props.demo ? "demo" : "live"}|${props.siteId}`} {...props} />;
+  return <SitePanel key={`${ctx.userId() ?? "-"}|${ctx.generation()}|${props.demo ? "demo" : "live"}|${props.siteId}|${Boolean(props.readOnly)}`} {...props} />;
 }
 
-function useKind(kind: CoKind, { siteId, api, context = DEFAULT_CO_CONTEXT, demo = false, initial }: PanelProps) {
-  const [state, setStateRaw] = useState<CoState>(initial?.[kind] ?? CO_INITIAL);
+function useKind(kind: CoKind, { siteId, api, context = DEFAULT_CO_CONTEXT, demo = false, initial, readOnly = false }: PanelProps) {
+  const [state, setStateRaw] = useState<CoState>(() => { const value = initial?.[kind] ?? CO_INITIAL; return readOnly ? { ...value, canWrite: false, pending: null } : value; });
   const ref = useRef(state);
   const set = (next: CoState) => {
+    if (readOnly) next = { ...next, canWrite: false, pending: null };
     ref.current = next;
     setStateRaw(next);
   };
@@ -83,9 +84,9 @@ function SitePanel(props: PanelProps) {
   const [tab, setTab] = useState<CoKind>(props.tab ?? "meeting");
   const cur = tab === "meeting" ? meetings : calls;
   return (
-    <section className={styles.panel} aria-labelledby={`co-${props.siteId}`} data-co-panel={cur.state.phase}>
+    <section className={styles.panel} aria-labelledby={`co-${props.siteId}|${Boolean(props.readOnly)}`} data-co-panel={cur.state.phase}>
       <div className={styles.head}>
-        <h2 id={`co-${props.siteId}`}>Copropriété</h2>
+        <h2 id={`co-${props.siteId}|${Boolean(props.readOnly)}`}>Copropriété</h2>
       </div>
       <p className={styles.note} data-co-banner="">{CO_COPY.banner}</p>
       <div className={styles.actions} role="tablist" aria-label="Dossiers de copropriété">

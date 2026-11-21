@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // ROOT review of 18e44ff: new request (preferred A) → profile (preferred becomes B) → new request,
 // same uid/generation. The real usePreferredAddress must render null until B's fresh reply, never
 // A again; a stale A reply arriving after leaving is dropped. Real hook in a real React root in local
@@ -16,7 +17,7 @@ const CHROMIUM =
   process.env.QA_CHROMIUM_PATH ||
   path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
 const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
 
 const ENTRY = `
 import { createElement as h } from "react";

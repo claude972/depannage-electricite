@@ -1,3 +1,4 @@
+import { fileURLToPath as localSourcePath } from "node:url";
 // Shared test harness for the planning/notification routes: compiles the TypeScript route files
 // with esbuild inside a vm, resolves "@/" and relative imports to the repository, and replaces
 // "@/lib/supabase/server" with fakes. The Supabase client is the real supabase-js over a fetch
@@ -10,7 +11,7 @@ import vm from "node:vm";
 import { transformSync } from "esbuild";
 import { createClient } from "@supabase/supabase-js";
 const require = createRequire(import.meta.url);
-export const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
+export const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "../..");
 export type Row = Record<string, unknown>;
 const SERVER = path.join(ROOT, "lib/supabase/server.ts");
 // CSS modules become their class names; esbuild interop reads __esModule/default.
