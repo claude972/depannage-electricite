@@ -1,9 +1,10 @@
 "use client";
 import { useState } from "react";
 import { equipmentPayload } from "../../../lib/features/site-operations/schemas";
-import { CRITICALITY, EQUIPMENT_CATEGORY, EQUIPMENT_STATUS, date } from "../../../lib/features/site-operations/labels";
+import { CRITICALITY, EQUIPMENT_CATEGORY, EQUIPMENT_STATUS, PLAN_STATUS, date } from "../../../lib/features/site-operations/labels";
 import type { Criticality, Equipment, EquipmentCategory, EquipmentPayload, EquipmentStatus } from "../../../lib/features/site-operations/types";
 import { EmptyState, Field, Notice, ReadOnly, Tag, Truncated, orNull, useSubmit, type PanelContext, type Tone } from "./shared";
+import { AssetInterventions } from "../site-asset-links/asset-interventions";
 import styles from "./site-operations.module.css";
 
 const CRITICALITY_TONE: Record<Criticality, Tone> = { low: "neutral", medium: "blue", high: "amber", critical: "red" };
@@ -16,6 +17,7 @@ const toPayload = (d: Draft): EquipmentPayload => ({ name: d.name.trim(), catego
 export function EquipmentPanel({ context }: { context: PanelContext }) {
   const { report, canWrite } = context;
   const rows = report.snapshot.equipment;
+  const plansOf = (equipmentId: string) => report.snapshot.maintenance_plans.filter((p) => p.equipment_id === equipmentId && p.status !== "archived");
   const [editing, setEditing] = useState<{ id: string | null; version: number | null } | null>(null);
   const [draft, setDraft] = useState<Draft>(empty);
   const form = useSubmit(context);
@@ -134,6 +136,30 @@ export function EquipmentPanel({ context }: { context: PanelContext }) {
                 <div><dt>Installé le</dt><dd>{date(row.installed_on)}</dd></div>
               </dl>
               {row.notes && <p className={styles.notes}>{row.notes}</p>}
+              {/* ENT-07: what is attached to this equipment — its maintenance plans (already in the
+                  site report) and the interventions explicitly linked to it (read on demand). */}
+              {plansOf(row.id).length > 0 && (
+                <div data-equipment-plans={row.id}>
+                  <strong>Maintenance et contrôles planifiés</strong>
+                  <ul>
+                    {plansOf(row.id).map((plan) => (
+                      <li key={plan.id}>
+                        {plan.title} · {PLAN_STATUS[plan.status]} · {plan.next_due_on ? `prochaine échéance le ${date(plan.next_due_on)}` : "sans échéance enregistrée"}
+                        {plan.last_done_on ? ` · dernière réalisation le ${date(plan.last_done_on)}` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {!context.demo && context.interventionSearch && (
+                <AssetInterventions
+                  siteId={report.site_id}
+                  kind="equipment"
+                  assetId={row.id}
+                  context={context.interventionSearch.context}
+                  onOpenDossier={context.onNavigate ? (id) => context.onNavigate!("intervention", id) : undefined}
+                />
+              )}
               {canWrite && (
                 <div className={styles.cardActions}>
                   <button type="button" className="button outline" onClick={() => open(row)} disabled={!!editing}>

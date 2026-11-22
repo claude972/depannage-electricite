@@ -2202,6 +2202,7 @@ export function DossierView({ c, id, initialQuoteId }: { c: Ctx; id: string; ini
               <ReviewForm
                 existing={review}
                 enabled={!demo ? intervention.client_id === session.profileId : true}
+                own={demo || intervention.client_id === session.profileId}
                 busy={session.busy}
                 onSubmit={async (values) => {
                   await session.submitReview(id, values);

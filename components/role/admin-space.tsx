@@ -1,5 +1,6 @@
 "use client";
 import { PLATFORM_COMMISSION_PERCENT, URGENCY_SURCHARGE_PERCENT } from "../../shared/commercial-facts";
+import { invoiceFunctionLabel, refundFunctionLabel } from "../../lib/features/platform-operations/config";
 import { DemoBanner } from "../app/demo-banner";
 import floatingNav from "./floating-navigation.module.css";
 // Platform Super Admin space (reference M43). The operator of the platform, not the owner of a
@@ -398,6 +399,8 @@ export function AdminSpace({ session }: { session: Session }) {
   const [overviewFailed, setOverviewFailed] = useState(false);
   const [reloading, setReloading] = useState(false);
   const [loadedAt, setLoadedAt] = useState<Date | null>(null);
+  /** Bumped by a warranty decision: the « Dossier correctif » block re-reads its cases. */
+  const [warrantyEpoch, setWarrantyEpoch] = useState(0);
   const [staleNote, setStaleNote] = useState("");
   // Name of the artisan opened from the directory when the bounded overview does not hold it.
   const [detailName, setDetailName] = useState("");
@@ -1035,8 +1038,8 @@ export function AdminSpace({ session }: { session: Session }) {
                 {(
                   [
                     ["Réaffectation avant acceptation du devis", yesNo(o.capabilities.dispatch_before_quote_acceptance)],
-                    ["Remboursements", yesNo(o.capabilities.refunds)],
-                    ["Factures", yesNo(o.capabilities.invoices)],
+                    ["Remboursements", demo ? yesNo(o.capabilities.refunds) : refundFunctionLabel(session.platformAccess, o.capabilities.refunds)],
+                    ["Factures", demo ? yesNo(o.capabilities.invoices) : invoiceFunctionLabel(session.platformAccess, o.capabilities.invoices)],
                     [
                       "Demandes d’assistance",
                       o.capabilities.support_tickets
@@ -1201,10 +1204,12 @@ export function AdminSpace({ session }: { session: Session }) {
         content = (
           <>
             <WarrantyPolicyEditor key={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`} context={session.mutationContext} demo={demo} />
-            <WarrantyPanel demo={demo} role="admin" context={session.mutationContext} />
-            {/* ADM-10: corrective dossier of each case (existing dossier only; opens #detail/<id>). */}
+            <WarrantyPanel demo={demo} role="admin" context={session.mutationContext} onChanged={() => setWarrantyEpoch((n) => n + 1)} />
+            {/* ADM-10: corrective dossier of each case (existing dossier only; opens #detail/<id>).
+                Re-read after each decision above and after « Actualiser » (the case status decides
+                which dossiers may be linked): a pending link command survives in the tab store. */}
             <WarrantyCorrectivePanel
-              key={`corrective|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`}
+              key={`corrective|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${warrantyEpoch}|${loadedAt?.getTime() ?? 0}`}
               context={session.mutationContext}
               superAdmin={session.platformAccess?.super_admin === true}
               onOpenDossier={(id) => go("detail", id)}

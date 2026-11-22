@@ -108,9 +108,17 @@ const KNOWN_REFUSALS: Record<string, string> = {
   "Site still has open interventions": "Ce site a encore des interventions en cours. Clôturez-les ou annulez-les avant d’archiver le site.",
   "Fiscal years overlap": "Cet exercice chevauche un exercice existant : les exercices budgétaires ne peuvent pas se chevaucher. Modifiez les dates.",
 };
-export function dbError(error: { code?: string; message?: string } | null) {
+/** `refusals` lets one route name its own business refusals: `messages` maps the exact SQL
+ *  exception text (P0001) and `duplicate` replaces the generic text of a unique violation (23505). */
+export function dbError(
+  error: { code?: string; message?: string } | null,
+  refusals?: { messages?: Record<string, string>; duplicate?: string },
+) {
   if (!error) return;
   const code = error.code;
+  if (code === "P0001" && error.message && refusals?.messages && Object.hasOwn(refusals.messages, error.message))
+    throw new ApiError(409, refusals.messages[error.message]);
+  if (code === "23505" && refusals?.duplicate) throw new ApiError(409, refusals.duplicate);
   if (code === "53300")
     throw new ApiError(
       429,
@@ -120,7 +128,7 @@ export function dbError(error: { code?: string; message?: string } | null) {
     throw new ApiError(403, "Vous n’avez pas accès à cette action.");
   if (code === "P0002") throw new ApiError(404, "Ce dossier est introuvable.");
   // Known business refusals keep their real reason (never « refresh » for a rule that still applies).
-  if (code === "P0001" && error.message && KNOWN_REFUSALS[error.message])
+  if (code === "P0001" && error.message && Object.hasOwn(KNOWN_REFUSALS, error.message))
     throw new ApiError(409, KNOWN_REFUSALS[error.message]);
   if (code === "23505" || code === "P0001")
     throw new ApiError(

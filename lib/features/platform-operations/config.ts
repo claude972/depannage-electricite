@@ -1,4 +1,4 @@
-import type { FinanceConfig } from "./types";
+import type { FinanceConfig, PlatformAccess } from "./types";
 /** True only in a build that ships the private PDF route app/api/platform-operations/finance/invoices/[id]/pdf/route.ts
  * (CODEX-INVOICE-PDF-001). Flip to false if that route is ever removed from the build; /me and the links follow it. */
 export const INVOICE_RENDERING_AVAILABLE = true;
@@ -52,3 +52,25 @@ export function outstandingEstimate(report: { ledger: { commission_estimated_cou
   return valid ? { count: count - s.count, cents: cents - s.cents, superseded: { count: s.count, cents: s.cents } } : { count, cents, superseded: null };
 }
 export const COMMISSION_NOT_CONFIGURED = "Taux de commission non configuré : aucune estimation n’est calculée.";
+
+/** ADM-08 — « Fonctions activées » rows of the admin settings. The admin overview carries fixed
+ *  flags written before the invoice register existed; these rows say the state the Finance space
+ *  really uses (/me): invoices are issued by hand there, and a commission invoice needs the
+ *  platform issuer AND a commission VAT rate. Without the Finance read nothing is asserted. */
+type FunctionAccess = Pick<PlatformAccess, "capabilities" | "config"> | null | undefined;
+const FINANCE_UNVERIFIED = "Non vérifiable avec votre accès (lecture Finance requise)";
+export function invoiceFunctionLabel(access: FunctionAccess, overviewFlag: boolean): string {
+  if (!access) return overviewFlag ? "Oui" : "État non vérifié";
+  if (!access.capabilities.finance) return overviewFlag ? "Oui" : FINANCE_UNVERIFIED;
+  const commission = access.config.invoice_issuer.configured
+    ? "Factures de commission : émetteur plateforme configuré ; elles exigent aussi un taux de TVA sur la commission, à régler dans Finance."
+    : "Factures de commission indisponibles : émetteur plateforme non configuré.";
+  return `Oui — factures de prestation émises manuellement depuis Finance${access.capabilities.invoice_rendering ? " (PDF disponible)" : ""}. ${commission}`;
+}
+export function refundFunctionLabel(access: FunctionAccess, overviewFlag: boolean): string {
+  if (!access) return overviewFlag ? "Oui" : "État non vérifié";
+  if (!access.capabilities.finance) return overviewFlag ? "Oui" : FINANCE_UNVERIFIED;
+  return access.capabilities.refund_execution
+    ? "Oui — demandes, avoirs et exécution depuis Finance."
+    : "Demandes et avoirs traités dans Finance ; l’exécution du remboursement n’est pas activée pour votre accès sur ce service.";
+}

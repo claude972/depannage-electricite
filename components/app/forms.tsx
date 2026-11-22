@@ -48,6 +48,7 @@ import { MessageReadBadge, MessageReadControl } from "../features/message-read/m
 import { useWarrantyHistory } from "../features/warranty-corrective/use-warranty-history";
 import { siteAddressParts } from "./site-address";
 import { RecordedTerms } from "../features/warranty-policy/recorded-terms";
+import { CorrectiveLinkNote } from "../features/warranty-corrective/corrective-link-note";
 import { HISTORY_COPY as WARRANTY_COPY, claimAllowed } from "../features/warranty-corrective/warranty-history";
 import { EnterpriseContractsPanel, type EnterpriseContractsContext, NO_CONTRACTS_CONTEXT } from "../features/enterprise-contracts/enterprise-contracts-panel";
 import {
@@ -1938,23 +1939,26 @@ export function ReviewForm({
   enabled,
   busy,
   onSubmit,
+  own = true,
 }: {
   existing?: Review;
   enabled: boolean;
   busy: boolean;
   onSubmit: (values: { rating: number; body: string }) => Promise<void>;
+  /** False when the reader did not write the review (organisation member reading the requester's). */
+  own?: boolean;
 }) {
   const [rating, setRating] = useState<number | null>(null);
   const [body, setBody] = useState("");
   if (existing)
     return (
       <section className="panel review-panel">
-        <h2>Votre avis</h2>
+        <h2>{own ? "Votre avis" : "Avis du demandeur"}</h2>
         <p className="review-stars" aria-label={`${existing.rating} sur 5`}>
           {"★".repeat(existing.rating)}
           {"☆".repeat(5 - existing.rating)}
         </p>
-        <p>{existing.body || "Merci pour votre évaluation."}</p>
+        <p>{existing.body || (own ? "Merci pour votre évaluation." : "Aucun commentaire n’accompagne cette note.")}</p>
       </section>
     );
   if (!enabled) return null;
@@ -2649,8 +2653,9 @@ export function ProfessionalOperations({
   const [recordStatus, setRecordStatus] = useState("pending");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState("");
-  // Only sites the member may write on are offered in the forms.
-  const writableSites = sites.filter((s) => canWriteSite(s.id));
+  // Only sites the member may write on are offered in the forms; an archived site refuses every
+  // rule or deadline (server 409), so it is not offered (its past rows stay listed below).
+  const writableSites = sites.filter((s) => !s.archived_at && canWriteSite(s.id));
   const selectedSite = (writableSites.some((s) => s.id === site) ? site : "") || writableSites[0]?.id || "";
   const readOnlyNote = (title: string) => (
     <Unavailable
@@ -3241,6 +3246,9 @@ type WarrantyPanelProps = {
   context?: { generation(): number; userId(): string | null };
   /** Requester (client_id) of the dossier: only that account is offered the real claim form. */
   ownerId?: string | null;
+  /** Called after a live write was confirmed (or refused as stale and re-read): lets a sibling
+   *  block reading the same cases (admin « Dossier correctif ») re-read them. */
+  onChanged?: () => void;
   /** Tests only. */
   fetcher?: typeof fetch;
 };
@@ -3252,7 +3260,7 @@ export function WarrantyPanel(props: WarrantyPanelProps) {
   const ctx = props.context ?? WARRANTY_ANON;
   return <WarrantyPanelBody key={`${ctx.userId() ?? "-"}|${ctx.generation()}|${props.interventionId ?? "*"}`} {...props} />;
 }
-function WarrantyPanelBody({ interventionId, demo, role, context, ownerId, fetcher }: WarrantyPanelProps) {
+function WarrantyPanelBody({ interventionId, demo, role, context, ownerId, fetcher, onChanged }: WarrantyPanelProps) {
   // Live: paged GET /api/warranty (intervention_id filter, next_cursor, has_active proof).
   const history = useWarrantyHistory(context ?? WARRANTY_ANON, interventionId ?? null, !demo, fetcher);
   const hs = history.state;
@@ -3327,6 +3335,7 @@ function WarrantyPanelBody({ interventionId, demo, role, context, ownerId, fetch
       } else {
         await api("/api/warranty", values);
         history.reload(); // causal re-read: page 1 + fresh has_active proof
+        onChanged?.();
         setNotice("Votre dossier a été enregistré.");
         if (values.action === "resolve") {
           const id = String(values.case_id);
@@ -3340,6 +3349,7 @@ function WarrantyPanelBody({ interventionId, demo, role, context, ownerId, fetch
         setConflicts((m) => ({ ...m, [String(values.case_id)]: { status: String(values.status), note: String(values.resolution) } }));
         setError(WARRANTY_CONFLICT);
         history.reload();
+        onChanged?.();
       } else setError((e as Error).message);
     } finally {
       setBusy(false);
@@ -3421,6 +3431,11 @@ function WarrantyPanelBody({ interventionId, demo, role, context, ownerId, fetch
                   <strong>Réponse : </strong>
                   {c.resolution}
                 </p>
+              )}
+              {/* Corrective dossier linked by the platform (a link exists only once the case is
+                  examined). The admin screens have their own block for it. */}
+              {!demo && role !== "admin" && c.status !== "submitted" && (
+                <CorrectiveLinkNote caseId={c.id} revision={c.updated_at} context={context ?? WARRANTY_ANON} fetcher={fetcher} />
               )}
               {role === "admin" &&
                 (["submitted", "reviewing"].includes(c.status) || Boolean(conflicts[c.id])) && (

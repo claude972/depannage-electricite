@@ -155,7 +155,9 @@ export function createPayerController({ api, interventionId, store, newId, conte
     set({ ...get(), phase: get().status ? get().phase : "loading" });
     const r = await api().read(interventionId);
     if (my !== seq || !same(who)) return;
-    if (r.status === 401 || r.status === 403) return forbid();
+    // 404 on the READ = the server does not expose this delegation to this member (a read-only
+    // viewer, a dossier outside the member's scope): nothing to retry, the block hides silently.
+    if (r.status === 401 || r.status === 403 || r.status === 404) return forbid();
     const s = r.status === 200 ? parseStatus(r.body, interventionId) : null;
     if (!s) return set({ ...get(), phase: "error", error: COPY.loadFailed });
     set({ ...get(), phase: "ready", status: s, error: get().phase === "error" ? "" : get().error });

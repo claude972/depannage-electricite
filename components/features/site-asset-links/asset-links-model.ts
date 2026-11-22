@@ -109,6 +109,48 @@ export function createAlApi(fetcher: typeof fetch = (...a) => fetch(...a), { tim
     command: (site, body) => timed(fetcher, linksPath(site), { ...base, method: "POST", headers: { accept: "application/json", "Content-Type": "application/json" }, body: JSON.stringify(body) }, timeoutMs),
   };
 }
+// ---- By asset (ENT-07): the dossiers linked to ONE equipment / zone, same route, asset filter ------
+/** GET …/asset-links?kind=&asset_id= — one page (50) of the links of an asset, opaque cursor. */
+export function readAssetLinks(fetcher: typeof fetch, siteId: string, kind: AssetKind, assetId: string, cursor: string | null, { timeoutMs = AL_TIMEOUT_MS } = {}): Promise<AlResult> {
+  return timed(fetcher, `${linksPath(siteId)}?kind=${kind}&asset_id=${encodeURIComponent(assetId)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`, { credentials: "same-origin", cache: "no-store", method: "GET", headers: { accept: "application/json" } }, timeoutMs);
+}
+/** Strict page of ONE asset: every row belongs to the site and to that asset, ids ascending. */
+export function parseAssetLinksPage(body: unknown, siteId: string, kind: AssetKind, assetId: string, firstPage: boolean): LinksPage | null {
+  const r = pageSchema.safeParse(body);
+  if (!r.success) return null;
+  const p = r.data;
+  if (p.site_archived && p.permissions.can_write) return null;
+  if (p.page.has_more !== (p.page.next_cursor !== null) || p.page.complete !== (firstPage && !p.page.has_more)) return null;
+  for (let i = 0; i < p.records.length; i++) {
+    const x = p.records[i];
+    if (lower(x.site_id) !== lower(siteId) || x.kind !== kind || lower(x.asset_id) !== lower(assetId)) return null;
+    if (i > 0 && lower(x.id) <= lower(p.records[i - 1].id)) return null;
+  }
+  return p;
+}
+export type AssetDossier = { interventionId: string; category: string; status: string; createdAt: string; linkedAt: string; active: boolean; detachedAt: string | null };
+/** One line per dossier (its latest link row wins), active links first, then the most recent. */
+export function dossiersOfAsset(records: LinkRow[]): AssetDossier[] {
+  const m = new Map<string, LinkRow>();
+  for (const r of records) {
+    const k = lower(r.intervention_id), seen = m.get(k);
+    if (!seen || Date.parse(r.updated_at) >= Date.parse(seen.updated_at)) m.set(k, r);
+  }
+  return [...m.values()]
+    .map((r) => ({ interventionId: r.intervention_id, category: r.intervention.category, status: r.intervention.status, createdAt: r.intervention.created_at, linkedAt: r.created_at, active: r.active, detachedAt: r.detached_at }))
+    .sort((a, b) => Number(b.active) - Number(a.active) || Date.parse(b.createdAt) - Date.parse(a.createdAt));
+}
+export const ASSET_LINKS_COPY = {
+  summary: "Interventions liées",
+  loading: "Lecture des interventions liées…",
+  failed: "Les interventions liées n’ont pas pu être lues.",
+  forbidden: "Vous n’avez pas accès aux liens de ce site.",
+  session: "Session expirée : reconnectez-vous.",
+  empty: "Aucune intervention n’est rattachée. Le rattachement se fait depuis le dossier d’une intervention du site.",
+  more: "Afficher la suite",
+  detached: "lien retiré",
+} as const;
+
 export const commandKey = (userId: string, siteId: string, interventionId: string) => `site-asset-link:${userId}|${lower(siteId)}|${lower(interventionId)}`;
 export function tabStore(): AlStore {
   const ss = () => (typeof sessionStorage !== "undefined" ? sessionStorage : null);

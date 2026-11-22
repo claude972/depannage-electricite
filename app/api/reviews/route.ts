@@ -23,7 +23,7 @@ export async function POST(request: Request) {
       p_rating: data.rating,
       p_body: data.body,
     });
-    dbError(error);
+    dbError(error, { duplicate: "Vous avez déjà laissé un avis pour cette intervention." });
     return Response.json({ review }, { status: 201 });
   } catch (error) {
     return apiError(error);

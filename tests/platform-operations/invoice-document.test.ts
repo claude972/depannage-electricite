@@ -11,7 +11,7 @@ const row: Invoice = {
 };
 test("document input carries only stored data and the related invoice number", () => {
   const doc = invoiceDocumentInput(row, { number: "F2026-000001" });
-  assert.equal(doc.related_number, "F2026-000001"); assert.equal(doc.quote_reference, "0A1B2C3D"); assert.equal(doc.issuer.vat_number, null); assert.equal(doc.recipient.name, "Client QA"); assert.equal(doc.tax_rate, 20);
+  assert.equal(doc.related_number, "F2026-000001"); assert.equal(doc.quote_reference, "DEV-0A1B2C"); assert.equal(doc.issuer.vat_number, null); assert.equal(doc.recipient.name, "Client QA"); assert.equal(doc.tax_rate, 20);
   assert.equal(invoiceDocumentInput({ ...row, kind: "invoice", related_invoice_id: null }, null).related_number, null);
   assert.ok(!("mentions" in doc));
 });

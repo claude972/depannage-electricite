@@ -1,4 +1,5 @@
 import type { Invoice } from "./types";
+import { quoteReference } from "@/shared/order-reference";
 /** Interface expected from ADV-DOCUMENTS-001 (branch claude/web-documents). No rendering happens in this lot. */
 export type InvoiceDocumentInput = {
   kind: "invoice" | "credit_note"; number: string; issued_at: string; currency: "eur";
@@ -20,6 +21,6 @@ export function invoiceDocumentInput(row: Invoice, related: { number: string } |
     recipient: { name: text(row.recipient.name ?? row.recipient.legal_name), address: text(row.recipient.address), siret: nullable(row.recipient.siret), vat_number: nullable(row.recipient.vat_number), organization: nullable(row.recipient.organization) },
     lines: row.lines.map((line) => ({ label: line.label, quantity: line.quantity, unit_price_cents: line.unit_price_cents })),
     subtotal_cents: row.subtotal_cents, tax_rate: Number(row.tax_rate), tax_cents: row.tax_cents, total_cents: row.total_cents,
-    related_number: related?.number ?? null, reason: row.reason, quote_reference: row.quote_id.slice(0, 8).toUpperCase(), intervention_id: row.intervention_id,
+    related_number: related?.number ?? null, reason: row.reason, quote_reference: quoteReference(row.quote_id), intervention_id: row.intervention_id,
   };
 }

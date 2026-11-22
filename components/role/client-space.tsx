@@ -67,6 +67,8 @@ import { OnsiteSettlement } from "./onsite-settlement";
 import { createOptionsApi } from "./booking-options";
 import { bookingPaymentText, fetchBookingStatus, isDeclaredOnSite, type BookingStatus } from "../app/booking-status";
 import styles from "./client.module.css";
+import { OfferPhotosPanel } from "../features/offer-photos/offer-photos-panel";
+import { offerPhotosOpen, shareablePhotos } from "../features/offer-photos/model";
 import theme from "./client-theme.module.css";
 import { ThemeSurface } from "../app/theme-provider";
 import { PublicContactActions } from "./public-contact-actions";
@@ -1244,6 +1246,15 @@ function DetailView({
         <p className="form-note">
           Le téléchargement sécurisé des pièces se fait depuis la page Documents.
         </p>
+        {/* CLI-02: share / withdraw request photos with the eligible artisans before assignment
+            (same server command as the mobile app; the document itself is never deleted). */}
+        {offerPhotosOpen(i, { id: session.profileId, role: session.role, live: session.mode === "live" }) && (
+          <OfferPhotosPanel
+            interventionId={i.id}
+            photos={shareablePhotos(photos, session.profileId).map((d) => ({ id: d.id, name: d.name }))}
+            context={session.mutationContext}
+          />
+        )}
         {/* SYS-10: photo review (consent, request / withdraw; result only after the artisan's validation). */}
         {reviewPhotos.length > 0 && i.artisan_id && !i.site_id && i.status !== "cancelled" && (
           <PhotoReviewPanel key={`${i.id}|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`} interventionId={i.id} role="client" photos={reviewPhotos.map((d) => ({ id: d.id, name: d.name }))} context={session.mutationContext} demo={session.mode === "demo"} />

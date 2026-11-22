@@ -3,6 +3,14 @@ import { authenticatedClient, apiError, assertOrigin, dbError } from "@/lib/supa
 import { validated } from "@/lib/supabase/validation";
 
 const schema = z.object({ token: z.string().regex(/^[0-9a-f]{64}$/) }).strict();
+// The SQL command never says whether the link was revoked, used or expired (no enumeration):
+// the message stays as vague, but it speaks about the invitation, not about a dossier.
+const INVITATION_REFUSALS = {
+  messages: {
+    "Invitation unavailable": "Ce lien d’invitation n’est plus valable : il a été révoqué, déjà utilisé ou il a expiré. Demandez une nouvelle invitation au propriétaire de l’organisation.",
+    "Already a member": "Vous êtes déjà membre de cette organisation : cette invitation n’est plus nécessaire.",
+  },
+};
 export async function POST(request: Request) {
   try {
     assertOrigin(request);
@@ -10,7 +18,7 @@ export async function POST(request: Request) {
     const data = await validated(request, schema);
     // SQL derives verified recipient identity from auth.users/auth.uid, not this body.
     const result = await db.rpc("accept_organization_invitation", { p_token: data.token });
-    dbError(result.error);
+    dbError(result.error, INVITATION_REFUSALS);
     return Response.json(result.data, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) { return apiError(error); }
 }

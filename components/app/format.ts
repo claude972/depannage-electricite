@@ -1,5 +1,5 @@
 import { CATEGORIES as DOMAIN_CATEGORIES } from "../../lib/domain";
-import { orderReference } from "../../shared/order-reference";
+import { orderReference, quoteReference } from "../../shared/order-reference";
 import type { Category, Role, Status, TravelStage } from "./types";
 
 export const CATEGORIES: {
@@ -109,10 +109,7 @@ export const category = (id: string) => {
   return { ...visual, min: domain.min, max: domain.max };
 };
 export const shortId = orderReference;
-export const quoteRef = (id: string) =>
-  id.startsWith("quote-")
-    ? `DEV-${id.slice(6).toUpperCase()}`
-    : `DEV-${id.replaceAll("-", "").slice(0, 6).toUpperCase()}`;
+export const quoteRef = quoteReference;
 export const initials = (name: string) =>
   name
     .split(" ")

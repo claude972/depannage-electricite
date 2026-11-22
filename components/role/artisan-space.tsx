@@ -105,7 +105,7 @@ import { CustomerInvoicesPanel } from "../features/customer-invoices/customer-in
 import { artisanSettlementView, type ArtisanSettlementView } from "../app/artisan-settlement";
 import { AvailableMissionsPanel } from "../features/available-missions/available-missions-panel";
 import { CoverageNotice } from "../features/coverage/coverage-notice";
-import { artisanNotCoveredNotice } from "../features/coverage/model";
+import { artisanNotCoveredNotice, codesToCheck } from "../features/coverage/model";
 import type { MissionsOrder } from "../features/available-missions/available-missions-model";
 import { MissionRadiusPanel } from "../features/mission-radius/mission-radius-panel";
 import { MissionHistoryPanel, historyLabel, type HistoryCounts, type HistoryItem } from "../features/mission-history/mission-history-panel";
@@ -3206,8 +3206,9 @@ function ApplicationForm({
   const [values, setValues] = useState<AppValues>(() => appValuesFrom(profile));
   const [postal, setPostal] = useState("");
   const [postalError, setPostalError] = useState("");
-  // ART-02: codes added in this form are checked against the published coverage (one public read
-  // each, informative only — the code is kept and nothing is blocked).
+  // ART-02: the codes of the zone are checked against the published coverage (informative only —
+  // the code is kept and nothing is blocked): those added in this form, and the ones already
+  // saved (bounded number of reads, recent answers reused).
   const [addedCodes, setAddedCodes] = useState<string[]>([]);
   const [touched, setTouched] = useState(false);
   const status: ArtisanApplicationStatus = profile?.application_status ?? "draft";
@@ -3438,8 +3439,8 @@ function ApplicationForm({
           </button>
         </div>
         {session.mode !== "demo" &&
-          addedCodes.filter((code) => values.postal_codes.includes(code)).map((code) => (
-            <CoverageNotice key={code} postalCode={code} message={artisanNotCoveredNotice} />
+          codesToCheck(values.postal_codes, addedCodes).map((code) => (
+            <CoverageNotice key={code} postalCode={code} message={artisanNotCoveredNotice} cached />
           ))}
         {values.postal_codes.length ? (
           <ul className={styles.chips} aria-label="Codes postaux couverts" style={{ listStyle: "none", padding: 0 }}>

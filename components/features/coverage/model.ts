@@ -73,6 +73,50 @@ export async function readNotCovered(fetcher: typeof fetch, code: string): Promi
   const r = await timed(fetcher, publicUrl(code), { method: "GET", referrerPolicy: "no-referrer" });
   return r.status === 200 && parsePublic(r.body)?.status === "not_covered";
 }
+// ART-02 (saved codes): the same public read, remembered for this tab so that a reopened form does
+// not ask again for each saved code. Only a verified answer is kept (never an error or a timeout),
+// and for a short time only: the published list can change.
+export const COVERAGE_CACHE_MS = 5 * 60_000;
+export const SAVED_CHECK_CAP = 20;
+const coverageCache = new Map<string, { at: number; notCovered: boolean }>();
+const coverageInFlight = new Map<string, Promise<boolean>>();
+export const clearCoverageCache = () => {
+  coverageCache.clear();
+  coverageInFlight.clear();
+};
+export async function readNotCoveredCached(fetcher: typeof fetch, code: string, now: () => number = Date.now): Promise<boolean> {
+  if (!isPostalCode(code)) return false;
+  const hit = coverageCache.get(code);
+  if (hit && now() - hit.at < COVERAGE_CACHE_MS) return hit.notCovered;
+  const running = coverageInFlight.get(code);
+  if (running) return running;
+  const read = (async () => {
+    const r = await timed(fetcher, publicUrl(code), { method: "GET", referrerPolicy: "no-referrer" });
+    const status = r.status === 200 ? parsePublic(r.body)?.status : undefined;
+    if (!status) return false;
+    coverageCache.set(code, { at: now(), notCovered: status === "not_covered" });
+    return status === "not_covered";
+  })().finally(() => coverageInFlight.delete(code));
+  coverageInFlight.set(code, read);
+  return read;
+}
+/** Codes of a declared zone to check, bounded. Codes just added in the form always come first; the
+ *  saved ones follow, those whose department prefix is the least frequent in the list first (an
+ *  isolated code is the likeliest to be outside the published zone — an ORDER only: the answer is
+ *  always the published list's). At most `cap` saved codes are read. */
+export function codesToCheck(saved: readonly string[], added: readonly string[] = [], cap = SAVED_CHECK_CAP): string[] {
+  const kept = [...new Set(saved.filter(isPostalCode))];
+  const first = [...new Set(added)].filter((code) => kept.includes(code));
+  const count = new Map<string, number>();
+  for (const code of kept) count.set(code.slice(0, 3), (count.get(code.slice(0, 3)) ?? 0) + 1);
+  const rest = kept
+    .filter((code) => !first.includes(code))
+    .map((code, index) => ({ code, index, weight: count.get(code.slice(0, 3)) ?? 0 }))
+    .sort((a, b) => a.weight - b.weight || a.index - b.index)
+    .slice(0, Math.max(0, cap))
+    .map((x) => x.code);
+  return [...first, ...rest];
+}
 export function publicError(status: number, retryAfterS: number | null): string {
   if (status === 422) return PUBLIC_COPY.invalid;
   if ((status === 429 || status === 503) && retryAfterS) return `Service momentanément indisponible : réessayez dans ${retryAfterS} s.`;
