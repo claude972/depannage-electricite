@@ -39,6 +39,7 @@
   "exclude": [
     "node_modules",
     "apps/mobile",
-    "supabase/functions/native-document-upload/index.ts"
+    "supabase/functions/native-document-upload/index.ts",
+    "depannage-*"
   ]
 }
