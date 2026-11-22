@@ -145,3 +145,14 @@ export const csvCell = (value: unknown) => {
 };
 export const csv = (rows: unknown[][]) =>
   "﻿" + rows.map((r) => r.map(csvCell).join(";")).join("\r\n");
+
+/** CLI-04: who last saved the slot, said plainly. The service has NO separate confirmation step for
+ *  a slot (either party overwrites it), so nothing here reads as « confirmé ». null = author not
+ *  known or neither the viewer nor the assigned artisan: nothing is claimed. */
+export function appointmentOrigin(input: { updatedBy?: string | null; viewerId?: string | null; artisanId?: string | null; editable: boolean }): string | null {
+  const { updatedBy, viewerId, artisanId, editable } = input;
+  if (!updatedBy) return null;
+  if (viewerId && updatedBy === viewerId) return editable ? "Créneau enregistré par vous — l’artisan peut encore le modifier." : "Créneau enregistré par vous.";
+  if (artisanId && updatedBy === artisanId) return editable ? "Créneau proposé par l’artisan — modifiez-le s’il ne vous convient pas." : "Créneau proposé par l’artisan.";
+  return null;
+}

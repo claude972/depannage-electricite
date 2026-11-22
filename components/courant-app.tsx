@@ -195,6 +195,8 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
    *  verified automatically once, and only if the signed-in account's pending attempt is that same
    *  reference (another account never posts for an inherited reference). */
   const inheritedReturn = useRef<string | null>(null);
+  /** Return parameters captured at boot: undefined = not read yet, null = none or delivered. */
+  const bootReturn = useRef<ReturnType<typeof parseReturnParams> | undefined>(undefined);
   const [view, setView] = useState<View>("home");
   const [param, setParam] = useState("");
   const [selectedId, setSelectedId] = useState("");
@@ -459,7 +461,10 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
       const token = sessionStorage.getItem(INVITE_KEY);
       if (token && INVITE_TOKEN.test(token)) setPendingInvitation(token);
     } catch {}
-    const back = parseReturnParams(window.location.search);
+    // FIN-03: the return is read ONCE, before the query is stripped. A second run of this effect
+    // (React StrictMode in development) would otherwise parse an empty query and drop the return.
+    if (bootReturn.current === undefined) bootReturn.current = parseReturnParams(window.location.search);
+    const back = bootReturn.current;
     if (back?.kind === "payment" && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(back.interventionId))
       setMobileReturnId(back.interventionId);
     if (back) {
@@ -513,7 +518,11 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
         if (active) {
           setLoading(false);
           setBooting(false);
-          if (back) setReturnContext(back);
+          if (back) {
+            // Delivered once: a later run of this effect never replays a consumed return.
+            bootReturn.current = null;
+            setReturnContext(back);
+          }
         }
       }
     }

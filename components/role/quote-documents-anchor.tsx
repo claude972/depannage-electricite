@@ -6,6 +6,7 @@
 import { useMemo } from "react";
 import { QuoteDocumentsPanel } from "../features/quote-documents";
 import { CONTRACT_MESSAGES } from "../app/api";
+import { useDossierPoll } from "../app/dossier-poll";
 import { FeatureUnavailable, useProbeWhenUnknown } from "./feature-unavailable";
 import type { Session } from "../app/session-types";
 import type { Workspace } from "../app/types";
@@ -48,6 +49,7 @@ export function QuoteDocumentsAnchor({
   authority,
   organizationId,
   siteId,
+  poll = false,
 }: {
   session: Session;
   variant: "artisan" | "client" | "enterprise";
@@ -55,12 +57,17 @@ export function QuoteDocumentsAnchor({
   authority: { canWrite: boolean; reason?: string };
   organizationId?: string;
   siteId?: string;
+  /** SYS-05: also re-read on the dossier polling tick (an open dossier whose other party acts). */
+  poll?: boolean;
 }) {
   const state = session.capabilities.quoteDocuments;
   const targetKey = "quoteId" in target ? `q:${target.quoteId}` : `i:${target.interventionId}`;
   // Memoized: the panel reloads its demo overview only when the shown dossier really changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const demo = useMemo(() => demoQuoteDocuments(session, target), [session.mode, session.role, session.data, targetKey]);
+  // SYS-05: a workspace refresh (realtime event, « Actualiser ») re-reads the panel silently; with
+  // `poll`, so does the dossier polling tick (amendments and terms are not pushed live).
+  const tick = useDossierPoll(poll && session.mode === "live" && state === "available");
   useProbeWhenUnknown(session, "quoteDocuments", "quoteId" in target ? { quoteId: target.quoteId } : { interventionId: target.interventionId });
   if (state === "unavailable")
     return (
@@ -88,6 +95,7 @@ export function QuoteDocumentsAnchor({
       scope={leafScope(session.profileId, session.role, authority, { organizationId, siteId })}
       client={session.features.quoteDocuments}
       demo={demo}
+      refreshKey={`${session.refreshedAt}|${tick}`}
       onNavigate={(view) => {
         if (view === "artisan-profile") session.go("profile");
       }}

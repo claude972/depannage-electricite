@@ -235,7 +235,7 @@ test("real Chromium — T8 strict locator: whole sentence in the panel status + 
   t.after(() => configureBrowser({ timeoutMs: 90000 }));
   // The panel markup really renders the sentence inside a longer status paragraph (source 4c).
   const source = readFileSync(path.resolve(import.meta.dirname, "../components/features/tracking/artisan-tracking-panel.tsx"), "utf8");
-  assert.match(source, /<p className=\{styles\.warn\} role="status">\s*\{status\.kind === "interrupted" \? status\.reason : "Partage interrompu par le rechargement de la page\."\} L’arrêt/);
+  assert.match(source, /<p className=\{styles\.warn\} role="status">\s*\{status\.kind === "interrupted" \? status\.reason : status\.kind === "error" \? "Le partage n’est plus actif sur cette page\." : "Partage interrompu par le rechargement de la page\."\} L’arrêt/);
   const cases = {
     ok: STALE_PANEL,
     twoStatuses: STALE_PANEL.replace("</section>", `<p role="status">${UI.reloadInterrupted}</p></section>`),

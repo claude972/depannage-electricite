@@ -46,6 +46,7 @@ function PanelBody({ state, unavailableMessage, scope, client, demo, geolocation
       onSnapshot: setSnapshot,
       onStatus: setStatus,
       online: () => (typeof navigator === "undefined" ? true : navigator.onLine),
+      reload: () => (demo ? Promise.resolve(demo.snapshot) : client.load()),
     });
     controller.current = ctrl;
     void reload();
@@ -152,7 +153,7 @@ function PanelBody({ state, unavailableMessage, scope, client, demo, geolocation
       ) : stale ? (
         <>
           <p className={styles.warn} role="status">
-            {status.kind === "interrupted" ? status.reason : "Partage interrompu par le rechargement de la page."} L’arrêt
+            {status.kind === "interrupted" ? status.reason : status.kind === "error" ? "Le partage n’est plus actif sur cette page." : "Partage interrompu par le rechargement de la page."} L’arrêt
             côté service est tenté ; s’il n’aboutit pas, la position cesse d’être affichée après 60 s.
           </p>
           <div className={styles.actions}>
@@ -175,7 +176,7 @@ function PanelBody({ state, unavailableMessage, scope, client, demo, geolocation
       {status.kind === "error" && (
         <p className={styles.error} role="alert">
           {status.message}
-          {status.retryable ? " Le partage est arrêté (par exemple après un changement de destination) : relancez-le avec un nouveau consentement." : ""}
+          {status.retryable ? " Relancez le partage avec un nouveau consentement." : ""}
         </p>
       )}
     </section>

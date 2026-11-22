@@ -14,6 +14,7 @@ import {
   ROLE_NAMES,
   STATUS,
   TRAVEL_STAGE,
+  appointmentOrigin,
   category,
   date,
   dateTime,
@@ -970,6 +971,7 @@ function DetailView({
   const reviewPhotos = photos.filter((d) => reviewImage(d.mime_type));
   const stepIndex = currentStepIndex(i.status, i.paid_at);
   const canSchedule = ["assigned", "quoted", "accepted"].includes(i.status);
+  const slotOrigin = appointmentOrigin({ updatedBy: ops?.appointment?.updated_by, viewerId: session.profileId, artisanId: i.artisan_id, editable: canSchedule });
   const travelStage = ops?.travel_stage || i.travel_stage || "planned";
   const opsState = session.capabilities.operations;
 
@@ -1390,6 +1392,8 @@ function DetailView({
                 <strong>
                   {dateTime(ops.appointment.starts_at)} – {dateTime(ops.appointment.ends_at)}
                 </strong>
+                {/* CLI-04: no confirmation step exists server-side; say who set the slot, never « confirmé ». */}
+                {slotOrigin && <span data-appointment-origin="">{slotOrigin}</span>}
                 {ops.appointment.note && <span>{ops.appointment.note}</span>}
                 {ops.appointment.updated_at && (
                   <span className="subtle">

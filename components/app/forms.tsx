@@ -148,8 +148,9 @@ export function RequestForm({
   contactPhone,
   onRecapDraft,
 }: {
-  /** Called with the validated values each time the recap step is shown (public form: the local
-   *  draft is kept so a reload before the account step does not lose the request). Sends nothing. */
+  /** Called with the current values on each step change, the recap included, and when the page is
+   *  left with typed input (public form: the local draft is kept so a reload on any step does not
+   *  lose the request). Sends nothing. */
   onRecapDraft?: (values: RequestValues) => void;
   initialCategory: Category;
   /** False for a generic entry: the internal fallback is not a user selection. */
@@ -255,13 +256,27 @@ export function RequestForm({
   const c = category(values.category);
   const recapDraft = useRef(onRecapDraft);
   recapDraft.current = onRecapDraft;
-  useEffect(() => {
-    if (step !== 3 || !recapDraft.current) return;
+  // The draft is written on EVERY step change (forward or back), not only on the recap, and when
+  // the page is left (reload, tab closed) once something was typed: a reload on step 1 or 2 no
+  // longer loses the input. Never on mount, never for a category the visitor did not choose.
+  const keepDraftNow = useRef<(typedOnly: boolean) => void>(() => undefined);
+  keepDraftNow.current = (typedOnly) => {
+    if (!recapDraft.current || !categoryChosen) return;
+    if (typedOnly && !(values.description || values.address || values.postal_code || values.city)) return;
     const normalizedPhone = contactPhone === undefined ? null : normalizePhone(phone);
     recapDraft.current(normalizedPhone ? { ...values, contact_phone: normalizedPhone } : values);
-    // The recap is reached only through the validated steps; values cannot change while it is shown.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  };
+  const draftStep = useRef(step);
+  useEffect(() => {
+    if (draftStep.current === step) return;
+    draftStep.current = step;
+    keepDraftNow.current(false);
   }, [step]);
+  useEffect(() => {
+    const leaving = () => keepDraftNow.current(true);
+    window.addEventListener("pagehide", leaving);
+    return () => window.removeEventListener("pagehide", leaving);
+  }, []);
   function next(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (photoPending.current) return;
@@ -1728,6 +1743,15 @@ export function AuthForm({
   const [phone, setPhone] = useState(initial?.phone?.trim().slice(0, 30) ?? "");
   const [phoneError, setPhoneError] = useState("");
   const [role, setRole] = useState<Role>(initialRole ?? "client");
+  // SYS-08: arriving here (« Créer mon compte et continuer », a header link) unmounts the control
+  // that had focus, which would fall back to <body>. The form title takes it, unless something
+  // inside the form already has it.
+  const formTitle = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    const el = formTitle.current;
+    if (!el || el.closest("form")?.contains(document.activeElement)) return;
+    el.focus({ preventScroll: true });
+  }, []);
   return (
     <div className="auth-layout">
       <section className="auth-copy">
@@ -1765,7 +1789,7 @@ export function AuthForm({
           void onSubmit({ email, password, full_name: "", role });
         }}
       >
-        <h2>
+        <h2 ref={formTitle} tabIndex={-1}>
           {mode === "login"
             ? "Connexion"
             : mode === "signup"

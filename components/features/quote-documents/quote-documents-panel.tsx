@@ -40,6 +40,10 @@ export interface QuoteDocumentsPanelProps {
   onNavigate?: (view: string, param?: string) => void;
   target: QuoteDocumentsTarget;
   variant: "artisan" | "client" | "enterprise";
+  /** SYS-05: changes when the lead refreshed its workspace or its dossier polling tick fired. The
+   *  overview is then re-read silently (no loader, forms and notices kept); a failed or stale
+   *  re-read keeps what is shown. */
+  refreshKey?: string | number;
 }
 
 const TITLES = {
@@ -76,7 +80,7 @@ function validityTone(validity: string | undefined): string {
 }
 
 export function QuoteDocumentsPanel(props: QuoteDocumentsPanelProps) {
-  const { state, unavailableMessage, scope, client, demo, onNavigate, target, variant } = props;
+  const { state, unavailableMessage, scope, client, demo, onNavigate, target, variant, refreshKey } = props;
   const key = scopeKey(scope, target);
   // Demo seeds are available synchronously (server rendering shows them too); live data is loaded.
   const [panel, dispatch] = useReducer(panelReducer, key, (k) => (demo ? panelReducer(initialPanelState(k), { type: "loaded", overview: demo.overview }) : initialPanelState(k)));
@@ -113,6 +117,29 @@ export function QuoteDocumentsPanel(props: QuoteDocumentsPanelProps) {
     // `target` is compared through `key`; `client` and `demo` are stable per lead render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, state, demo]);
+
+  // SYS-05: silent re-read when the lead's refresh key moves (the other party accepted the quote,
+  // proposed or decided an amendment). Never during a command: it ends with its own fresh read.
+  const pendingRef = useRef(panel.pending);
+  pendingRef.current = panel.pending;
+  const refreshSeen = useRef(refreshKey);
+  useEffect(() => {
+    if (refreshSeen.current === refreshKey) return;
+    refreshSeen.current = refreshKey;
+    if (demo || state !== "available" || pendingRef.current) return;
+    const mountedKey = keyRef.current;
+    let active = true;
+    client
+      .load(target)
+      .then((overview) => {
+        if (active && overview && keyRef.current === mountedKey && !pendingRef.current) dispatch({ type: "loaded", overview });
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey]);
 
   const reload = async () => {
     if (demo) return;

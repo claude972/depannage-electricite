@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  POINT_REFUSED_NOTE,
+  SHARE_ENDED_MESSAGE,
   ShareController,
   arrivalEstimate,
   destinationCommand,
@@ -126,7 +128,7 @@ test("projection Web Mercator réversible ; tuiles visibles seulement, nombre bo
 
 // ---- Partage artisan : géolocalisation et horloge injectées ----------------------------------------
 type Watch = { ok: (p: GeolocationPosition) => void; err: (e: GeolocationPositionError) => void };
-function harness(opts: { command?: (c: TrackingCommand) => Promise<TrackingSnapshot | null>; online?: boolean } = {}) {
+function harness(opts: { command?: (c: TrackingCommand) => Promise<TrackingSnapshot | null>; online?: boolean; reload?: () => Promise<TrackingSnapshot | null> } = {}) {
   let now = NOW;
   const watches = new Map<number, Watch>();
   const cleared: number[] = [];
@@ -155,6 +157,7 @@ function harness(opts: { command?: (c: TrackingCommand) => Promise<TrackingSnaps
     onSnapshot: () => undefined,
     onStatus: (s) => statuses.push(s),
     online: () => opts.online ?? true,
+    ...(opts.reload ? { reload: opts.reload } : {}),
   });
   const pos = (lat: number, accuracy = 10, ageMs = 0) =>
     ({ coords: { latitude: lat, longitude: -61.07, accuracy } as GeolocationCoordinates, timestamp: now - ageMs } as GeolocationPosition);
@@ -331,6 +334,93 @@ test("P3-3 : confirmer/retirer une destination arrête le partage — dit avant 
   await h.ctrl.start(snap({ shared: false, session_id: null }));
   assert.equal(h.calls.filter((c) => c.action === "start").length, 2);
   assert.equal(h.watches.size, 1);
+});
+
+test("CLI-05 : point refusé — 422 ⇒ le partage continue et la position suivante est envoyée ; 409 ⇒ relecture silencieuse, puis poursuite ou motif précis", async () => {
+  const SID = "11111111-1111-4111-8111-111111111111";
+  const refuse = (status: number, message: string) => Object.assign(new Error(message), { status });
+  // 422 : échantillon jugé trop ancien par le service. Aucun arrêt, aucune « interruption » ; nouvel envoi ensuite.
+  let refusals = 1;
+  const old = harness({
+    command: async (c) => {
+      if (c.action === "point" && refusals-- > 0) throw refuse(422, "Invalid input");
+      return snap({ session_id: SID, last_seq: c.action === "point" ? c.payload.seq : 0 });
+    },
+  });
+  await old.ctrl.start(snap());
+  await old.fire(old.pos(14.6));
+  assert.equal(old.watches.size, 1);
+  assert.equal(old.ctrl.watching, true);
+  assert.deepEqual(old.statuses.at(-1), { kind: "sharing", lastSent: null, note: POINT_REFUSED_NOTE });
+  assert.match(POINT_REFUSED_NOTE, /trop ancienne.*nouvelle tentative/);
+  assert.ok(!old.statuses.some((s) => s.kind === "error" || s.kind === "interrupted"));
+  old.tick(5000);
+  await old.fire(old.pos(14.601));
+  const sent = old.calls.filter((c) => c.action === "point") as Extract<TrackingCommand, { action: "point" }>[];
+  assert.deepEqual(sent.map((p) => p.payload.seq), [1, 1], "le numéro refusé est réutilisé");
+  assert.equal((old.statuses.at(-1) as Extract<ShareStatus, { kind: "sharing" }>).note, null);
+  // 409, session terminée (destination confirmée) : relecture, arrêt local, motif précis — jamais le texte brut du service.
+  let reloads = 0;
+  const ended = harness({
+    command: async (c) => {
+      if (c.action === "point") throw refuse(409, "L’état du dossier a changé. Actualisez la page.");
+      return snap({ session_id: SID });
+    },
+    reload: async () => (reloads++, snap({ shared: false, session_id: null, control_version: 9, position_state: "stopped" })),
+  });
+  await ended.ctrl.start(snap());
+  await ended.fire(ended.pos(14.6));
+  assert.equal(reloads, 1);
+  assert.equal(ended.watches.size, 0);
+  assert.deepEqual(ended.statuses.at(-1), { kind: "error", message: SHARE_ENDED_MESSAGE, retryable: true });
+  assert.doesNotMatch(SHARE_ENDED_MESSAGE, /Actualisez|recharge/i);
+  // 409, même session encore partagée sous une version plus récente : version adoptée, envoi suivant sans message.
+  const moved = harness({
+    command: async (c) => {
+      if (c.action === "point" && c.expected_version !== 8) throw refuse(409, "L’état du dossier a changé. Actualisez la page.");
+      return snap({ session_id: SID, control_version: c.action === "point" ? 8 : 3, last_seq: c.action === "point" ? c.payload.seq : 0 });
+    },
+    reload: async () => snap({ shared: true, session_id: SID, control_version: 8, last_seq: 0 }),
+  });
+  await moved.ctrl.start(snap({ control_version: 3 }));
+  await moved.fire(moved.pos(14.6));
+  assert.equal(moved.watches.size, 1);
+  assert.ok(!moved.statuses.some((s) => s.kind === "error"));
+  moved.tick(5000);
+  await moved.fire(moved.pos(14.601));
+  assert.deepEqual((moved.calls.filter((c) => c.action === "point") as Extract<TrackingCommand, { action: "point" }>[]).map((p) => p.expected_version), [3, 8]);
+  assert.equal(moved.statuses.at(-1)?.kind, "sharing");
+  // 409 sans version plus récente (ou relecture en échec) : aucune boucle, arrêt avec le motif précis.
+  const same = harness({ command: async (c) => { if (c.action === "point") throw refuse(409, "x"); return snap({ session_id: SID, control_version: 3 }); }, reload: async () => snap({ shared: true, session_id: SID, control_version: 3 }) });
+  await same.ctrl.start(snap({ control_version: 3 }));
+  await same.fire(same.pos(14.6));
+  assert.equal(same.watches.size, 0);
+  assert.equal((same.statuses.at(-1) as Extract<ShareStatus, { kind: "error" }>).message, SHARE_ENDED_MESSAGE);
+});
+
+test("CLI-05 : start refusé (409, snapshot dépassé) ⇒ une relecture et un seul nouvel envoi du même démarrage", async () => {
+  const versions: number[] = [];
+  const h = harness({
+    command: async (c) => {
+      versions.push(c.expected_version);
+      if (c.action === "start" && c.expected_version !== 7) throw Object.assign(new Error("L’état du dossier a changé. Actualisez la page."), { status: 409 });
+      return snap({ session_id: "11111111-1111-4111-8111-111111111111", control_version: 8 });
+    },
+    reload: async () => snap({ shared: false, session_id: null, control_version: 7 }),
+  });
+  await h.ctrl.start(snap({ shared: false, session_id: null, control_version: 5 }));
+  assert.deepEqual(versions, [5, 7]);
+  assert.equal(h.watches.size, 1);
+  assert.ok(!h.statuses.some((s) => s.kind === "error"));
+  // Une session encore active ailleurs, ou aucune version plus récente : aucun second envoi.
+  for (const fresh of [snap({ shared: true, session_id: "other", control_version: 7 }), snap({ shared: false, session_id: null, control_version: 5 })]) {
+    const calls: string[] = [];
+    const no = harness({ command: async (c) => { calls.push(c.action); throw Object.assign(new Error("changé"), { status: 409 }); }, reload: async () => fresh });
+    await no.ctrl.start(snap({ shared: false, session_id: null, control_version: 5 }));
+    assert.deepEqual(calls, ["start"]);
+    assert.equal(no.watches.size, 0);
+    assert.equal(no.statuses.at(-1)?.kind, "error");
+  }
 });
 
 test("P3-4 : route 409 → relecture ; nouvelle demande au plus une fois par nouvel état, jamais pour le même", () => {

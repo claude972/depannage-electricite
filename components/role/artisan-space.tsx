@@ -1597,7 +1597,7 @@ function WorkDossier({ session, intervention: i }: { session: Session; intervent
           </section>
           <NextAction session={session} intervention={i} ops={ops} pending={pending} />
           <DocumentManager
-            key={`${i.id}|${session.profileId}|${session.mutationContext.generation()}`}
+            key={`documents|${i.id}|${session.profileId}|${session.mutationContext.generation()}`}
             documents={[]}
             interventions={[]}
             interventionId={i.id}
@@ -1609,7 +1609,7 @@ function WorkDossier({ session, intervention: i }: { session: Session; intervent
           />
           {/* SYS-10: photo review of this dossier (validate / reject per server flags). */}
           {!i.site_id && i.status !== "cancelled" && <PhotoReviewPanel
-            key={`${i.id}|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`}
+            key={`photo-review|${i.id}|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`}
             interventionId={i.id}
             role="artisan"
             photos={session.data.documents.filter((d) => d.intervention_id === i.id && reviewImage(d.mime_type)).map((d) => ({ id: d.id, name: d.name }))}
@@ -2076,6 +2076,7 @@ function QuotePanel({
           variant="artisan"
           target={{ interventionId: i.id }}
           authority={{ canWrite: true }}
+          poll
         />
       )}
       {i.status === "quoted" && (

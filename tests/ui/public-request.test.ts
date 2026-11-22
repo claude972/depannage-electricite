@@ -202,7 +202,8 @@ test("auth (SSR réel) : login / signup / reset dans le chrome thémé, classes 
     assert.match(html, /class="ui-v2 /);
     assert.match(html, /data-public-skin="auth"/);
     assert.match(html, /aria-current="page"[^>]*data-home-action="login"[^>]*>Compte/, mode);
-    assert.match(html, new RegExp(`<h2>${titles[mode]}</h2>`));
+    // SYS-08: the form title is focusable (it takes focus when the view opens).
+    assert.match(html, new RegExp(`<h2 tabindex="-1">${titles[mode]}</h2>`));
     for (const cls of guards[mode]) assert.match(html, new RegExp(`class="${cls}`), `${mode}: ${cls}`);
     assert.equal(/type="password"/.test(html), mode !== "reset", mode);
     assert.equal(/<select/.test(html), mode === "signup", mode); // choix d’espace en inscription seulement

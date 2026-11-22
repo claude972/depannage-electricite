@@ -281,7 +281,14 @@ export type ShareDeps = {
   onSnapshot: (s: TrackingSnapshot) => void;
   onStatus: (s: ShareStatus) => void;
   online?: () => boolean;
+  /** CLI-05: fresh snapshot read after a 409 (outdated version); null or a throw = not known. */
+  reload?: () => Promise<TrackingSnapshot | null>;
 };
+/** CLI-05: a point refused with 409 once the session is really over — the specific reason only,
+ *  never the generic « Actualisez la page » of the service. */
+export const SHARE_ENDED_MESSAGE = "Le partage a été arrêté par une modification du dossier (par exemple une destination confirmée par le client).";
+/** A point refused with 422 (sample judged too old or unusable by the service): sharing goes on. */
+export const POINT_REFUSED_NOTE = "Position refusée par le service (trop ancienne) : nouvelle tentative avec une position plus récente.";
 
 /**
  * Machine d’état du partage. `watchPosition` n’est appelé qu’après consentement ET démarrage serveur réussi ;
@@ -333,12 +340,20 @@ export class ShareController {
     this.pendingStart = true;
     this.deps.onStatus({ kind: "starting" });
     let next: TrackingSnapshot | null;
+    const send = (version: number) =>
+      command({ action: "start", expected_version: version, payload: { session_id: sessionId, consent: true, consent_policy: CONSENT_POLICY } });
     try {
-      next = await command({
-        action: "start",
-        expected_version: snapshot.tracking.control_version,
-        payload: { session_id: sessionId, consent: true, consent_policy: CONSENT_POLICY },
-      });
+      try {
+        next = await send(snapshot.tracking.control_version);
+      } catch (error) {
+        // CLI-05: 409 = the shown snapshot was outdated (e.g. a destination confirmed meanwhile). The
+        // consent was just given: re-read and send this same start ONCE with the fresh version.
+        const fresh = failureOf(error).status === 409 && this.deps.reload ? await this.deps.reload().catch(() => null) : null;
+        if (gen !== this.generation || this.disposed) return;
+        if (!fresh || fresh.tracking.shared || !fresh.permissions.can_share || fresh.tracking.control_version === snapshot.tracking.control_version) throw error;
+        this.deps.onSnapshot(fresh);
+        next = await send(fresh.tracking.control_version);
+      }
     } catch (error) {
       if (gen === this.generation) this.pendingStart = false;
       if (gen !== this.generation) return;
@@ -418,9 +433,31 @@ export class ShareController {
         this.deps.onStatus({ kind: "sharing", lastSent: null, note: `Envoi ralenti par le service (${Math.ceil(f.retryAfterS ?? 5)} s).` });
         return;
       }
-      // 409/403/404/… : la session n’est plus valide côté serveur.
+      if (f.status === 422) {
+        // CLI-05: the service refused this sample (too old for it). The session is intact: keep the
+        // watch and send the next, fresher position — never a false « interrompu ».
+        this.deps.onStatus({ kind: "sharing", lastSent: null, note: POINT_REFUSED_NOTE });
+        return;
+      }
+      if (f.status === 409) {
+        // CLI-05: outdated version. Re-read silently: the same session still shared under a newer
+        // version ⇒ adopt it and go on; otherwise the session is over ⇒ the specific reason only.
+        const fresh = this.deps.reload ? await this.deps.reload().catch(() => null) : null;
+        if (gen !== this.generation || this.disposed) return;
+        if (fresh) this.deps.onSnapshot(fresh);
+        const t = fresh?.tracking;
+        if (fresh && t && fresh.permissions.can_share && t.shared && t.session_id === this.sessionId && t.control_version !== this.version) {
+          this.version = t.control_version;
+          this.seq = t.last_seq;
+          return;
+        }
+        this.halt();
+        this.deps.onStatus({ kind: "error", message: SHARE_ENDED_MESSAGE, retryable: true });
+        return;
+      }
+      // 403/404/… : la session n’est plus valide côté serveur.
       this.halt();
-      this.deps.onStatus({ kind: "error", message: f.message, retryable: f.status === 409 });
+      this.deps.onStatus({ kind: "error", message: f.message, retryable: false });
     } finally {
       if (gen === this.generation) this.sending = false;
     }
