@@ -385,7 +385,7 @@ function HelpView({ onNew, onLogin, warrantyTerms }: { onNew: () => void; onLogi
             <IconTile icon="message" size={40} />
             <div>
               <strong>Vous ne trouvez pas votre réponse ?</strong>
-              <span>Une fois connecté, l’assistance répond dans votre espace. Aucun appel, email ni SMS n’est promis.</span>
+              <span>Une fois connecté, l’assistance répond dans votre espace. Vous pouvez aussi demander à être rappelé avec le formulaire en bas de page.</span>
             </div>
           </div>
         </section>

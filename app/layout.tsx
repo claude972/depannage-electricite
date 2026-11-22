@@ -4,6 +4,7 @@ import localFont from "next/font/local";
 import { BRAND_NAME } from "@/lib/brand";
 import "./globals.css";
 import { PwaRegistration } from "@/components/pwa-registration";
+import { SkipLink } from "@/components/app/skip-link";
 import { ThemeProvider } from "@/components/app/theme-provider";
 import { THEME_INIT_SCRIPT } from "@/components/app/theme";
 
@@ -56,9 +57,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body>
-        <a className="skip-link" href="#main">
-          Aller au contenu
-        </a>
+        <SkipLink />
         <PwaRegistration />
         <ThemeProvider>{children}</ThemeProvider>
       </body>

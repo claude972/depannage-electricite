@@ -166,7 +166,7 @@ const FAQ: [string, string][] = [
   ],
   [
     "Que couvre la garantie ?",
-    "Les conditions de garantie de la plateforme figurent dans l’aide publique, section « Garantie », après publication par l’exploitant.",
+    "La garantie est portée par la plateforme : satisfaction, ré-intervention ou remboursement. Les conditions publiées figurent dans l’aide publique, section « Garantie ».",
   ],
   [
     "Puis-je gérer plusieurs établissements ?",
@@ -2267,14 +2267,14 @@ function ProfileSettings({ session }: { session: Session }) {
           <InstallPanel />
           <AccountSessionsPanel key={`sessions:${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`} demo={demo} context={session.mutationContext} />
           <AccountDataPanel
-            key={`${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`}
+            key={`data:${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`}
             demo={demo}
             context={session.mutationContext}
             onOpenTicket={(id) => session.go("support", id)}
             erasureRequests
           />
-          <SavedPaymentMethodsPanel key={`${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`} demo={demo} context={session.mutationContext} />
-          <SubscriptionsPanel key={`${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`} role="client" demo={demo} context={session.mutationContext} />
+          <SavedPaymentMethodsPanel key={`payment:${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`} demo={demo} context={session.mutationContext} />
+          <SubscriptionsPanel key={`subs:${session.mode}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`} role="client" demo={demo} context={session.mutationContext} />
         </div>
         <aside className={styles.aside}>
           <section className={styles.asideCard}>
@@ -2406,7 +2406,7 @@ function HelpView({ session }: { session: Session }) {
           <section className={styles.asideCard}>
             <h3>Contact et informations légales</h3>
             <p>
-              Les coordonnées de l’exploitant seront publiées avant l’ouverture commerciale.
+              L’exploitant, TTBM SARL, est présenté dans les mentions légales. Pour toute question, écrivez à l’assistance depuis cet espace.
               Cette version ne fournit pas de ligne d’urgence.
             </p>
           </section>
