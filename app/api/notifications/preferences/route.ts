@@ -1,7 +1,7 @@
 import { adminClient, authenticatedClient, apiError, ApiError, assertOrigin, dbError } from "@/lib/supabase/server";
 import { validated } from "@/lib/supabase/validation";
 import { preferencesSchema } from "@/lib/features/notifications/schemas";
-import { KIND_LABELS, kindsForRole } from "@/lib/features/notifications/kinds";
+import { kindsForRole, preferenceLabel } from "@/lib/features/notifications/kinds";
 import { CHANNELS_NOTE, detectChannels } from "@/lib/features/notifications/channels";
 import { resendConfiguration } from "@/lib/features/notifications/external-delivery/resend";
 import { webPushConfiguration } from "@/lib/features/notifications/external-delivery/web-push";
@@ -40,7 +40,7 @@ async function view(preferences: unknown, emailVerified: boolean, pushEligible: 
       // Preferences and in-app notifications still work when external readiness is unknown.
     }
   }
-  return { preferences, kinds: kindsForRole(role).map((kind) => ({ kind, label: KIND_LABELS[kind] })), channels, channels_note: CHANNELS_NOTE };
+  return { preferences, kinds: kindsForRole(role).map((kind) => ({ kind, label: preferenceLabel(kind) })), channels, channels_note: CHANNELS_NOTE };
 }
 export async function GET(request: Request) {
   try {

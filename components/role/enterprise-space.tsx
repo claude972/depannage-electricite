@@ -131,6 +131,8 @@ import { SiteAttachmentsPanel } from "../features/site-attachments/site-attachme
 import { CustomerInvoicesPanel } from "../features/customer-invoices/customer-invoices-panel";
 import { PlatformPayAction } from "../app/platform-pay";
 import { OrganizationSlaPanel } from "../features/organization-sla/organization-sla-panel";
+import { RestaurantDashboard, TicketDeadlineLine } from "../features/enterprise-restaurant/restaurant-dashboard";
+import { AccountingExportPanel } from "../features/enterprise-integrations/accounting-export-panel";
 import { CONTRACT_MESSAGES } from "../app/api";
 import { demoReport } from "../../lib/features/site-operations/demo";
 import { leafScope, platformEntries } from "./anchors";
@@ -1967,6 +1969,10 @@ export function DossierView({ c, id, initialQuoteId }: { c: Ctx; id: string; ini
                 </strong>
               </div>
             </div>
+            {/* ENT-06: server-computed target deadline of this ticket (site delay rule or linked delay case). */}
+            {intervention.site_id && !demo && (
+              <TicketDeadlineLine siteId={intervention.site_id} interventionId={intervention.id} context={session.mutationContext} />
+            )}
           </section>
 
           <EnterpriseTimeline steps={timeline} cancelled={intervention.status === "cancelled"} />
@@ -2023,12 +2029,13 @@ export function DossierView({ c, id, initialQuoteId }: { c: Ctx; id: string; ini
             )}
             {/* ENT-13: contract source of the displayed quote (server-stated) and the owner's grid access. */}
             {displayed && <ContractSourceLine key={`source-${displayed.id}`} quoteId={displayed.id} demo={demo} />}
-            <QuoteGridAccessPanel
+            {/* Owner-only read on the server (quote_grid_owner_site): no request for other roles (it would answer 404). */}
+            {(demo || session.membershipRole === "owner") && <QuoteGridAccessPanel
               interventionId={intervention.id}
               context={session.mutationContext}
               demo={demo}
               attachBlockedReason={intervention.artisan_id ? undefined : "Une grille ne peut être autorisée qu’une fois un artisan attribué à ce dossier."}
-            />
+            />}
             {versions.length > 1 && (
               <div className={styles.versions} role="group" aria-label="Versions du devis">
                 {versions.map((q, index) => (
@@ -3069,6 +3076,17 @@ export function SiteSheet({ c, id }: { c: Ctx; id: string }) {
       </div>
 
       <div className={styles.twoCol}>
+        {/* ENT-06: restaurant view — open tickets (critical equipment first), status and target deadline. */}
+        {vertical === "restaurant" && live && (
+          <RestaurantDashboard
+            siteId={site.id}
+            context={session.mutationContext}
+            reference={shortId}
+            categoryLabel={(value) => category(value as Category).label}
+            statusLabel={(value) => STATUS[value as keyof typeof STATUS] ?? value}
+            onOpen={(interventionId) => session.openIntervention(interventionId)}
+          />
+        )}
         {live ? (
           <SiteInterventionsPanel session={session} siteId={site.id} headingId="site-interventions" onForbidden={() => setForbiddenScope(siteScope)} />
         ) : (
@@ -3364,7 +3382,7 @@ export function SiteSheet({ c, id }: { c: Ctx; id: string }) {
           readOnlyReason={c.authority.readOnlyReason || "Lecture seule sur ce site."}
         />
 
-        {vertical === "restaurant" && (
+        {vertical === "restaurant" && !live && (
           <Unavailable
             title="Équipements critiques (cuisine, froid, éclairage)"
             reason="Les équipements, leur criticité et leur état se gèrent dans « Opérations du site » ci-dessus. Aucune télémesure ni alerte automatique n’est raccordée : l’état affiché est celui déclaré."
@@ -4783,7 +4801,7 @@ function InvoicesView({ c }: { c: Ctx }) {
   const payments = byDateDesc(scope.payments);
   return (
     <>
-      <PageTitle title="Facturation" subtitle="Trace financière réelle des dossiers chargés" />
+      <PageTitle title="Facturation" subtitle="Factures, avoirs, règlements et export comptable" />
       {c.organization ? (
         <CustomerInvoicesPanel
           title="Factures et avoirs émis"
@@ -4794,7 +4812,11 @@ function InvoicesView({ c }: { c: Ctx }) {
       ) : (
         <Unavailable title="Factures et avoirs" reason="Choisissez une organisation pour consulter ses factures et avoirs émis." blocker="FIN-05" />
       )}
-      <p className={styles.muted}>Les relances de paiement ne sont pas envoyées par l’application : aucune relance automatique n’est configurée.</p>
+      {c.organization && !c.demo ? (
+        <AccountingExportPanel organizationId={c.organization.id} context={session.mutationContext} />
+      ) : (
+        <p className={styles.muted}>Les relances de paiement ne sont pas envoyées par l’application : aucune relance automatique n’est configurée.</p>
+      )}
       <section className="panel" aria-labelledby="payments-title">
         <h2 id="payments-title">Règlements</h2>
         {payments.length ? (

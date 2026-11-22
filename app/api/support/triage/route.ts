@@ -71,7 +71,7 @@ function pageMatches(page: { rows: { id: string }[]; next_cursor: string | null 
 
 export async function GET(request: Request) {
   try {
-    const { db, user } = await authenticatedClient();
+    const { db, user } = await authenticatedClient(request);
     const params = new URL(request.url).searchParams;
     if (new Set(params.keys()).size !== params.size) throw new ApiError(422, "Filtres de suivi invalides.");
     const parsed = kinds.safeParse(Object.fromEntries(params));
@@ -116,7 +116,7 @@ export async function POST(request: Request) {
   try {
     assertOrigin(request);
     if (new URL(request.url).search) throw new ApiError(422, "Paramètres inattendus.");
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     const command = await validated(request, commandSchema);
     const result = await db.rpc("mutate_support_triage", {
       p_ticket: command.ticket_id, p_command: command.command_id,

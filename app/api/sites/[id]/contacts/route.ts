@@ -24,7 +24,7 @@ function query(request: Request, site: string) {
 }
 export async function GET(request: Request,context: Context) {
  try {
-  const {db}=await authenticatedClient();const id=await siteId(context),cursor=query(request,id);
+  const {db}=await authenticatedClient(request);const id=await siteId(context),cursor=query(request,id);
   const site=await db.from("sites").select("id").eq("id",id).maybeSingle();dbError(site.error);if(!site.data)throw new ApiError(404,"Ce site est introuvable.");
   const rights=await db.rpc("can_manage_site",{p_site_id:id});dbError(rights.error);if(typeof rights.data!=="boolean")throw new ApiError(503,"Les droits du site n’ont pas pu être vérifiés.");
   let selection=db.from("site_contacts").select(COLUMNS,{count:"exact"}).eq("site_id",id).is("archived_at",null).order("id",{ascending:true}).limit(100);
@@ -38,7 +38,7 @@ export async function GET(request: Request,context: Context) {
 }
 export async function POST(request: Request,context: Context) {
  try {
-  assertOrigin(request);const {db}=await authenticatedClient();if(new URL(request.url).searchParams.size)throw new ApiError(422,"Paramètres inattendus.");const id=await siteId(context);
+  assertOrigin(request);const {db}=await authenticatedClient(request);if(new URL(request.url).searchParams.size)throw new ApiError(422,"Paramètres inattendus.");const id=await siteId(context);
   const site=await db.from("sites").select("id").eq("id",id).maybeSingle();dbError(site.error);if(!site.data)throw new ApiError(404,"Ce site est introuvable.");
   const command=await validated(request,contactCommand);
   const result=await db.rpc("write_site_contact",{p_site_id:id,p_id:command.id,p_command_id:command.command_id,p_expected_version:command.expected_version,p_action:command.action,p_values:command.action==="save"?command.values:null});dbError(result.error);

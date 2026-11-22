@@ -26,7 +26,7 @@ function isSnapshot(value: unknown): value is SiteOperationsSnapshot {
 }
 export async function GET(request: Request) {
   try {
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     const params = new URL(request.url).searchParams;
     if (request.url.length > 2048 || [...params.keys()].some((k) => k !== "site_id") || params.getAll("site_id").length !== 1)
       throw new ApiError(422, "Indiquez le site à consulter.");
@@ -43,7 +43,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     assertOrigin(request);
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     if (new URL(request.url).searchParams.size) throw new ApiError(422, "Vérifiez les informations saisies.");
     const command = await validated(request, commandSchema);
     const { fn, args } = toRpc(command);

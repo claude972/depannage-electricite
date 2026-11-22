@@ -15,9 +15,9 @@ const schema = z
     organization_id: uuid.nullish(),
   })
   .strict();
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     const { data, error } = await db
       .from("sites")
       .select("*")
@@ -32,7 +32,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     assertOrigin(request);
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     const data = await validated(request, schema);
     const { data: result, error } = await db.rpc("create_site", {
       p_name: data.name,

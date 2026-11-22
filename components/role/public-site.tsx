@@ -14,7 +14,7 @@ import { InstallPanel } from "../app/install-panel";
 import { CATEGORIES, category, money } from "../app/format";
 import { PublicHome } from "./public-home";
 import { requestPrefill } from "./public-request-prefill";
-import { PublicChrome, type HomeHandlers } from "./public-chrome";
+import { PublicChrome, serviceChromeHandlers, serviceChromeHref, type HomeHandlers, type HomeTargetView } from "./public-chrome";
 import formStyles from "./public-forms.module.css";
 import { ABOUT_VALUES, CONTACT_CHANNELS, FAQ, HELP_PROCESS, JOIN_FACTS, JOIN_REVIEW, JOIN_STEPS, JOIN_TILES, LEGAL_SECTIONS, OPERATOR_FIELDS, PENDING, PRIVACY_CONTROLS, PRIVACY_DATA, PRIVACY_THIRD_PARTIES, numbered, pricingRows } from "./public-lists";
 import styles from "./public.module.css";
@@ -37,20 +37,34 @@ const PUBLIC_VIEWS: View[] = ["home", "new", "auth", "help", "pricing", "join", 
 const OperatorContext = createContext<PublicProfileState | null>(null);
 // "join" reads the published network terms (PUB-07); nothing else is derived from it there.
 const OPERATOR_VIEWS: View[] = ["help", "pricing", "about", "privacy", "legal", "join"];
-type Source = { fields: OperatorField[]; optional?: OperatorField[]; join?: string; /** Owner-validated fact with no profile field. */ fixed?: string };
+type Source = {
+  fields: OperatorField[]; optional?: OperatorField[]; join?: string; /** Owner-validated fact with no profile field. */ fixed?: string;
+  /** Once a profile is PUBLISHED: fields shown instead when `fields` (optional in the profile) are absent. */
+  fallback?: OperatorField[];
+  /** Once a profile is PUBLISHED: sentence added when none of the `optional` fields is published. */
+  optionalAbsent?: string;
+  /** Once a profile is PUBLISHED: the row is not listed (its content, if any, has its own block). */
+  hiddenOncePublished?: boolean;
+  /** Once a profile is PUBLISHED: the row is listed only when its (non-mandatory) value is published. */
+  omittedWhenAbsent?: boolean;
+};
+/** A profile is published: it is the only source, and nothing is « à renseigner » any more — an
+ *  optional rubric the operator left out is either omitted or said to be « non publiée ». */
+const isPublished = (state: PublicProfileState | null | undefined): boolean => state?.phase === "ready" && state.published !== null;
 /** Published value for a field label, or null ⇒ pending. Required parts must all be published. */
 function sourced(state: PublicProfileState | null, source: Source | undefined): string | null {
   if (!source) return null;
-  if (source.fixed) return state?.phase === "ready" && state.published ? null : source.fixed;
-  const parts = source.fields.map((f) => publishedValue(state, f));
+  if (source.fixed) return isPublished(state) ? null : source.fixed;
+  let parts = source.fields.map((f) => publishedValue(state, f));
+  if (parts.some((p) => p === null) && source.fallback && isPublished(state)) parts = source.fallback.map((f) => publishedValue(state, f));
   if (parts.some((p) => p === null)) return null;
   const extra = (source.optional ?? []).map((f) => publishedValue(state, f)).filter((v): v is string => v !== null);
-  return [...(parts as string[]), ...extra].join(source.join ?? ", ");
+  const value = [...(parts as string[]), ...extra].join(source.join ?? ", ");
+  return source.optionalAbsent && !extra.length && isPublished(state) ? `${value} (${source.optionalAbsent})` : value;
 }
 /** Pending notices only while nothing is published (a publication carries every minimum field). */
 function WhenUnpublished({ children }: { children: ReactNode }) {
-  const state = useContext(OperatorContext);
-  return state?.phase === "ready" && state.published ? null : <>{children}</>;
+  return isPublished(useContext(OperatorContext)) ? null : <>{children}</>;
 }
 function PublishedStamp() {
   const stamp = publishedStamp(useContext(OperatorContext));
@@ -155,13 +169,7 @@ export function PublicSite({ session, operatorProfile, supportWhatsAppPhone, sho
       <div className={viewStyles.wrap}>
         {themedAlerts}
         <div className={viewStyles.skin} data-public-skin="info">
-          {operatorProfile === undefined && OPERATOR_VIEWS.includes(view) && fetched.phase === "error" && (
-            // E79: an outage is never presented as « À renseigner par l’exploitant ».
-            <div className="alert error" role="alert" data-operator-profile-error="">
-              <span>Les informations de l’exploitant n’ont pas pu être chargées pour le moment. Les mentions ci-dessous ne reflètent pas leur publication.</span>
-              <button type="button" className="button outline" onClick={fetched.retry}>Réessayer</button>
-            </div>
-          )}
+          {operatorProfile === undefined && OPERATOR_VIEWS.includes(view) && fetched.phase === "error" && <OperatorProfileError onRetry={fetched.retry} />}
           <OperatorContext.Provider value={operator}>
           {view === "help" ? (
             <HelpView onNew={() => newRequest()} onLogin={login} />
@@ -184,6 +192,48 @@ export function PublicSite({ session, operatorProfile, supportWhatsAppPhone, sho
         </div>
       </div>
     </PublicChrome>
+  );
+}
+
+// ---- Real routes (/mentions-legales, /a-propos, /confidentialite and their aliases) -----------
+// PUB-08 / PUB-09: the same views as `/#legal`, `/#about` and `/#privacy`, mounted outside the
+// hash application so that the address itself answers (direct link, reload, no 404). No session:
+// every action leaves for the application (`/#…`) or for another real route.
+export const INFO_ROUTES = { about: "/a-propos", privacy: "/confidentialite", legal: "/mentions-legales" } as const;
+export type PublicInfoView = keyof typeof INFO_ROUTES;
+export const infoRouteHref = (view: HomeTargetView): string => (view in INFO_ROUTES ? INFO_ROUTES[view as PublicInfoView] : serviceChromeHref({ type: "view", view }));
+export function PublicInfoPage({ view, operatorProfile }: { view: PublicInfoView; /** Tests only. */ operatorProfile?: PublicProfileState }) {
+  const fetched = usePublishedOperatorProfile(operatorProfile === undefined, undefined, view);
+  const operator = operatorProfile ?? fetched;
+  const go = (href: string) => window.location.assign(href);
+  const handlers: HomeHandlers = { ...serviceChromeHandlers(go), onNavigate: (target) => go(infoRouteHref(target)) };
+  const home = () => go("/");
+  return (
+    <PublicChrome current={view} handlers={handlers} onHome={home} mainClassName={`${styles.main} ${viewStyles.main}`}>
+      <div className={viewStyles.wrap}>
+        <div className={viewStyles.skin} data-public-skin="info" data-public-info-route={view}>
+          {operatorProfile === undefined && fetched.phase === "error" && <OperatorProfileError onRetry={fetched.retry} />}
+          <OperatorContext.Provider value={operator}>
+            {view === "about" ? (
+              <AboutView onNew={() => handlers.onNew()} onJoin={() => handlers.onNavigate("join")} onLogin={handlers.onLogin} />
+            ) : view === "privacy" ? (
+              <PrivacyView onHome={home} onLogin={handlers.onLogin} />
+            ) : (
+              <LegalView onHome={home} />
+            )}
+          </OperatorContext.Provider>
+        </div>
+      </div>
+    </PublicChrome>
+  );
+}
+/** E79: an outage is never presented as « À renseigner par l’exploitant ». */
+function OperatorProfileError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="alert error" role="alert" data-operator-profile-error="">
+      <span>Les informations de l’exploitant n’ont pas pu être chargées pour le moment. Les mentions ci-dessous ne reflètent pas leur publication.</span>
+      <button type="button" className="button outline" onClick={onRetry}>Réessayer</button>
+    </div>
   );
 }
 
@@ -266,9 +316,16 @@ function AuthView({ session, initialRole }: { session: PublicSession; initialRol
 
 // ---- Help (M46 process + M70 FAQ + M42 column) ---------------------------------------------
 // Contact (PUB-04): only real channels; the others say they are pending. No form pretends to send.
+// « Responsable du traitement » is optional in the profile: once published without it, the publisher
+// itself (raison sociale, forme juridique) is shown — the entity that publishes these pages.
+const CONTROLLER_SOURCE: Source = { fields: ["privacy_controller"], fallback: ["legal_name", "legal_form"] };
 const CONTACT_SOURCES: Record<string, { field: OperatorField; href: (v: string) => string }> = {
   "Adresse e-mail de contact": { field: "public_email", href: (v) => `mailto:${v}` },
   "Téléphone": { field: "public_phone", href: (v) => `tel:${v}` },
+};
+const CONTACT_UNPUBLISHED: Record<string, string> = {
+  "Adresse e-mail de contact": "Aucune adresse e-mail de contact n’est publiée par l’exploitant.",
+  "Téléphone": "Aucun numéro de téléphone n’est publié par l’exploitant. Cette version ne fournit pas de ligne d’urgence.",
 };
 function ContactBlock({ onLogin, headingId }: { onLogin: () => void; headingId: string }) {
   const operator = useContext(OperatorContext);
@@ -277,19 +334,22 @@ function ContactBlock({ onLogin, headingId }: { onLogin: () => void; headingId: 
       <h3 id={headingId} tabIndex={-1} style={{ scrollMarginTop: 88 }}>Contact</h3>
       <dl className={styles.legalFields}>
         {/* The callback channel is described only by its live form (« Être rappelé »), never statically. */}
-        {CONTACT_CHANNELS.map((c) => (
-          <div key={c.label} data-contact-channel={c.state}>
-            <dt>{c.label} :</dt>
-            <dd>
-              {(() => {
-                const src = CONTACT_SOURCES[c.label];
-                const value = src ? publishedValue(operator, src.field) : null;
-                if (src && value) return <a href={src.href(value)} data-operator-value={src.field}>{value}</a>;
-                return c.state === "pending" ? <><strong>{PENDING}</strong> — {c.text}</> : c.text;
-              })()}
-            </dd>
-          </div>
-        ))}
+        {CONTACT_CHANNELS.map((c) => {
+          const src = CONTACT_SOURCES[c.label];
+          const value = src ? publishedValue(operator, src.field) : null;
+          // Published profile without this (optional) channel: said plainly, never « à renseigner ».
+          const unpublished = Boolean(src) && !value && isPublished(operator);
+          return (
+            <div key={c.label} data-contact-channel={value ? "available" : unpublished ? "unpublished" : c.state}>
+              <dt>{c.label} :</dt>
+              <dd>
+                {src && value ? <a href={src.href(value)} data-operator-value={src.field}>{value}</a>
+                  : unpublished ? CONTACT_UNPUBLISHED[c.label]
+                  : c.state === "pending" ? <><strong>{PENDING}</strong> — {c.text}</> : c.text}
+              </dd>
+            </div>
+          );
+        })}
       </dl>
       <button type="button" className="button outline" onClick={onLogin} data-contact-login="">Se connecter pour écrire à l’assistance</button>
       <PublishedStamp />
@@ -298,11 +358,14 @@ function ContactBlock({ onLogin, headingId }: { onLogin: () => void; headingId: 
 }
 /** PUB-10: a published long text as plain-text paragraphs (never HTML); pending wording otherwise. */
 function PrivacyText({ field, title }: { field: "privacy_retention" | "privacy_notice"; title: string }) {
-  const value = publishedValue(useContext(OperatorContext), field);
+  const operator = useContext(OperatorContext);
+  const value = publishedValue(operator, field);
   return (
     <div className={styles.legalFields} data-privacy-text={field} data-published={value ? "" : undefined}>
       <h3>{title}</h3>
-      {value ? paragraphs(value).map((p, i) => <p key={i} style={{ whiteSpace: "pre-line" }}>{p}</p>) : <p>{PENDING}</p>}
+      {value ? paragraphs(value).map((p, i) => <p key={i} style={{ whiteSpace: "pre-line" }}>{p}</p>)
+        // Optional rubric left out of a published profile: stated as such, not as a pending field.
+        : <p>{isPublished(operator) ? "Non précisées dans les informations publiées par l’exploitant." : PENDING}</p>}
     </div>
   );
 }
@@ -347,7 +410,7 @@ function PendingFields({ fields, label, sources = {} }: { fields: string[]; labe
   const operator = useContext(OperatorContext);
   return (
     <dl className={styles.legalFields} aria-label={label} data-pending-fields="">
-      {fields.map((field) => (
+      {fields.filter((field) => !(isPublished(operator) && (sources[field]?.hiddenOncePublished || (sources[field]?.omittedWhenAbsent && sourced(operator, sources[field]) === null)))).map((field) => (
         <div key={field}>
           <dt>{field} :</dt>
           <dd>{sourced(operator, sources[field]) ?? PENDING}</dd>
@@ -613,7 +676,9 @@ function AboutView({ onNew, onJoin, onLogin }: { onNew: () => void; onJoin: () =
           sources={{
             "Nom de l’exploitant et forme juridique": { fields: ["legal_name", "legal_form"] },
             "Personnes responsables": { fields: ["publication_director"] },
-            "Zone d’intervention couverte": { fields: ["service_area"] },
+            // Optional presentation: shown by its own block above when published, never as a pending row.
+            "Équipe": { fields: ["team_text"], hiddenOncePublished: true },
+            "Zone d’intervention couverte": { fields: ["service_area"], omittedWhenAbsent: true },
             "Coordonnées de contact": { fields: ["public_email"], optional: ["public_phone"], join: " · " },
           }}
         />
@@ -641,6 +706,7 @@ function AboutView({ onNew, onJoin, onLogin }: { onNew: () => void; onJoin: () =
 
 // ---- Privacy (V8-C05) -----------------------------------------------------------------------
 function PrivacyView({ onHome, onLogin }: { onHome: () => void; onLogin: () => void }) {
+  const contactPublished = publishedValue(useContext(OperatorContext), "privacy_email") !== null;
   const sections = ["Données enregistrées par l’application", "Services tiers utilisés aujourd’hui", "Mode démonstration", "Traceurs et mesure d’audience", "Vos contrôles", "Vos droits et le contact"];
   return (
     <div className={`${styles.page} ${styles.document}`}>
@@ -684,7 +750,7 @@ function PrivacyView({ onHome, onLogin }: { onHome: () => void; onLogin: () => v
           fields={["Responsable du traitement", "Contact pour l’exercice des droits (accès, rectification, suppression)"]}
           label="Informations de confidentialité"
           sources={{
-            "Responsable du traitement": { fields: ["privacy_controller"] },
+            "Responsable du traitement": CONTROLLER_SOURCE,
             "Contact pour l’exercice des droits (accès, rectification, suppression)": { fields: ["privacy_email"] },
           }}
         />
@@ -694,7 +760,7 @@ function PrivacyView({ onHome, onLogin }: { onHome: () => void; onLogin: () => v
       </section>
       <p className={styles.docFoot}>
         <Icon name="shield" size={20} />
-        <span>L’adresse de contact dédiée sera affichée dès sa publication par l’exploitant ; aucun cookie analytique ou marketing n’est utilisé.</span>
+        <span>{contactPublished ? "Pour toute demande relative à vos données, écrivez à l’adresse de contact indiquée ci-dessus ; aucun cookie analytique ou marketing n’est utilisé." : "L’adresse de contact dédiée sera affichée dès sa publication par l’exploitant ; aucun cookie analytique ou marketing n’est utilisé."}</span>
       </p>
     </div>
   );
@@ -708,7 +774,7 @@ const LEGAL_SOURCES: Record<string, Record<string, Source>> = {
   "Éditeur": {
     "Raison sociale et forme juridique": { fields: ["legal_name", "legal_form"] },
     "Adresse du siège": { fields: ["hq_address"] },
-    "Numéro SIREN et numéro de TVA": { fields: ["siren"], optional: ["vat_number"], join: " · TVA " },
+    "Numéro SIREN et numéro de TVA": { fields: ["siren"], optional: ["vat_number"], join: " · TVA ", optionalAbsent: "aucun numéro de TVA publié par l’exploitant" },
     "Immatriculation": { fields: [], fixed: OPERATOR_REGISTRATION },
     [SIRET_ROW]: { fields: ["siret"] },
     "Directeur ou directrice de la publication": { fields: ["publication_director"] },
@@ -716,7 +782,7 @@ const LEGAL_SOURCES: Record<string, Record<string, Source>> = {
   },
   "Hébergeur": { "Nom de l’hébergeur": { fields: ["host_name"] }, "Adresse": { fields: ["host_address"] }, "Coordonnées de contact": { fields: ["host_contact"] } },
   "Propriété intellectuelle": { "Titulaire des droits sur le nom, le logo et les contenus": { fields: ["rights_holder"] } },
-  "Données personnelles": { "Responsable du traitement": { fields: ["privacy_controller"] }, "Contact pour l’exercice des droits": { fields: ["privacy_email"] } },
+  "Données personnelles": { "Responsable du traitement": CONTROLLER_SOURCE, "Contact pour l’exercice des droits": { fields: ["privacy_email"] } },
 };
 /** Published presentation text and display name, only when published. */
 function OperatorAbout() {
@@ -741,7 +807,7 @@ function LegalView({ onHome }: { onHome: () => void }) {
     <div className={`${styles.page} ${styles.document}`}>
       <Crumb onHome={onHome} current="Mentions légales" />
       <h1 className={styles.title}>Mentions légales</h1>
-      <p className={styles.subtitle}>Identité de l’exploitant de la plateforme. Les rubriques encore signalées « à renseigner » seront complétées par l’exploitant.</p>
+      <p className={styles.subtitle}>Identité de l’exploitant de la plateforme.{adminPublished ? "" : " Les rubriques encore signalées « à renseigner » seront complétées par l’exploitant."}</p>
       {LEGAL_SECTIONS.map((section, index) => (
         <section key={section.title} className={styles.docSection} aria-labelledby={`legal-section-${index}`}>
           <h2 id={`legal-section-${index}`}>{numbered(index, section.title)}</h2>

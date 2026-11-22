@@ -62,6 +62,9 @@ export async function POST(
     });
     if (error?.code === "P0001" && error.message === "report_photos_required")
       throw new ApiError(409, "Enregistrez le compte rendu avec les photos avant et après pour terminer l’intervention.");
+    // CLI-07: an expired quote is refused with its real reason, not a generic « state changed ».
+    if (error?.code === "P0001" && error.message === "Quote validity expired")
+      throw new ApiError(409, "Ce devis ne peut plus être accepté : sa validité est dépassée. L’artisan peut en envoyer une nouvelle version.");
     dbError(error);
     // FIN-04: a cancelled dossier backed by a card hold releases the authorization at the provider.
     // The cancellation is already recorded; the outcome is reported honestly, never assumed.

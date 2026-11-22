@@ -33,7 +33,8 @@ export type OperatorGrant = {
   account_role?: "client" | "manager" | "artisan" | "admin" | null;
   granted_by: string; granted_at: string; revoked_by: string | null; revoked_at: string | null; revoke_note: string;
 };
-export type AuditEntry = { id: number; actor_id: string | null; action: string; target_kind: string; target_id: string; details: Record<string, unknown>; created_at: string };
+/** `source`, `intervention_id` and the actor's name/role are only sent by the unified journal (`journal=` query). */
+export type AuditEntry = { id: number; actor_id: string | null; action: string; target_kind: string; target_id: string; details: Record<string, unknown>; created_at: string; source?: "platform" | "dossier"; intervention_id?: string | null; actor_name?: string | null; actor_role?: string | null };
 export type Setting<T> = { key: string; value: T; version: number; updated_by: string; updated_at: string };
 export type InvoiceIssuer = { legal_name: string; siret: string; address: string; vat_number: string | null; commission_vat_rate: number | null };
 export type CommissionSetting = { bps: number };

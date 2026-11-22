@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import { authenticatedClient, apiError, ApiError, dbError } from "@/lib/supabase/server";
+import { authenticatedClient, adminClient, apiError, ApiError, dbError } from "@/lib/supabase/server";
+import { readArtisanSettlement } from "@/lib/features/payments/artisan-settlement";
 import { uuid } from "@/lib/supabase/validation";
 
 export const dynamic = "force-dynamic";
@@ -134,7 +135,17 @@ export async function GET(request: Request) {
         .order("created_at", { ascending: false }).order("id", { ascending: false }).limit(50);
       dbError(quotes.error);
       const audit = await readAudit(db, id!);
-      return Response.json({ intervention: job.data, quotes: quotes.data ?? [], quotes_limit: 50, quotes_limited: exactCount(quotes.count) > (quotes.data?.length ?? 0), audit }, { headers: privateHeaders });
+      // ADM-03: frozen commission and net share of a card-settled dossier (optional field, read with the
+      // service role only after the administrator check above; absent when nothing is settled by card).
+      let settlement = null;
+      const accepted = (quotes.data ?? []).find(quote => quote.status === "accepted");
+      if (accepted?.artisan_id) {
+        try {
+          const payment = await db.from("payments").select("status,total_cents,method").eq("quote_id", accepted.id).maybeSingle();
+          if (!payment.error && payment.data) settlement = await readArtisanSettlement(adminClient(), accepted.id, accepted.artisan_id, payment.data);
+        } catch { settlement = null; }
+      }
+      return Response.json({ intervention: job.data, quotes: quotes.data ?? [], quotes_limit: 50, quotes_limited: exactCount(quotes.count) > (quotes.data?.length ?? 0), audit, ...(settlement ? { settlement } : {}) }, { headers: privateHeaders });
     }
 
     const rawLimit = params.get("limit") ?? "25";

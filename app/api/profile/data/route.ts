@@ -89,7 +89,7 @@ function failure(error: unknown) {
 
 export async function GET(request: Request) {
   try {
-    const { db, user } = await authenticatedClient();
+    const { db, user } = await authenticatedClient(request);
     const query = new URL(request.url).searchParams;
     for (const key of query.keys()) {
       if ((key !== "section" && key !== "after") || query.getAll(key).length !== 1)
@@ -200,7 +200,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     assertOrigin(request);
-    const { db, user } = await authenticatedClient();
+    const { db, user } = await authenticatedClient(request);
     if (new URL(request.url).searchParams.size)
       throw new ApiError(422, "Paramètres inattendus.");
     const input = await validated(request, erasure);

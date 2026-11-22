@@ -110,6 +110,7 @@ import type { MissionsOrder } from "../features/available-missions/available-mis
 import { MissionRadiusPanel } from "../features/mission-radius/mission-radius-panel";
 import { MissionHistoryPanel, historyLabel, type HistoryCounts, type HistoryItem } from "../features/mission-history/mission-history-panel";
 import type { MissionOffer } from "../features/available-missions/available-missions-model";
+import { OfferPhotoGallery } from "../features/offer-photos/offer-photo-gallery";
 import {
   applicationSteps,
   appointmentSlotState,
@@ -129,7 +130,7 @@ import {
 import { CredentialReviewPanel } from "../features/credential-reviews/credential-review-panel";
 import { DECISION_LABEL, type Decision } from "../features/credential-reviews/credential-reviews-model";
 import { ArtisanQuotes } from "../features/artisan-quotes/artisan-quotes";
-import { useArtisanPerformance, LivePerformanceSummary, LivePerformanceGrid, LiveRatingLine, livePerformanceSubtitle } from "../features/artisan-performance";
+import { useArtisanPerformance, LivePerformanceSummary, LivePerformanceGrid, LiveRatingLine, livePerformanceSubtitle, PeriodPerformancePanel, PunctualityTile } from "../features/artisan-performance";
 import { CredentialReminderPanel } from "../features/operational-reminders/operational-reminder-panel";
 import { useDossierPoll } from "../app/dossier-poll";
 import { AppointmentReminderPanel } from "../features/appointment-reminders/appointment-reminder-panel";
@@ -1237,6 +1238,7 @@ function Missions({ session, declinedIds, onDeclined, availability, available = 
           onOpenAccepted={(id) => session.openIntervention(id)}
           onDecline={(id, reason) => session.operate(id, { action: "decline_offer", reason })}
           onDeclined={onDeclined}
+          offerExtra={demo ? undefined : (id) => <OfferPhotoGallery interventionId={id} context={session.mutationContext} />}
         />
       )}
       {segment === "available" && demo && hidden > 0 && (
@@ -1447,6 +1449,12 @@ function OfferView({
           </div>
         </section>
       </div>
+      {/* CLI-02: photos the client chose to share with the eligible artisans before assignment. */}
+      {session.mode === "live" && (
+        <section className="panel">
+          <OfferPhotoGallery interventionId={i.id} context={session.mutationContext} />
+        </section>
+      )}
       {blocked && (
         <div className="alert warning" role="status">
           <Icon name="shield" />
@@ -2072,6 +2080,15 @@ function QuotePanel({
                 <span>{money(current.total_cents)}</span>
               </div>
             </div>
+            {/* CLI-07: agreed total with accepted amendments (server accepted_total_cents), as the client sees it. */}
+            {current.status === "accepted" && typeof current.accepted_total_cents === "number" && current.accepted_total_cents !== current.total_cents && (
+              <div className={styles.quoteTotals} data-artisan-quote-accepted-total="">
+                <div className={styles.quoteTotal}>
+                  <span>Total TTC, avenants acceptés compris</span>
+                  <span>{money(current.accepted_total_cents)}</span>
+                </div>
+              </div>
+            )}
           </>
         )}
       </section>
@@ -3819,7 +3836,7 @@ function Profile({
       {livePerf.phase === "demo" ? (
         <PerfGrid perf={perf} since={since} />
       ) : (
-        <LivePerformanceGrid perf={livePerf} since={since} />
+        <LivePerformanceGrid perf={livePerf} since={since} punctuality={<PunctualityTile source={session} />} />
       )}
       <div className={styles.profileActions}>
         <button
@@ -3936,10 +3953,12 @@ function PerformanceView({ session }: { session: Session }) {
         }
       />
       {livePerf.phase !== "demo" ? (
-        <LivePerformanceGrid perf={livePerf} since={since} />
+        <LivePerformanceGrid perf={livePerf} since={since} punctuality={<PunctualityTile source={session} />} />
       ) : (
         <PerfGrid perf={perf} since={since} />
       )}
+      {/* ART-10: revenue by period and source, completed interventions and punctuality (server). */}
+      {livePerf.phase !== "demo" && <PeriodPerformancePanel source={session} />}
       {/* Detailed list from the loaded dossiers only: a distinct panel, never the server totals. */}
       <section className="panel" aria-labelledby="perf-paid" data-perf-loaded-payments="">
         <h2 id="perf-paid" style={{ fontSize: 17, marginBottom: 8 }}>

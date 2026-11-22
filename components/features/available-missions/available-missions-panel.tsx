@@ -5,7 +5,7 @@ import { useOnlineReadRetry } from "../../app/use-online-read-retry";
 // total count claimed. An offer opens its anonymized summary (?id=) — never the private dossier
 // route; acceptance goes through the existing locked action (onAccept), then onOpenAccepted opens
 // the private dossier. Logic in ./available-missions-model. Mount keyed by uid|generation|demo.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { category, date, dateTime, money } from "../../app/format";
 import {
   DEFAULT_MISSIONS_CONTEXT,
@@ -45,6 +45,8 @@ export type AvailableMissionsProps = {
   onOrderChange?(order: MissionsOrder): void;
   /** Nearest: a reply ranked with another radius version than the confirmed one (re-read it). */
   onRadiusStale?(): void;
+  /** Extra content of an opened offer summary (e.g. the photos the client chose to share). */
+  offerExtra?(id: string): ReactNode;
   /** Tests only. */
   initial?: MissionsState;
 };
@@ -173,6 +175,7 @@ export function AvailableMissionsPanel(props: AvailableMissionsProps) {
                 <div><dt>Distance</dt><dd>{nearest ? `${bandLabel(bandOf(point.id))} (approximation entre centres de communes)` : "non calculée"}</dd></div>
               </dl>
               <p className={styles.hint}>L’adresse exacte, le contact et la description sont transmis après acceptation.</p>
+              {props.offerExtra?.(point.id)}
               {state.acceptError && <p className={styles.error} role="alert" data-available-accept-error="">{state.acceptError}</p>}
             </>
           )}

@@ -2,6 +2,7 @@ import { taxRateSchema } from "@/lib/tax-rates";
 import {createHash}from 'node:crypto';
 import {z}from 'zod';
 import {authenticatedClient,ApiError,dbError}from '@/lib/supabase/server';
+import {renderedPdfLink}from '@/lib/features/documents/rendered-link';
 import {invoiceDocumentInput}from '@/lib/features/platform-operations/invoice-document';
 import {parseInvoicePdfInput,renderInvoicePdf,invoicePdfFileName}from '@/lib/features/platform-operations/invoice-pdf';
 import type {Invoice}from '@/lib/features/platform-operations/types';
@@ -29,7 +30,7 @@ function parameters(request:Request,user:string){
 }
 function timeKey(s:string){const fraction=(s.match(/\.(\d+)(?:Z|[+-])/ )?.[1]??'').padEnd(6,'0');return BigInt(Date.parse(s))*1000n+BigInt(fraction.slice(3));}
 export async function listInvoices(request:Request){try{
- const{db,user}=await authenticatedClient();const p=parameters(request,user.id);
+ const{db,user}=await authenticatedClient(request);const p=parameters(request,user.id);
  const result=await db.rpc('customer_invoice_page',{p_organization_id:p.filters.organization_id,p_site_id:p.filters.site_id,p_intervention_id:p.filters.intervention_id,p_kind:p.filters.kind,p_basis:p.filters.basis,p_limit:p.limit,p_after_at:p.cursor?.issued_at??null,p_after_id:p.cursor?.id??null});dbError(result.error);
  const page=z.object({captured_at:instant,total:count,remaining:count,invoices:z.array(rowSchema).max(50)}).strict().parse(result.data);
  if(page.remaining>page.total||(!p.cursor&&page.remaining!==page.total)||page.invoices.length!==Math.min(page.remaining,p.limit)||new Set(page.invoices.map(r=>r.id)).size!==page.invoices.length||page.invoices.some((r,index)=>
@@ -50,5 +51,8 @@ async function stored(db:Awaited<ReturnType<typeof authenticatedClient>>['db'],i
  return{...data,document,input};
 }
 async function idFrom(context:Context){const id=z.uuid().safeParse((await context.params).id);if(!id.success)throw new ApiError(404,'Ce document est introuvable.');return id.data.toLowerCase();}
-export async function readInvoice(request:Request,context:Context){try{const{db}=await authenticatedClient();const id=await idFrom(context);if(new URL(request.url).searchParams.size)throw new ApiError(422,'Paramètres de document invalides.');const d=await stored(db,id);return Response.json({invoice:d.invoice,document:d.document,version:version(d.invoice),links:links(id),related_invoice:d.related?summary(d.related):null,credit_notes:d.credit_notes.map(summary),credit_notes_page:{total:d.credit_notes_total,complete:d.credit_notes_total<=50}},{headers:HEADERS});}catch(e){return failed(e);}}
-export async function readInvoicePdf(request:Request,context:Context){try{const{db}=await authenticatedClient();const id=await idFrom(context);const p=new URL(request.url).searchParams;if([...p.keys()].some(k=>k!=='inline'||p.getAll(k).length!==1||p.get(k)!=='1'))throw new ApiError(422,'Paramètres de téléchargement invalides.');const d=await stored(db,id);const bytes=renderInvoicePdf(d.input);return new Response(bytes,{headers:{...HEADERS,'Content-Type':'application/pdf','Content-Length':String(bytes.byteLength),'Content-Disposition':`${p.get('inline')==='1'?'inline':'attachment'}; filename="${invoicePdfFileName(d.invoice)}"`,'X-Document-Version':version(d.invoice).sha256}});}catch(e){return failed(e);}}
+export async function readInvoice(request:Request,context:Context){try{const{db}=await authenticatedClient(request);const id=await idFrom(context);if(new URL(request.url).searchParams.size)throw new ApiError(422,'Paramètres de document invalides.');const d=await stored(db,id);return Response.json({invoice:d.invoice,document:d.document,version:version(d.invoice),links:links(id),related_invoice:d.related?summary(d.related):null,credit_notes:d.credit_notes.map(summary),credit_notes_page:{total:d.credit_notes_total,complete:d.credit_notes_total<=50}},{headers:HEADERS});}catch(e){return failed(e);}}
+export async function readInvoicePdf(request:Request,context:Context){try{const{db,user}=await authenticatedClient(request);const id=await idFrom(context);const p=new URL(request.url).searchParams;if([...p.keys()].some(k=>(k!=='inline'&&k!=='link')||p.getAll(k).length!==1||p.get(k)!=='1')||p.size>1)throw new ApiError(422,'Paramètres de téléchargement invalides.');const d=await stored(db,id);const bytes=renderInvoicePdf(d.input);
+ // `link=1` (application native) : même contrôle d’accès, réponse par lien signé de 60 secondes.
+ if(p.get('link')==='1')return Response.json({url:await renderedPdfLink(user.id,`invoice-${id}`,bytes)},{headers:HEADERS});
+ return new Response(bytes,{headers:{...HEADERS,'Content-Type':'application/pdf','Content-Length':String(bytes.byteLength),'Content-Disposition':`${p.get('inline')==='1'?'inline':'attachment'}; filename="${invoicePdfFileName(d.invoice)}"`,'X-Document-Version':version(d.invoice).sha256}});}catch(e){return failed(e);}}

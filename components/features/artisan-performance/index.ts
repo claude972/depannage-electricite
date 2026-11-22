@@ -7,3 +7,5 @@ export {
   livePerformanceSubtitle,
 } from "./artisan-performance-views";
 export { parseArtisanPerformance, isEmptyReport } from "./model";
+export { PeriodPerformancePanel, PunctualityTile, usePeriodReport } from "./period-panel";
+export type { PeriodSource } from "./period-panel";

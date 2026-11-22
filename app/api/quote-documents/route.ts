@@ -18,7 +18,7 @@ function invalid(): never {
 }
 export async function GET(request: Request) {
   try {
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     const params = new URL(request.url).searchParams;
     for (const key of params.keys()) if ((key !== "intervention_id" && key !== "quote_id") || params.getAll(key).length !== 1) invalid();
     const interventionParam = params.get("intervention_id");
@@ -48,7 +48,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     assertOrigin(request);
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     if (new URL(request.url).searchParams.size) throw new ApiError(422, "Cette action n’accepte pas de paramètre supplémentaire.");
     const data = await validated(request, schema);
     if (data.action === "set_terms") {

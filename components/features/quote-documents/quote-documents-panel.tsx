@@ -463,6 +463,17 @@ function QuoteCard({
         {quote.amendments.map((amendment) => (
           <AmendmentCard key={amendment.id} amendment={amendment} quote={quote} scope={scope} busy={busy} pending={pending} demo={demo} client={client} run={run} deciding={deciding} setDeciding={setDeciding} />
         ))}
+        {/* CLI-07: every party reads the same agreed total — base quote + ACCEPTED amendments only
+            (amounts as returned by the server; proposed, refused and withdrawn ones are excluded). */}
+        {quote.status === "accepted" && quote.amendments.some((a) => a.status === "accepted") && (
+          <p className={styles.row} data-quote-accepted-total="">
+            <span>Total TTC, avenants acceptés compris</span>
+            <strong className={styles.amount}>{formatEuro(quote.total_cents + quote.amendments.filter((a) => a.status === "accepted").reduce((sum, a) => sum + a.total_cents, 0))}</strong>
+            <span className={styles.meta}>
+              Devis {formatEuro(quote.total_cents)} + {quote.amendments.filter((a) => a.status === "accepted").length > 1 ? "avenants acceptés" : "avenant accepté"} {formatEuro(quote.amendments.filter((a) => a.status === "accepted").reduce((sum, a) => sum + a.total_cents, 0))}
+            </span>
+          </p>
+        )}
         {canWrite(scope, quote.permissions.can_propose) && !proposing && (
           <div className={styles.actions}>
             <button type="button" className="button outline" disabled={busy} onClick={() => setProposing(true)}>

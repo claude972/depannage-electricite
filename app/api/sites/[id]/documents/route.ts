@@ -83,7 +83,7 @@ async function siteIdFrom(context: Context) {
 
 export async function GET(request: Request, context: Context) {
   try {
-    const { db, user } = await authenticatedClient();
+    const { db, user } = await authenticatedClient(request);
     const siteId = await siteIdFrom(context);
     const query = new URL(request.url).searchParams;
     const state = stateSchema.safeParse(query.get("state") ?? "current");
@@ -143,7 +143,7 @@ export async function GET(request: Request, context: Context) {
 export async function POST(request: Request, context: Context) {
   try {
     assertOrigin(request);
-    const { db, user } = await authenticatedClient();
+    const { db, user } = await authenticatedClient(request);
     const siteId = await siteIdFrom(context);
     if (new URL(request.url).searchParams.size) throw new ApiError(422, "Paramètres inattendus.");
     await requireWritableSite(db, siteId);
@@ -231,7 +231,7 @@ export async function POST(request: Request, context: Context) {
 export async function PATCH(request: Request, context: Context) {
   try {
     assertOrigin(request);
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     const siteId = await siteIdFrom(context);
     if (new URL(request.url).searchParams.size) throw new ApiError(422, "Paramètres inattendus.");
     const command = await validated(request, archiveCommand);

@@ -26,6 +26,30 @@ export const KIND_LABELS: Record<NotificationKind, string> = {
   member_joined: "Nouveau membre dans l’organisation",
   membership_removed: "Accès à une organisation retiré",
 };
+/** CLI-07 — quote amendments reuse the closest stored kind (the `notifications.kind` list has no
+ *  amendment kind); `payload.subject = "quote_amendment"` and its event give the label shown, so an
+ *  amendment is never presented as « Devis reçu ». Unknown payloads fall back to the kind label. */
+const AMENDMENT_EVENT_LABELS: Record<string, string> = {
+  proposed: "Avenant proposé",
+  withdrawn: "Avenant retiré",
+  accepted: "Avenant accepté",
+  rejected: "Avenant refusé",
+};
+export function notificationLabel(n: { kind: NotificationKind; payload?: Record<string, unknown> | null }): string {
+  const payload = n.payload;
+  if (payload && payload.subject === "quote_amendment" && typeof payload.event === "string" && Object.hasOwn(AMENDMENT_EVENT_LABELS, payload.event)) return AMENDMENT_EVENT_LABELS[payload.event];
+  return KIND_LABELS[n.kind] ?? "Notification";
+}
+/** Label of a kind in the PREFERENCES list: muting a quote kind also mutes the amendment events
+ *  stored under it, so the option says so. */
+const PREFERENCE_OVERRIDES: Partial<Record<NotificationKind, string>> = {
+  quote_received: "Devis reçu, avenant proposé ou retiré",
+  quote_rejected: "Devis ou avenant refusé",
+  quote_accepted: "Devis ou avenant accepté",
+};
+export function preferenceLabel(kind: NotificationKind): string {
+  return PREFERENCE_OVERRIDES[kind] ?? KIND_LABELS[kind];
+}
 export const KIND_ICONS: Record<NotificationKind, string> = {
   mission_assigned: "wrench",
   mission_received: "briefcase",

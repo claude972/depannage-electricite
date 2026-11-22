@@ -8,7 +8,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { Empty, Loader, Tag, Unavailable } from "../../app/ui";
 import { Icon } from "../../app/icons";
 import { NOTIFICATION_COPY, applyMark, reducePage, scopeKey, type ContractState, type LeafScope, type ListState, type NotificationsClient } from "../../../lib/features/notifications/leaf";
-import { KIND_ICONS, KIND_LABELS } from "../../../lib/features/notifications/kinds";
+import { KIND_ICONS, notificationLabel } from "../../../lib/features/notifications/kinds";
 import { CHANNEL_LABELS, type ExternalChannel } from "../../../lib/features/notifications/channels";
 import type { Notification, NotificationKind, NotificationMarkCommand, NotificationPage, PreferencesView } from "../../../lib/features/notifications/types";
 import styles from "./notifications.module.css";
@@ -239,7 +239,7 @@ function NotificationItem({ notification: n, pending, locked, writable, error, o
       <p className={styles.itemBody}>{n.body}</p>
       <div className={styles.itemMeta}>
         <time dateTime={n.created_at}>{when(n.created_at)}</time>
-        <span>{KIND_LABELS[n.kind] ?? "Notification"}</span>
+        <span data-notification-label="">{notificationLabel(n)}</span>
         {onOpen && <button type="button" className="text-button" onClick={onOpen}>Ouvrir le dossier</button>}
         {writable && <button type="button" className="text-button" disabled={pending || locked} onClick={() => onMark(unread ? "mark_read" : "mark_unread")}>{pending ? "Marquage…" : unread ? "Marquer comme lue" : "Marquer comme non lue"}</button>}
       </div>

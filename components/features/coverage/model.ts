@@ -64,6 +64,27 @@ export function publicMessage(code: string, r: PublicCoverage): string {
 /** CLI-03: honest notice on a recap / dossier still searching. Informative: the request is never blocked. */
 export const notCoveredNotice = (code: string) =>
   `Le code postal ${code} ne figure pas dans la zone publiée par l’exploitant : il est possible qu’aucun artisan ne puisse prendre votre demande. Elle reste enregistrée et aucun délai n’est garanti.`;
+// CLI-03 — availability signal: the code may be in the published zone while no approved, available
+// artisan lists it today. GET /api/public/coverage/availability → { availability: available|none }
+// (a yes/no computed on the server; no identity, no count). Only a verified « none » yields a notice.
+export const AVAILABILITY_PATH = "/api/public/coverage/availability";
+export const availabilityUrl = (code: string) => `${AVAILABILITY_PATH}?postal_code=${encodeURIComponent(code)}`;
+const availabilityBody = z.object({ availability: z.enum(["available", "none"]) }).strict();
+export const parseAvailability = (body: unknown): "available" | "none" | null => {
+  const r = availabilityBody.safeParse(body);
+  return r.success ? r.data.availability : null;
+};
+export const noArtisanNotice = (code: string) =>
+  `Aucun artisan disponible dans votre zone pour le moment (code postal ${code}). Votre demande reste enregistrée et sera proposée dès qu’un artisan desservira ce secteur ; aucun délai n’est garanti.`;
+export type CoverageSignal = "not_covered" | "no_artisan" | null;
+/** Recap / dossier still searching: outside the published zone, else no artisan today, else silent.
+ *  Errors, timeouts, « unknown » and out-of-contract bodies never produce a notice. */
+export async function readCoverageSignal(fetcher: typeof fetch, code: string): Promise<CoverageSignal> {
+  if (!isPostalCode(code)) return null;
+  if (await readNotCovered(fetcher, code)) return "not_covered";
+  const r = await timed(fetcher, availabilityUrl(code), { method: "GET", referrerPolicy: "no-referrer" });
+  return r.status === 200 && parseAvailability(r.body) === "none" ? "no_artisan" : null;
+}
 /** ART-02: same verified fact, worded for an artisan declaring an intervention zone (never blocking). */
 export const artisanNotCoveredNotice = (code: string) =>
   `Le code postal ${code} ne figure pas dans la zone publiée par l’exploitant. Vous pouvez le conserver dans votre dossier ; vérifiez qu’il correspond bien à votre zone d’intervention.`;

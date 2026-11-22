@@ -3,10 +3,11 @@ import { taxRateSchema } from "@/lib/tax-rates";
 // SQL command; the decider sends only the exact amendment id displayed (like accept_quote).
 import { z } from "zod";
 import { calculateQuote } from "@/lib/domain";
-import { authenticatedClient, ApiError, assertOrigin, dbError } from "@/lib/supabase/server";
+import { adminClient, authenticatedClient, ApiError, assertOrigin, dbError } from "@/lib/supabase/server";
 import { quoteLine, uuid, validated } from "@/lib/supabase/validation";
 import { checkedObject, failed, privateHeaders } from "@/lib/features/quote-documents/server";
 import { validateValidUntil } from "@/lib/features/quote-documents/validity";
+import { notifyAmendment } from "@/lib/features/quote-documents/amendment-notifications";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 const text = (max: number) => z.string().trim().max(max).regex(/^[^\u0000]*$/);
@@ -28,7 +29,7 @@ const schema = z.discriminatedUnion("action", [
 export async function POST(request: Request) {
   try {
     assertOrigin(request);
-    const { db } = await authenticatedClient();
+    const { db, user } = await authenticatedClient();
     if (new URL(request.url).searchParams.size) throw new ApiError(422, "Cette action n’accepte pas de paramètre supplémentaire.");
     const data = await validated(request, schema);
     let result;
@@ -46,8 +47,13 @@ export async function POST(request: Request) {
     } else {
       result = await db.rpc("decide_quote_amendment", { p_id: data.amendment_id, p_decision: data.action === "accept" ? "accepted" : "rejected", p_note: data.action === "reject" ? data.note : "" });
     }
+    if (result.error?.code === "P0001" && result.error.message === "Amendment validity expired")
+      throw new ApiError(409, "Cet avenant ne peut plus être accepté : sa validité est dépassée. L’artisan peut en proposer un nouveau.");
     dbError(result.error);
     const amendment = checkedObject(result.data, "L’avenant n’a pas été confirmé.");
+    // CLI-07: the other party is told in its notification centre (client: proposal / withdrawal;
+    // artisan: decision). Written only after the SQL command confirmed the change; best effort.
+    await notifyAmendment(adminClient, data.action === "propose" ? "proposed" : data.action === "withdraw" ? "withdrawn" : data.action === "accept" ? "accepted" : "rejected", amendment, user?.id ?? "");
     return Response.json({ action: data.action, amendment }, { status: data.action === "propose" ? 201 : 200, headers: privateHeaders });
   } catch (error) {
     return failed(error);

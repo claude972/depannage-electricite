@@ -1,0 +1,42 @@
+/* ENT-16 accounting export. Tokens only (DESIGN.md). */
+.muted {
+  color: var(--ui-text-muted, #526178);
+  font-size: 13px;
+  margin: 4px 0;
+}
+.counts {
+  font-weight: 600;
+  margin: 12px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.actions button {
+  min-height: 44px;
+}
+.note {
+  color: var(--ui-text-muted, #526178);
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 8px 0 0;
+}
+.sub {
+  font-size: 15px;
+  margin: 16px 0 4px;
+}
+.list {
+  margin: 4px 0;
+  padding-left: 20px;
+  font-size: 13px;
+}
+.error {
+  color: #a32a1e;
+  font-size: 13px;
+}
+.ok {
+  font-size: 13px;
+}

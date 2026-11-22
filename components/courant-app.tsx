@@ -190,6 +190,8 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
     useState<Capabilities>(UNKNOWN_CAPABILITIES);
   const [returnContext, setReturnContext] = useState<ReturnContext | null>(null);
   const [mobileReturnId, setMobileReturnId] = useState<string | null>(null);
+  // FIN-03: signed-out return inside the native application's browser sheet: neutral page, no login form.
+  const [mobileReturnOnly, setMobileReturnOnly] = useState(false);
   const returnRef = useRef<ReturnContext | null>(null);
   returnRef.current = returnContext;
   /** E47: a successful card return seen while signed out, kept across the FIRST sign-in only. It is
@@ -626,7 +628,10 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
       if (dossier) pendingLink.current = dossier;
       setAuthMode("login");
       navigate("auth");
-      setError(
+      // On a phone the payment usually comes from the native application, which holds the session:
+      // a neutral page sends the customer back there. The site login stays one tap away.
+      if (dossier && returnContext.kind === "payment" && showsMobileAppReturn(window.navigator.userAgent, window.innerWidth)) setMobileReturnOnly(true);
+      else setError(
         "Connectez-vous pour relire l’état de votre retour Stripe. Aucun statut n’est déduit du lien.",
       );
       setReturnContext(null);
@@ -3184,6 +3189,13 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
     role === "artisan" ? <ArtisanSpace key={sessionKey} session={session} /> :
     role === "manager" ? <EnterpriseSpace key={sessionKey} session={session} /> :
     role === "admin" ? <AdminSpace key={sessionKey} session={session} /> : <ClientSpace key={sessionKey} session={session} />;
+  if (mobileReturnOnly && mobileReturnId) return <main role="region" aria-label="Retour du paiement" style={{ maxWidth: 480, margin: "0 auto", padding: "48px 20px", display: "grid", gap: 16, textAlign: "center" }}>
+    <h1 style={{ fontSize: "1.4rem", margin: 0 }}>Paiement transmis</h1>
+    <p style={{ margin: 0 }}>Revenez dans l’application : l’état du règlement y est relu auprès du serveur. Cette page ne confirme aucun paiement.</p>
+    <a className="button primary" href={`depannageelectrique://dossier/${mobileReturnId}?retourPaiement=1`}>Revenir à mon dossier dans l’application</a>
+    <p style={{ margin: 0 }}>Si rien ne se passe, fermez cette page avec le bouton en haut de l’écran : votre dossier vous attend dans l’application.</p>
+    <button type="button" className="button" onClick={() => { setMobileReturnOnly(false); setError("Connectez-vous pour relire l’état de votre retour Stripe. Aucun statut n’est déduit du lien."); }}>J’ai payé depuis le site : me connecter</button>
+  </main>;
   return <>
     {mobileReturnId && <div className="notice" role="region" aria-label="Retour du paiement" style={{ padding: "10px 16px", textAlign: "center", overflowWrap: "anywhere", whiteSpace: "normal" }}>
       <a href={`depannageelectrique://dossier/${mobileReturnId}?retourPaiement=1`}>Revenir à mon dossier dans l’application mobile</a>

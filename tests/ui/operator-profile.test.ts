@@ -46,7 +46,9 @@ test("pages publiques : valeurs PUBLIÉES uniquement, avec « publié le … (ve
   assert.doesNotMatch(legal, /Mentions légales à compléter/);
   const about = page("about", published());
   assert.match(text(about), /Zone d’intervention couverte : Zone QA/);
-  assert.match(text(about), /Équipe : À renseigner par l’exploitant/, "a field the contract does not carry stays pending");
+  // WEB17 (PUB-09): the team text is an optional field of the contract; once a profile is published
+  // its row is no longer listed as pending (the text has its own block when published).
+  assert.doesNotMatch(text(about), /Équipe : À renseigner par l’exploitant/);
   assert.match(about, /href="mailto:contact@exploitant-qa\.invalid"/);
   assert.match(about, /href="tel:\+596000000000"/);
   assert.match(text(page("privacy", published())), /Contact pour l’exercice des droits \(accès, rectification, suppression\) : donnees@exploitant-qa\.invalid/);

@@ -20,8 +20,9 @@ export async function POST(request: Request) {
   try {
     const url = new URL(request.url);
     if (url.search || Number(request.headers.get("content-length") ?? 0) > 4096) throw new ApiError(422, "Requête de recherche invalide.");
-    if (request.headers.get("origin") !== url.origin) throw new ApiError(403, "Origine de la requête non autorisée.");
-    const { db, user } = await authenticatedClient();
+    // Native application: no Origin header, the Bearer token is not an ambient credential.
+    if (request.headers.get("origin") !== url.origin && (request.headers.has("origin") || !/^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/i.test(request.headers.get("authorization") ?? ""))) throw new ApiError(403, "Origine de la requête non autorisée.");
+    const { db, user } = await authenticatedClient(request);
     const input = clientInterventionInput.safeParse(await request.json().catch(() => null));
     if (!input.success) throw new ApiError(422, "Vérifiez votre recherche.");
     const { filter, cursor } = input.data, search = input.data.search.toLowerCase();

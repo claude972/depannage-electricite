@@ -1247,12 +1247,13 @@ function DetailView({
           Le téléchargement sécurisé des pièces se fait depuis la page Documents.
         </p>
         {/* CLI-02: share / withdraw request photos with the eligible artisans before assignment
-            (same server command as the mobile app; the document itself is never deleted). */}
+            (same server command as the mobile app), or delete one for good while no artisan is assigned. */}
         {offerPhotosOpen(i, { id: session.profileId, role: session.role, live: session.mode === "live" }) && (
           <OfferPhotosPanel
             interventionId={i.id}
             photos={shareablePhotos(photos, session.profileId).map((d) => ({ id: d.id, name: d.name }))}
             context={session.mutationContext}
+            onDeleted={() => void session.refresh()}
           />
         )}
         {/* SYS-10: photo review (consent, request / withdraw; result only after the artisan's validation). */}

@@ -25,7 +25,7 @@ const headers = { 'Cache-Control': 'private, no-store', 'Referrer-Policy': 'no-r
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    const { db, user } = await authenticatedClient();
+    const { db, user } = await authenticatedClient(request);
     const actor = user.id.toLowerCase();
     const siteResult = uuid.safeParse((await context.params).id);
     const params = new URL(request.url).searchParams;

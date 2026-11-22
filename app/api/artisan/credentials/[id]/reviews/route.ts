@@ -57,7 +57,7 @@ function beforeVersion(request: Request) {
 
 export async function GET(request: Request, context: Context) {
   try {
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     const id = await credentialId(context);
     const before = beforeVersion(request);
     const result = await db.rpc("read_artisan_credential_reviews", { p_credential_id: id, p_before_version: before });
@@ -82,7 +82,7 @@ export async function GET(request: Request, context: Context) {
 export async function POST(request: Request, context: Context) {
   try {
     assertOrigin(request);
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     const id = await credentialId(context);
     if (new URL(request.url).searchParams.size) throw new ApiError(422, "Paramètres inattendus.");
     const data = await validated(request, command);

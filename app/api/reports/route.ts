@@ -69,7 +69,7 @@ function streamCsv(db: Database, scope: Scope, initial: Page) {
 
 export async function GET(request: Request) {
   try {
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     const params = new URL(request.url).searchParams;
     if (request.url.length > 2048 || [...params.keys()].some(key =>
       !["site_id", "organization_id", "format", "after"].includes(key) || params.getAll(key).length !== 1)) {

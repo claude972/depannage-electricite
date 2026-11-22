@@ -1,0 +1,144 @@
+/* ENT-06 restaurant dashboard. Tokens only (DESIGN.md): 1px borders, 8px grid, 44px targets. */
+.panel {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.head h2 {
+  margin: 0;
+}
+.muted {
+  color: var(--ui-text-muted, #526178);
+  font-size: 13px;
+  margin: 4px 0;
+}
+.note {
+  color: var(--ui-text-muted, #526178);
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 8px 0 0;
+}
+.figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  margin: 12px 0 16px;
+}
+.figure {
+  border: 1px solid var(--ui-border, #dce4ee);
+  border-radius: 8px;
+  padding: 8px 12px;
+  min-width: 0;
+}
+.figure strong {
+  display: block;
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+.figure span {
+  font-size: 13px;
+  color: var(--ui-text-muted, #526178);
+}
+.figureAlert {
+  border-color: #c0392b;
+}
+.figureAlert strong {
+  color: #a32a1e;
+}
+.sub {
+  font-size: 15px;
+  margin: 16px 0 4px;
+}
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-top: 1px solid var(--ui-border, #edf0f5);
+}
+.row:first-child {
+  border-top: 0;
+}
+.rowMain {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.rowMain strong {
+  display: block;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.rowMain small,
+.deadline small,
+.line small {
+  display: block;
+  font-size: 12px;
+  color: var(--ui-text-muted, #526178);
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+.ref {
+  font-weight: 500;
+  color: var(--ui-text-muted, #526178);
+  font-variant-numeric: tabular-nums;
+}
+.rowSide {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.rowSide button {
+  min-height: 44px;
+}
+.deadline {
+  margin-top: 6px;
+}
+.due {
+  display: inline !important;
+  font-size: 13px !important;
+  font-variant-numeric: tabular-nums;
+}
+.partial {
+  margin: 8px 0;
+  padding-left: 20px;
+  font-size: 13px;
+}
+.line {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--ui-border, #dce4ee);
+  border-radius: 8px;
+}
+.lineLabel {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ui-text-muted, #526178);
+  margin-bottom: 4px;
+}
+.linkButton {
+  background: none;
+  border: 0;
+  padding: 0;
+  min-height: 44px;
+  font-size: 13px;
+  text-decoration: underline;
+  color: inherit;
+  cursor: pointer;
+}

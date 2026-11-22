@@ -137,3 +137,64 @@ export async function POST(request: Request) {
     return response;
   }
 }
+
+// CLI-02 — true deletion of a REQUEST photo by the client who uploaded it, only while the request
+// is still open (« requested », no artisan). Every rule is checked on the server:
+//   1. the document is an image owned by the caller and attached to a dossier (else 404, no leak);
+//   2. `set_mission_offer_photo(…, false)` runs under the CALLER: it re-checks in SQL, with the
+//      dossier row locked, that the caller is the requesting client, that the dossier is still
+//      « requested » without artisan and that the image is theirs — and withdraws the photo from
+//      the offer first, so no eligible artisan can still read it;
+//   3. the row is deleted (the offer consent and photo review rows cascade; a photo referenced by a
+//      message or a report is refused by its foreign key ⇒ 409), then the private file is removed.
+// Once an artisan is assigned the photo belongs to the dossier evidence and cannot be deleted.
+const REQUEST_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const notFound = () => new ApiError(404, "Ce document est introuvable.");
+const noLongerOpen = () => new ApiError(409, "La demande n’est plus en recherche d’artisan : cette photo fait désormais partie du dossier et ne peut plus être supprimée.");
+export async function DELETE(request: Request) {
+  try {
+    assertOrigin(request);
+    const { db, user } = await authenticatedClient(request);
+    const params = new URL(request.url).searchParams;
+    const id = params.get("id");
+    if (params.size !== 1 || !id || !uuid.safeParse(id).success) throw new ApiError(422, "Document invalide.");
+    const admin = adminClient();
+    const found = await admin.from("documents").select("id,owner_id,intervention_id,path,mime_type").eq("id", id).maybeSingle();
+    if (found.error) throw new ApiError(503, "La suppression est momentanément indisponible. Réessayez.");
+    const doc = found.data;
+    if (!doc || doc.owner_id !== user.id || !doc.intervention_id || !REQUEST_PHOTO_TYPES.includes(doc.mime_type)) throw notFound();
+    const withdrawn = await db.rpc("set_mission_offer_photo", { p_id: doc.intervention_id, p_document_id: id, p_shared: false });
+    if (withdrawn.error?.code === "P0001") throw noLongerOpen();
+    if (withdrawn.error?.code === "42501") throw notFound();
+    dbError(withdrawn.error);
+    if (withdrawn.data !== false) throw new ApiError(503, "La suppression est momentanément indisponible. Réessayez.");
+    // Last read before the irreversible step (an acceptance may have landed since the check above).
+    const job = await admin.from("interventions").select("client_id,status,artisan_id").eq("id", doc.intervention_id).maybeSingle();
+    if (job.error || !job.data) throw new ApiError(503, "La suppression est momentanément indisponible. Réessayez.");
+    if (job.data.client_id !== user.id) throw notFound();
+    if (job.data.status !== "requested" || job.data.artisan_id) throw noLongerOpen();
+    const removed = await admin.from("documents").delete().eq("id", id).eq("owner_id", user.id).eq("intervention_id", doc.intervention_id).select("id");
+    if (removed.error?.code === "23503")
+      throw new ApiError(409, "Cette photo est utilisée dans un message ou un rapport du dossier : elle ne peut pas être supprimée.");
+    if (removed.error) throw new ApiError(503, "La suppression est momentanément indisponible. Réessayez.");
+    if (!removed.data?.length) throw notFound();
+    let cleaned = false;
+    for (let attempt = 0; attempt < 2 && !cleaned; attempt++) {
+      try {
+        const result = await admin.storage.from("intervention-documents").remove([doc.path]);
+        cleaned = !result.error && Array.isArray(result.data) && result.data.some((entry) => entry?.name === doc.path);
+      } catch { cleaned = false; }
+    }
+    // Trace of the destructive action (who, which dossier); never blocks the answer.
+    try { await admin.from("audit_log").insert({ actor_id: user.id, intervention_id: doc.intervention_id, action: "request_photo_deleted" }); } catch { /* best effort */ }
+    if (!cleaned) {
+      console.error("request photo file not removed", { document: id });
+      return Response.json({ error: "La photo a été retirée du dossier, mais l’effacement du fichier n’a pas été confirmé. Signalez-le à l’assistance.", deleted: true, cleanup: "incomplete" }, { status: 503, headers: { "Cache-Control": "private, no-store" } });
+    }
+    return Response.json({ deleted: true, id }, { headers: { "Cache-Control": "private, no-store" } });
+  } catch (error) {
+    const response = apiError(error);
+    response.headers.set("Cache-Control", "private, no-store");
+    return response;
+  }
+}

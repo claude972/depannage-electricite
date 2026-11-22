@@ -1,6 +1,7 @@
 "use client";
 import { PLATFORM_COMMISSION_PERCENT, URGENCY_SURCHARGE_PERCENT } from "../../shared/commercial-facts";
 import { invoiceFunctionLabel, refundFunctionLabel } from "../../lib/features/platform-operations/config";
+import { auditActionLabel } from "../../lib/features/platform-operations/audit-labels";
 import { DemoBanner } from "../app/demo-banner";
 import floatingNav from "./floating-navigation.module.css";
 // Platform Super Admin space (reference M43). The operator of the platform, not the owner of a
@@ -1063,13 +1064,31 @@ export function AdminSpace({ session }: { session: Session }) {
             </table>
           </div>
         </Panel>
-        <Panel title="Journal d’audit" count={audit.length} intro={`${o.capabilities.list_limit} derniers événements au plus, tels qu’enregistrés par la plateforme.`}>
+        <Panel title="Journal d’audit" count={audit.length} intro={`Aperçu : ${o.capabilities.list_limit} derniers événements des dossiers et des comptes au plus.`}>
+          {platformViewAllowed(session.platformAccess, "platform-audit") && (
+            <p className={styles.panelBody} data-audit-full-link="">
+              <a className={styles.inlineLink} href="#platform-audit">Ouvrir le journal complet (droits, finances, modération et dossiers réunis, toutes les pages)</a>
+            </p>
+          )}
           <DataTable
             caption="Journal d’audit"
             rows={audit}
             keyOf={(e) => String(e.id)}
             columns={[
-              { key: "action", label: "Action", wide: true, render: (e) => e.action },
+              {
+                key: "action",
+                label: "Action",
+                wide: true,
+                render: (e) => {
+                  const action = auditActionLabel(e.action);
+                  return (
+                    <span data-audit-code={action.code}>
+                      {action.label}
+                      <span className={styles.muted}> · code {action.code}</span>
+                    </span>
+                  );
+                },
+              },
               { key: "actor", label: "Acteur", render: (e) => actorLabel(e.actor_id, { selfId: session.profileId, overview: o }) },
               {
                 key: "intervention",

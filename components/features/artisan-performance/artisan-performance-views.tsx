@@ -51,7 +51,7 @@ function Tile({ icon, tone, label, value, note }: { icon: string; tone: string; 
   );
 }
 
-function Basis({ report }: { report: ArtisanPerformanceReport }) {
+function Basis({ report, measuredPunctuality = false }: { report: ArtisanPerformanceReport; measuredPunctuality?: boolean }) {
   const b = report.basis;
   return (
     <details className={styles.basis}>
@@ -68,7 +68,13 @@ function Basis({ report }: { report: ArtisanPerformanceReport }) {
           {b.completed && <li>Interventions terminées : {b.completed}</li>}
           {b.rating && <li>Note moyenne : {b.rating}</li>}
           {b.growth && <li>Évolution : {b.growth}</li>}
-          {b.punctuality && <li>Ponctualité : {b.punctuality}</li>}
+          {measuredPunctuality ? (
+            <li>
+              Ponctualité : mesurée sur le mois en cours à partir des créneaux de rendez-vous et des arrivées enregistrés ; la règle détaillée figure dans « Activité par période » de la page Performance.
+            </li>
+          ) : (
+            b.punctuality && <li>Ponctualité : {b.punctuality}</li>
+          )}
         </ul>
       </div>
     </details>
@@ -137,7 +143,9 @@ export function LivePerformanceSummary({ perf, onDetail }: { perf: PerformanceHa
 }
 
 /** Profile block and Performance page grid (M36). `since` is the account seniority. */
-export function LivePerformanceGrid({ perf, since }: { perf: PerformanceHandle; since: string | null }) {
+/** `punctuality`: the measured tile supplied by the host (period report of the current month).
+ *  Without it, the grid keeps the honest « not computed » placeholder of the monthly report. */
+export function LivePerformanceGrid({ perf, since, punctuality }: { perf: PerformanceHandle; since: string | null; punctuality?: ReactNode }) {
   if (perf.phase !== "ready") {
     return (
       <div aria-busy={perf.phase === "loading"}>
@@ -189,15 +197,17 @@ export function LivePerformanceGrid({ perf, since }: { perf: PerformanceHandle; 
           value={since ?? "—"}
           note={since ? "Depuis l’inscription" : "Date d’inscription non transmise"}
         />
-        <div className={styles.perfTile}>
-          <Unavailable
-            title="Ponctualité"
-            reason={report.basis.punctuality || "Non calculée par le serveur."}
-            blocker="mesure de ponctualité non prévue"
-          />
-        </div>
+        {punctuality ?? (
+          <div className={styles.perfTile}>
+            <Unavailable
+              title="Ponctualité"
+              reason={report.basis.punctuality || "Non calculée par le serveur."}
+              blocker="mesure de ponctualité non prévue"
+            />
+          </div>
+        )}
       </div>
-      <Basis report={report} />
+      <Basis report={report} measuredPunctuality={punctuality !== undefined} />
     </>
   );
 }

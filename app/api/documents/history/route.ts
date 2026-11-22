@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 const privateHeaders = { "Cache-Control": "private, no-store" };
 export async function GET(request: Request) {
   try {
-    const { db, user } = await authenticatedClient();
+    const { db, user } = await authenticatedClient(request);
     return Response.json(await readDocumentHistory(db, documentHistoryQuery(request.url, user.id)), { headers: privateHeaders });
   } catch (error) {
     if (error instanceof DocumentHistoryError)
