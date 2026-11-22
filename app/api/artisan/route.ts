@@ -11,9 +11,11 @@ const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("link_credential"), document_id: uuid, kind: z.enum(["registration", "liability", "qualification", "other"]), expires_on: z.iso.date().nullable() }).strict(),
 ]);
 const privateHeaders = { "Cache-Control": "private, no-store" };
+const APPLICATION_REFUSED = "Votre candidature a été refusée par l’exploitant : elle ne peut pas être soumise à nouveau. Le motif figure dans votre dossier ; contactez l’assistance pour demander sa réouverture.";
 /** ADM-02: a refusal has no state in artisan_profiles; it is the latest application decision written
  *  by the administration (notification payload `definitive`). While it stands, this route refuses a
- *  new submission. An unreadable decision log never blocks an artisan who was not refused. */
+ *  new submission. An unreadable decision log never blocks an artisan who was not refused: this is
+ *  only the early, friendly check — the SQL command refuses a refused application by itself. */
 async function applicationRefused(userId: string): Promise<boolean> {
   try {
     const last = await adminClient().from("notifications").select("payload").eq("recipient_id", userId).in("kind", ["account_approved", "account_suspended"])
@@ -44,7 +46,7 @@ export async function POST(request: Request) {
     const { db, user } = await authenticatedClient(request);
     const data = await validated(request, schema);
     if (data.action === "submit_application" && await applicationRefused(user.id))
-      throw new ApiError(409, "Votre candidature a été refusée par l’exploitant : elle ne peut pas être soumise à nouveau. Le motif figure dans votre dossier ; contactez l’assistance pour demander sa réouverture.");
+      throw new ApiError(409, APPLICATION_REFUSED);
     let result;
     switch (data.action) {
       case "save_profile":
@@ -54,6 +56,8 @@ export async function POST(request: Request) {
       case "set_capacity_limit": result = await db.rpc("set_artisan_capacity_limit", { p_limit: data.capacity_limit, p_expected_version: data.expected_version }); break;
       case "link_credential": result = await db.rpc("link_artisan_credential", { p_document_id: data.document_id, p_kind: data.kind, p_expires_on: data.expires_on }); break;
     }
+    // The database enforces the refusal itself (migration 20261122170000): same answer as the early check.
+    if (data.action === "submit_application" && result.error?.code === "P0001" && result.error.message === "Application refused by the operator") throw new ApiError(409, APPLICATION_REFUSED);
     dbError(result.error);
     return Response.json({ [data.action === "link_credential" ? "credential" : "artisan_profile"]: result.data }, { headers: privateHeaders });
   } catch (error) { return apiError(error); }
