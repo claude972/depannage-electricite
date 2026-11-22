@@ -23,7 +23,8 @@ const buttons = (html: string) => [...html.matchAll(/<button[^>]*>([^<]*)<\/butt
 
 test("statut : libellé distinct et décisions autorisées par statut (soumis ⇒ approuver ou demander des corrections, E35)", () => {
   const cases: [string | null, boolean, string, string | null][] = [
-    ["submitted", false, "Dossier soumis", "Approuver|Demander des corrections"],
+    // ADM-02 (22 nov. 2026): a submitted application can also be refused, with a mandatory reason.
+    ["submitted", false, "Dossier soumis", "Approuver|Demander des corrections|Refuser la candidature"],
     ["approved", true, "Approuvé", "Suspendre"],
     ["suspended", false, "Suspendu", "Réactiver"],
     ["changes_requested", false, "Modifications demandées", null],
@@ -47,7 +48,20 @@ test("suspendu ⇒ « Réactiver » avec confirmation explicite, action reinstat
   const src = readFileSync("components/app/forms.tsx", "utf8");
   assert.match(src, /reactivate: \{\s*label: "Réactiver",[\s\S]*?confirmLabel: "Confirmer la réactivation",\s*action: "reinstate",/);
   assert.match(src, /approve: \{\s*label: "Approuver",[\s\S]*?action: "approve",/);
-  assert.match(src, /await api\("\/api\/admin\/artisans", \{ user_id: p\.id, command_id, action, expected_version \}\);/);
+  // ADM-02 (22 nov. 2026): the same command now also carries the decision reason when one is given.
+  assert.match(src, /api<\{ reason_recorded\?: boolean \}>\("\/api\/admin\/artisans", \{ user_id: p\.id, command_id, action, expected_version, \.\.\.\(reason \? \{ reason \} : \{\}\)/);
+});
+
+test("ADM-02 · décision négative : motif obligatoire, refus et réouverture distincts, candidature refusée affichée comme telle", () => {
+  const src = readFileSync("components/app/forms.tsx", "utf8");
+  for (const key of ["suspend", "reject", "reopen", "request_changes"]) assert.match(src, new RegExp(`${key}: \\{[^}]*reasonRequired: true`), key);
+  assert.doesNotMatch(src, /(?:approve|reactivate): \{[^}]*reasonRequired: true/);
+  assert.match(src, /reject: \{[^}]*action: "request_changes",[^}]*definitive: true/);
+  const refused = renderToString(createElement(f.ArtisanApplicationsList as never, { rows: [{ ...row("changes_requested"), refused: true }], truncated: false, limit: null, busy: false, onDecide: async () => {} } as never));
+  assert.match(refused, /<p>Candidature refusée(?:<!-- -->)? — /);
+  assert.deepEqual(buttons(refused), ["Rouvrir la candidature"]);
+  assert.equal(f.parseArtisanApplications({ artisans: [{ ...row("changes_requested"), refused: true }] }).rows[0].refused, true);
+  assert.equal(f.parseArtisanApplications({ artisans: [row("changes_requested")] }).rows[0].refused, undefined);
 });
 
 test("brouillon / modifications demandées / statut absent ou inconnu ⇒ jamais d’approbation, texte honnête", () => {

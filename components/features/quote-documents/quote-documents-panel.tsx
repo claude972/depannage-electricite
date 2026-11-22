@@ -359,16 +359,22 @@ function LinesTable({ lines, subtotal, taxRate, tax, total, caption }: { lines: 
 
 function DocumentLinks({ documents, demo, client }: { documents: QuoteDocumentSummary[]; demo: boolean; client: QuoteDocumentsClient }) {
   if (!documents.length) return <p className={styles.meta}>Aucun document généré pour cette version.</p>;
+  // SYS-06: every revision stays downloadable; the highest one is the document in force, the others
+  // are kept as history and said to be replaced (never presented as current).
+  const latest = Math.max(...documents.map((doc) => doc.revision));
+  const ordered = [...documents].sort((a, b) => b.revision - a.revision);
   return (
     <ul className={styles.list}>
-      {documents.map((doc) => (
-        <li key={doc.id} className={styles.item}>
+      {ordered.map((doc) => (
+        <li key={doc.id} className={styles.item} data-quote-document-revision={doc.revision} data-quote-document-state={doc.revision === latest ? "current" : "superseded"}>
           <span className={styles.grow}>
             <strong>
               {doc.reference} — révision {doc.revision}
             </strong>
+            {" · "}
+            <span>{doc.revision === latest ? "version en vigueur" : `remplacée par la révision ${latest}`}</span>
             <br />
-            <span className={styles.meta}>Généré le {formatDateTimeUtc(doc.generated_at)}</span>
+            <span className={styles.meta}>Généré le {formatDateTimeUtc(doc.generated_at)}{doc.revision === latest ? "" : " · conservé dans l’historique"}</span>
           </span>
           <span className={styles.links}>
             {demo ? (

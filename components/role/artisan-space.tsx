@@ -130,6 +130,9 @@ import {
   type MissionSegment,
 } from "./artisan-lists";
 import { CredentialReviewPanel } from "../features/credential-reviews/credential-review-panel";
+import { ApplicationDecisionsNotice } from "../features/credential-reviews/application-decisions-notice";
+import { CredentialValidityOverview } from "../features/credential-reviews/credential-validity-overview";
+import { RetentionNotice } from "../features/site-documents/retention-notice";
 import { DECISION_LABEL, type Decision } from "../features/credential-reviews/credential-reviews-model";
 import { ArtisanQuotes } from "../features/artisan-quotes/artisan-quotes";
 import { useArtisanPerformance, LivePerformanceSummary, LivePerformanceGrid, LiveRatingLine, livePerformanceSubtitle, PeriodPerformancePanel, PunctualityTile } from "../features/artisan-performance";
@@ -2902,6 +2905,9 @@ function Documents({
           <Unavailable title="Justificatifs" state={session.capabilities.artisan} />
         ) : (
           <>
+            {/* SYS-06: validity (expired / expiring soon) and versions (current / replaced) of the credentials. */}
+            <CredentialValidityOverview credentials={dossier.credentials} today={today} audience="artisan" documentName={(id) => session.data.documents.find((d) => d.id === id)?.name ?? null} />
+            <RetentionNotice audience="user" demo={session.mode === "demo"} />
             <div className={styles.credCards}>
               {states.map((s) => (
                 <CredentialCard
@@ -3312,6 +3318,8 @@ function ApplicationForm({
           {profile?.submitted_at && status !== "draft" ? ` Soumise le ${dateTime(profile.submitted_at)}.` : ""}
         </p>
       </div>
+      {/* ADM-02: reasons of the administration's decisions on this application (own account only). */}
+      <ApplicationDecisionsNotice demo={session.mode !== "live"} refreshKey={`${status}|${profile?.updated_at ?? ""}`} />
       {editBlocked && (
         <div className="alert warning" role="note">
           <Icon name="info" />

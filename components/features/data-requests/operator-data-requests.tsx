@@ -9,6 +9,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { DATA_REQUESTS_COPY as COPY, DECISIONS, EXECUTION_LABEL, STATE_LABEL, TERMINAL, type DecisionCommand } from "./contract";
 import { DETAIL_INITIAL, LIST_INITIAL, createDetail, createList, tabStore, type Context, type DetailView, type ListState, type Store } from "./model";
 import styles from "./data-requests.module.css";
+import { ErasureExecutionPanel } from "./erasure-execution-panel";
 
 export type OperatorDataRequestsProps = { context: Context; fetcher?: typeof fetch; store?: () => Store | null; newId?: () => string | null };
 const uuid = (): string | null => (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : null);
@@ -65,7 +66,10 @@ function Live({ context, fetcher, store = tabStore, newId = uuid }: OperatorData
             <li key={r.id} className={styles.item} data-op-erasure-row={r.id}>
               <span className={styles.labels}>
                 <span className={styles.badge}>{STATE_LABEL[r.state]}</span>
-                <span className={styles.badge}>{EXECUTION_LABEL[r.execution_state]}</span>
+                {/* SYS-09: the execution is read from the platform journal (request rows only know « not_started »). */}
+                <span className={styles.badge} data-op-erasure-execution={list.executions ? (list.executions[r.id] ? "executed" : "not_started") : "unknown"}>
+                  {list.executions ? (list.executions[r.id] ? `${COPY.opExecuted} le ${when(list.executions[r.id])}` : EXECUTION_LABEL[r.execution_state]) : COPY.opExecutionUnknown}
+                </span>
               </span>
               <span className={styles.meta}>Demande {r.id.slice(0, 8)} · version {r.version} · déposée le {when(r.created_at)}</span>
               <button type="button" className={styles.secondary} aria-expanded={selected === r.id} onClick={() => setSelected(selected === r.id ? null : r.id)}>
@@ -139,9 +143,9 @@ function Detail({ id, fetcher, store, newId, context, onDecided }: { id: string;
         <>
           <dl className={styles.kv}>
             <div><dt>État de la demande</dt><dd data-op-erasure-state={d.request.state}>{STATE_LABEL[d.request.state]} (version {d.request.version})</dd></div>
-            <div><dt>Exécution</dt><dd>{EXECUTION_LABEL[d.request.execution_state]}</dd></div>
             <div><dt>Déposée / mise à jour</dt><dd>{when(d.request.created_at)} · {when(d.request.updated_at)}</dd></div>
           </dl>
+          <ErasureExecutionPanel id={id} requestState={d.request.state} fetcher={() => latest.current.fetcher()} onExecuted={onDecided} />
           <h4 className={styles.title}>Historique ({d.history.length})</h4>
           {d.history.length === 0 ? (
             <p className={styles.hint}>Aucune décision enregistrée.</p>

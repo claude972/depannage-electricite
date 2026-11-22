@@ -29,7 +29,9 @@ export const parseRequest = (v: unknown): ErasureRequest | null => {
   return r.success ? r.data : null;
 };
 
-type Page = { rows: ErasureRequest[]; next_cursor: string | null };
+/** `executions` (operator list only, SYS-09): request id → date of the executed erasure. Absent when the
+ *  server could not read the journal: the execution state is then unknown, not « non commencé ». */
+type Page = { rows: ErasureRequest[]; next_cursor: string | null; executions?: Record<string, string> };
 /** Ascending ids after the cursor; next_cursor equals the last row id; never a cursor on an empty page. */
 function checkedPage(rows: ErasureRequest[], next: string | null, after: string | null): Page | null {
   let previous = after?.toLowerCase() ?? "";
@@ -41,14 +43,15 @@ function checkedPage(rows: ErasureRequest[], next: string | null, after: string 
   return { rows, next_cursor: next };
 }
 const personalPage = z.object({ section: z.literal("erasure_requests"), rows: z.array(requestSchema).max(100), next_cursor: z.uuid().nullable() }).strict();
-const adminPage = z.object({ rows: z.array(requestSchema).max(100), next_cursor: z.uuid().nullable() }).strict();
+const adminPage = z.object({ rows: z.array(requestSchema).max(100), next_cursor: z.uuid().nullable(), executions: z.record(z.uuid(), date).optional() }).strict();
 export function parsePersonalPage(body: unknown, after: string | null): Page | null {
   const p = personalPage.safeParse(body);
   return p.success ? checkedPage(p.data.rows, p.data.next_cursor, after) : null;
 }
 export function parseAdminPage(body: unknown, after: string | null, limit: number): Page | null {
   const p = adminPage.safeParse(body);
-  return p.success && p.data.rows.length <= limit ? checkedPage(p.data.rows, p.data.next_cursor, after) : null;
+  const page = p.success && p.data.rows.length <= limit ? checkedPage(p.data.rows, p.data.next_cursor, after) : null;
+  return page && p.success && p.data.executions ? { ...page, executions: p.data.executions } : page;
 }
 
 const historyEntry = z
@@ -109,7 +112,9 @@ export const DATA_REQUESTS_COPY = {
   openTicket: "Voir le ticket",
   session: "Session expirée : reconnectez-vous.",
   opTitle: "Demandes d’effacement",
-  opNote: "Examen des demandes : la décision ne déclenche aucun effacement (exécution non commencée). Le titre et les messages des tickets ne sont pas affichés ici.",
+  opNote: "Examen des demandes : la décision seule ne déclenche aucun effacement. Une demande approuvée est ensuite exécutée par un administrateur, après une confirmation explicite. Le titre et les messages des tickets ne sont pas affichés ici.",
+  opExecuted: "Effacement exécuté",
+  opExecutionUnknown: "État de l’effacement non vérifié",
   opEmpty: "Aucune demande d’effacement.",
   opForbidden: "Vos habilitations d’assistance, vérifiées par le serveur, ne couvrent pas les demandes d’effacement.",
   opDecideNo: "Décision non disponible : vos habilitations (lecture et statut de l’assistance) ne permettent pas de décider, ou la demande est close.",
@@ -120,6 +125,6 @@ export const DATA_REQUESTS_COPY = {
   opRestored: "Une décision envoyée depuis cet onglet n’a pas été confirmée : renvoyez-la (même commande) ou relisez la demande.",
   opStorage: "Le stockage de cet onglet est indisponible : rien n’a été envoyé. Sans lui, une réponse perdue ne pourrait pas être renvoyée à l’identique.",
   opNoUuid: "Ce navigateur ne permet pas de créer un identifiant sécurisé : aucune décision n’est possible ici.",
-  opSaved: "Décision enregistrée. Aucun effacement n’est déclenché.",
+  opSaved: "Décision enregistrée. Aucun effacement n’est déclenché par cette décision : une demande approuvée reste à exécuter par un administrateur.",
   opReplayed: "Décision déjà enregistrée (même commande) : état relu.",
 } as const;

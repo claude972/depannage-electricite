@@ -43,6 +43,12 @@ async function mount() {
   return div;
 }
 const confirmBtn = (div) => [...div.querySelectorAll("button")].find((b) => /^Confirmer/.test((b.textContent || "").trim()));
+// ADM-02 (22 nov. 2026): a negative decision needs its reason before « Confirmer » posts anything.
+const giveReason = async (div) => {
+  const area = div.querySelector("textarea"); if (!area) return;
+  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(area, "Motif de test suffisamment long.");
+  area.dispatchEvent(new Event("input", { bubbles: true })); await tick(30);
+};
 window.scenarios = {
   async e34() {
     const div = await mount();
@@ -59,16 +65,17 @@ window.scenarios = {
     const div = await mount();
     const labels = [...row(div).querySelectorAll("button")].map((b) => (b.textContent || "").trim());
     const ask = btn(row(div), "Demander des corrections");
-    if (ask) { ask.click(); await tick(30); confirmBtn(div).click(); await tick(300); }
+    if (ask) { ask.click(); await tick(30); await giveReason(div); confirmBtn(div).click(); await tick(300); }
     return { labels, posts: window.posts, status: window.server.status };
   },
   async e36() {
     Object.assign(window.server, { status: "approved", approved: true, version: 2, seen: new Set(), lose: true }); window.posts = [];
     const div = await mount();
-    btn(div, "Suspendre").click(); await tick(30); confirmBtn(div).click();
+    btn(div, "Suspendre").click(); await tick(30); await giveReason(div); confirmBtn(div).click();
     await until(() => window.posts.length === 1); await tick(300);
     const again = btn(div, "Suspendre");
-    if (again) { again.click(); await tick(30); confirmBtn(div)?.click(); await tick(300); }
+    if (again) { again.click(); await tick(30); await giveReason(div); confirmBtn(div)?.click(); await tick(300); }
+    else if (confirmBtn(div)) { confirmBtn(div).click(); await tick(300); } // form kept open after the lost reply
     return { posts: window.posts, status: window.server.status, shown: row(div)?.getAttribute("data-application-status") };
   },
 };

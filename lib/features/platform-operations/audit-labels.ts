@@ -48,6 +48,7 @@ const LABELS: Record<string, string> = {
   create: "Demande créée",
   created: "Demande créée",
   appointment_saved: "Rendez-vous enregistré",
+  request_photo_deleted: "Photo de la demande supprimée",
   accept_mission: "Mission acceptée",
   admin_reassigned: "Artisan réaffecté par l’administration",
   admin_message: "Message de l’administration envoyé",

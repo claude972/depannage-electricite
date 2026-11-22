@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { authenticatedClient, apiError, assertOrigin, ApiError, dbError } from "@/lib/supabase/server";
+import { adminClient, authenticatedClient, apiError, assertOrigin, ApiError, dbError } from "@/lib/supabase/server";
 import { uuid, validated } from "@/lib/supabase/validation";
 
 const schema = z.discriminatedUnion("action", [
@@ -11,6 +11,17 @@ const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("link_credential"), document_id: uuid, kind: z.enum(["registration", "liability", "qualification", "other"]), expires_on: z.iso.date().nullable() }).strict(),
 ]);
 const privateHeaders = { "Cache-Control": "private, no-store" };
+/** ADM-02: a refusal has no state in artisan_profiles; it is the latest application decision written
+ *  by the administration (notification payload `definitive`). While it stands, this route refuses a
+ *  new submission. An unreadable decision log never blocks an artisan who was not refused. */
+async function applicationRefused(userId: string): Promise<boolean> {
+  try {
+    const last = await adminClient().from("notifications").select("payload").eq("recipient_id", userId).in("kind", ["account_approved", "account_suspended"])
+      .not("payload->>application_decision", "is", null).order("created_at", { ascending: false }).limit(1);
+    if (last.error) return false;
+    return (last.data?.[0]?.payload as { definitive?: unknown } | undefined)?.definitive === true;
+  } catch { return false; }
+}
 export async function GET(request: Request) {
   try {
     const { db, user } = await authenticatedClient(request);
@@ -30,8 +41,10 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     assertOrigin(request);
-    const { db } = await authenticatedClient(request);
+    const { db, user } = await authenticatedClient(request);
     const data = await validated(request, schema);
+    if (data.action === "submit_application" && await applicationRefused(user.id))
+      throw new ApiError(409, "Votre candidature a été refusée par l’exploitant : elle ne peut pas être soumise à nouveau. Le motif figure dans votre dossier ; contactez l’assistance pour demander sa réouverture.");
     let result;
     switch (data.action) {
       case "save_profile":

@@ -6,7 +6,7 @@ import { URGENCY_NOTICE, WARRANTY_SUMMARY } from "../../shared/commercial-facts"
 import { CoverageNotice } from "../features/coverage/coverage-notice";
 // Operational forms extracted from the original monolith; behaviour preserved, shared by the
 // role spaces. Styling classes live in app/globals.css.
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { api, ApiRequestError, PHOTO_TYPES, validateUpload } from "./api";
 import { classifyRefusal } from "./refusal";
 import { AddressField, createAddressApi } from "./address-field";
@@ -2300,8 +2300,19 @@ export type ArtisanApplicationRow = {
   application_status?: string | null;
   /** Dossier revision read (0 without dossier); the expected version of the next decision. */
   application_version?: number;
+  /** ADM-02: the latest recorded decision is a refusal (sent only when the decision log was readable). */
+  refused?: boolean;
 };
-export type ArtisanDecision = "suspend" | "reactivate" | "approve" | "request_changes";
+export type ArtisanDecision = "suspend" | "reactivate" | "approve" | "request_changes" | "reject" | "reopen";
+/** ADM-02: bounds of the decision reason (same as the server). Mandatory for a negative decision. */
+export const ARTISAN_REASON_MIN = 10;
+export const ARTISAN_REASON_MAX = 500;
+export type ArtisanDecisionRecord = { id: string; actor_id: string | null; decided_at: string; action: "approve" | "request_changes" | "suspend" | "reinstate"; reason: string; application_version: number; definitive?: boolean; reopened?: boolean };
+export function artisanDecisionRecordLabel(record: Pick<ArtisanDecisionRecord, "action" | "definitive" | "reopened">): string {
+  if (record.reopened) return "Candidature rouverte";
+  if (record.definitive) return "Candidature refusée";
+  return { approve: "Candidature approuvée", request_changes: "Corrections demandées", suspend: "Accès suspendu", reinstate: "Accès réactivé" }[record.action];
+}
 export const ARTISAN_STATUS_LABELS: Record<string, string> = {
   submitted: "Dossier soumis",
   approved: "Approuvé",
@@ -2309,13 +2320,31 @@ export const ARTISAN_STATUS_LABELS: Record<string, string> = {
   changes_requested: "Modifications demandées",
   draft: "Brouillon",
 };
-const DECISIONS: Record<ArtisanDecision, { label: string; message: string; confirmLabel: string; action: "approve" | "request_changes" | "suspend" | "reinstate"; approved: boolean }> = {
+const DECISIONS: Record<ArtisanDecision, { label: string; message: string; confirmLabel: string; action: "approve" | "request_changes" | "suspend" | "reinstate" | "reopen"; approved: boolean; reasonRequired?: boolean; definitive?: boolean }> = {
   suspend: {
     label: "Suspendre",
     message: "Suspendre l’accès aux nouvelles missions de cet artisan ?",
     confirmLabel: "Confirmer la suspension",
     action: "suspend",
     approved: false,
+    reasonRequired: true,
+  },
+  reject: {
+    label: "Refuser la candidature",
+    message: "Refuser cette candidature ? L’artisan ne pourra pas la soumettre à nouveau tant qu’un administrateur ne l’aura pas rouverte.",
+    confirmLabel: "Confirmer le refus",
+    action: "request_changes",
+    approved: false,
+    reasonRequired: true,
+    definitive: true,
+  },
+  reopen: {
+    label: "Rouvrir la candidature",
+    message: "Rouvrir cette candidature refusée ? L’artisan pourra la corriger puis la soumettre à nouveau.",
+    confirmLabel: "Confirmer la réouverture",
+    action: "reopen",
+    approved: false,
+    reasonRequired: true,
   },
   reactivate: {
     label: "Réactiver",
@@ -2337,8 +2366,96 @@ const DECISIONS: Record<ArtisanDecision, { label: string; message: string; confi
     confirmLabel: "Confirmer la demande de corrections",
     action: "request_changes",
     approved: false,
+    reasonRequired: true,
   },
 };
+/** ADM-02 — confirmation of one application decision with its reason. The reason is mandatory for a
+ *  negative decision (corrections, refusal, suspension, and a reopening): « Confirmer » stays refused
+ *  with an explicit message until it is long enough. A failed decision keeps the form and the text. */
+function DecisionConfirm({ decision, name, busy, onConfirm }: { decision: ArtisanDecision; name: string; busy: boolean; onConfirm(reason: string): Promise<unknown> }) {
+  const spec = DECISIONS[decision];
+  const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState("");
+  const id = useId();
+  const trimmed = reason.trim();
+  async function confirm() {
+    if (pending || busy) return;
+    if (spec.reasonRequired && trimmed.length < ARTISAN_REASON_MIN) {
+      setError(`Indiquez le motif de cette décision (${ARTISAN_REASON_MIN} caractères au moins) : il est conservé et communiqué à l’artisan.`);
+      return;
+    }
+    if (trimmed && trimmed.length < ARTISAN_REASON_MIN) {
+      setError(`Un motif compte au moins ${ARTISAN_REASON_MIN} caractères. Complétez-le ou laissez le champ vide.`);
+      return;
+    }
+    setError("");
+    setPending(true);
+    try {
+      const done = await onConfirm(trimmed);
+      if (done !== false) {
+        setOpen(false);
+        setReason("");
+      }
+    } finally {
+      setPending(false);
+    }
+  }
+  return (
+    <div className="inline-confirmation" data-artisan-decision={decision}>
+      {!open ? (
+        <button type="button" className="button outline" disabled={busy} onClick={() => setOpen(true)}>
+          {spec.label}
+        </button>
+      ) : (
+        <div className="confirmation-review">
+          <p>
+            {name} : {spec.message}
+          </p>
+          <label className="field" htmlFor={id} style={{ display: "grid", gap: 4, width: "100%" }}>
+            <span>{spec.reasonRequired ? `Motif (obligatoire, ${ARTISAN_REASON_MIN} à ${ARTISAN_REASON_MAX} caractères)` : `Motif (facultatif, ${ARTISAN_REASON_MAX} caractères au plus)`}</span>
+            <textarea
+              id={id}
+              rows={3}
+              maxLength={ARTISAN_REASON_MAX}
+              value={reason}
+              disabled={pending}
+              aria-invalid={error ? true : undefined}
+              aria-describedby={`${id}-help`}
+              onChange={(event) => {
+                setReason(event.target.value);
+                if (error) setError("");
+              }}
+            />
+            <small id={`${id}-help`}>Le motif est conservé dans l’historique des décisions et visible par l’artisan.</small>
+          </label>
+          {error && (
+            <p className="field-error" role="alert" data-artisan-decision-error="">
+              {error}
+            </p>
+          )}
+          <div>
+            <button type="button" className="button primary" disabled={busy || pending} onClick={() => void confirm()}>
+              {pending ? "Enregistrement…" : spec.confirmLabel}
+            </button>
+            <button
+              type="button"
+              className="button outline"
+              disabled={pending}
+              onClick={() => {
+                setOpen(false);
+                setError("");
+              }}
+            >
+              Annuler
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 /** Label, single allowed decision and honest note for one row (pure, exported for tests). */
 export function artisanApplicationView(row: Pick<ArtisanApplicationRow, "artisan_approved" | "application_status">): {
   label: string;
@@ -2385,7 +2502,7 @@ export function parseArtisanApplications(raw: unknown): { rows: ArtisanApplicati
     if (!(status === undefined || status === null || typeof status === "string")) throw new Error(ARTISAN_LIST_INVALID);
     const version = r.application_version;
     if (!(version === undefined || (typeof version === "number" && Number.isSafeInteger(version) && version >= 0))) throw new Error(ARTISAN_LIST_INVALID);
-    return { id: r.id, full_name: r.full_name, artisan_approved: r.artisan_approved, created_at: r.created_at, application_status: typeof status === "string" ? status : null, ...(version === undefined ? {} : { application_version: version }) };
+    return { id: r.id, full_name: r.full_name, artisan_approved: r.artisan_approved, created_at: r.created_at, application_status: typeof status === "string" ? status : null, ...(version === undefined ? {} : { application_version: version }), ...(r.refused === true ? { refused: true } : {}) };
   });
   return { rows, truncated: v.truncated === true, limit: typeof v.limit === "number" && Number.isSafeInteger(v.limit) && v.limit > 0 ? v.limit : null };
 }
@@ -2404,6 +2521,7 @@ export function ArtisanApplicationsList({
   onDecide,
   artisanId,
   approvalBlockedReason,
+  refusedIds,
 }: {
   artisanId?: string;
   approvalBlockedReason?: string;
@@ -2411,7 +2529,10 @@ export function ArtisanApplicationsList({
   truncated: boolean;
   limit: number | null;
   busy: boolean;
-  onDecide(row: ArtisanApplicationRow, decision: ArtisanDecision): Promise<unknown>;
+  /** Resolves to false when the decision was not applied: the reason form then stays open. */
+  onDecide(row: ArtisanApplicationRow, decision: ArtisanDecision, reason?: string): Promise<unknown>;
+  /** Ids whose latest recorded decision is a refusal (known only where the decision log is read). */
+  refusedIds?: ReadonlySet<string>;
 }) {
   const visibleRows = artisanId ? rows.filter((row) => row.id === artisanId) : rows;
   if (artisanId && !visibleRows.length) return <Empty icon="shield" title="Décision indisponible">Cet artisan ne figure pas dans les candidatures chargées. Actualisez la liste avant de décider.</Empty>;
@@ -2435,36 +2556,26 @@ export function ArtisanApplicationsList({
         {visibleRows.map((p) => {
           const view = artisanApplicationView(p);
           const approvalBlocked = Boolean(approvalBlockedReason && (view.decision === "approve" || view.decision === "reactivate"));
-          const decision = view.decision ? DECISIONS[view.decision] : null;
+          const refused = p.application_status === "changes_requested" && (p.refused === true || refusedIds?.has(p.id) === true);
           return (
-            <div key={p.id} data-artisan-application={p.id} data-application-status={p.application_status ?? "unknown"}>
+            <div key={p.id} data-artisan-application={p.id} data-application-status={p.application_status ?? "unknown"} data-application-refused={refused ? "" : undefined}>
               <span className="avatar">{p.full_name.slice(0, 2).toUpperCase()}</span>
               <section>
                 <h3>{p.full_name}</h3>
                 <p>
-                  {view.label} — {date(p.created_at)}
+                  {refused ? "Candidature refusée" : view.label} — {date(p.created_at)}
                 </p>
-                {view.note && <p className="inline-note">{view.note}</p>}
+                {refused ? <p className="inline-note">Candidature refusée : l’artisan ne peut pas la soumettre à nouveau tant qu’elle n’est pas rouverte.</p> : view.note && <p className="inline-note">{view.note}</p>}
               </section>
               {approvalBlocked && <p className="inline-note" role="status">{approvalBlockedReason}</p>}
-              {decision && view.decision && !approvalBlocked && (
-                <ConfirmAction
-                  label={decision.label}
-                  message={`${p.full_name} : ${decision.message}`}
-                  confirmLabel={decision.confirmLabel}
-                  busy={busy}
-                  onConfirm={() => onDecide(p, view.decision as ArtisanDecision)}
-                />
+              {view.decision && !approvalBlocked && (
+                <DecisionConfirm decision={view.decision} name={p.full_name} busy={busy} onConfirm={(reason) => onDecide(p, view.decision as ArtisanDecision, reason)} />
               )}
               {view.secondary && (
-                <ConfirmAction
-                  label={DECISIONS[view.secondary].label}
-                  message={`${p.full_name} : ${DECISIONS[view.secondary].message}`}
-                  confirmLabel={DECISIONS[view.secondary].confirmLabel}
-                  busy={busy}
-                  onConfirm={() => onDecide(p, view.secondary as ArtisanDecision)}
-                />
+                <DecisionConfirm decision={view.secondary} name={p.full_name} busy={busy} onConfirm={(reason) => onDecide(p, view.secondary as ArtisanDecision, reason)} />
               )}
+              {p.application_status === "submitted" && <DecisionConfirm decision="reject" name={p.full_name} busy={busy} onConfirm={(reason) => onDecide(p, "reject", reason)} />}
+              {refused && <DecisionConfirm decision="reopen" name={p.full_name} busy={busy} onConfirm={(reason) => onDecide(p, "reopen", reason)} />}
             </div>
           );
         })}
@@ -2516,17 +2627,44 @@ export function ArtisanAdministration({ demo, artisanId, approvalBlockedReason }
   }, []);
   /** E36: one command id per intention (dossier + action + version read), kept until confirmed. */
   const intents = useRef(new Map<string, string>());
-  async function decide(p: ArtisanApplicationRow, decision: ArtisanDecision) {
+  // ADM-02: decision log of the artisan shown (targeted mode only): reasons, dates, refusal state.
+  const [history, setHistory] = useState<ArtisanDecisionRecord[] | null>(null);
+  const [historyError, setHistoryError] = useState(false);
+  const [notice, setNotice] = useState("");
+  async function loadHistory() {
+    if (demo || !artisanId) return;
+    try {
+      const file = await api<{ decisions?: unknown }>(`/api/admin/artisans?user_id=${encodeURIComponent(artisanId)}`);
+      const list = Array.isArray(file?.decisions) ? (file.decisions as ArtisanDecisionRecord[]).filter((d) => d && typeof d.id === "string" && typeof d.reason === "string" && typeof d.decided_at === "string") : null;
+      setHistory(list);
+      setHistoryError(list === null);
+    } catch {
+      setHistoryError(true);
+    }
+  }
+  useEffect(() => {
+    void loadHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [artisanId, demo]);
+  const refusedIds = artisanId && history?.[0]?.definitive === true ? new Set([artisanId]) : undefined;
+  async function decide(p: ArtisanApplicationRow, decision: ArtisanDecision, reasonText = ""): Promise<boolean | void> {
     if (busy || loading || (artisanId && p.id !== artisanId) || (approvalBlockedReason && (decision === "approve" || decision === "reactivate"))) return;
-    const { approved, action } = DECISIONS[decision];
+    const { approved, action, definitive, reasonRequired } = DECISIONS[decision];
+    const reason = reasonText.trim();
+    // Second line of defence behind the form: a negative decision never leaves without its reason.
+    if (reasonRequired && reason.length < ARTISAN_REASON_MIN) {
+      setError(`Indiquez le motif de cette décision (${ARTISAN_REASON_MIN} caractères au moins).`);
+      return false;
+    }
     setBusy(p.id);
     setError("");
+    setNotice("");
     const expected_version = p.application_version ?? 0;
-    const intent = `${p.id}|${action}|${expected_version}`;
+    const intent = `${p.id}|${decision}|${expected_version}`;
     try {
       if (demo) {
-        const status = action === "request_changes" ? "changes_requested" : approved ? "approved" : "suspended";
-        const next = rows.map((row) => (row.id === p.id ? { ...row, artisan_approved: approved, application_status: status } : row));
+        const status = action === "request_changes" ? "changes_requested" : action === "reopen" ? "changes_requested" : approved ? "approved" : "suspended";
+        const next = rows.map((row) => (row.id === p.id ? { ...row, artisan_approved: approved, application_status: status, refused: definitive === true } : row));
         localStorage.setItem(DEMO_KEY, JSON.stringify(next));
         setRows(next);
       } else {
@@ -2536,10 +2674,18 @@ export function ArtisanAdministration({ demo, artisanId, approvalBlockedReason }
           if (!command_id) throw new Error("Ce navigateur ne permet pas de créer un identifiant sécurisé : décision impossible ici.");
           intents.current.set(intent, command_id);
         }
-        await api("/api/admin/artisans", { user_id: p.id, command_id, action, expected_version });
+        const saved = await api<{ reason_recorded?: boolean }>("/api/admin/artisans", { user_id: p.id, command_id, action, expected_version, ...(reason ? { reason } : {}), ...(definitive ? { definitive: true } : {}) });
         intents.current.delete(intent);
-        await load();
+        setNotice(
+          saved?.reason_recorded === false
+            ? "La décision est enregistrée, mais son motif n’a pas pu être conservé. Communiquez-le à l’artisan par un autre moyen."
+            : reason
+              ? "Décision enregistrée. Son motif est conservé dans l’historique et communiqué à l’artisan."
+              : "Décision enregistrée.",
+        );
+        await Promise.all([load(), loadHistory()]);
       }
+      return true;
     } catch (e) {
       const status = e instanceof ApiRequestError ? e.status : 0;
       const kind = classifyRefusal(status);
@@ -2548,13 +2694,14 @@ export function ArtisanAdministration({ demo, artisanId, approvalBlockedReason }
       if (kind === "session") {
         setRows([]); // P1: 401 purges the protected list at once
         setError((e as Error).message);
-        return;
+        return false;
       }
       const message = kind === "conflict" ? "Ce dossier a changé depuis son affichage : il a été relu, vérifiez son état avant de décider." : (e as Error).message;
       // 409 / 403 / 404 / uncertain reply: re-read the dossier before any new decision (E34, P1);
       // the refusal message stays visible over the re-read (load() clears its own error first).
       if (kind !== "invalid") await load();
       setError((prev) => prev || message);
+      return false;
     } finally {
       setBusy("");
     }
@@ -2584,7 +2731,41 @@ export function ArtisanAdministration({ demo, artisanId, approvalBlockedReason }
           Chargement des candidatures…
         </div>
       ) : error && !rows.length ? null : (
-        <ArtisanApplicationsList rows={rows} artisanId={artisanId} approvalBlockedReason={approvalBlockedReason} truncated={truncated} limit={limit} busy={Boolean(busy)} onDecide={decide} />
+        <ArtisanApplicationsList rows={rows} artisanId={artisanId} approvalBlockedReason={approvalBlockedReason} truncated={truncated} limit={limit} busy={Boolean(busy)} onDecide={decide} refusedIds={refusedIds} />
+      )}
+      {notice && (
+        <p className="inline-note" role="status" data-artisan-decision-notice="">
+          {notice}
+        </p>
+      )}
+      {artisanId && !demo && (
+        <div data-artisan-decision-history="">
+          <h3>Historique des décisions</h3>
+          {historyError ? (
+            <p className="inline-note" role="alert">
+              L’historique des décisions n’a pas pu être lu.{" "}
+              <button type="button" className="text-button" onClick={() => void loadHistory()}>
+                Réessayer
+              </button>
+            </p>
+          ) : history === null ? (
+            <p className="inline-note">Chargement de l’historique…</p>
+          ) : history.length === 0 ? (
+            <p className="inline-note">Aucune décision motivée n’est enregistrée pour cette candidature.</p>
+          ) : (
+            <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 10 }}>
+              {history.map((item) => (
+                <li key={item.id} data-artisan-decision-record={item.definitive ? "reject" : item.reopened ? "reopen" : item.action}>
+                  <strong>{artisanDecisionRecordLabel(item)}</strong> · {date(item.decided_at)} · version {item.application_version} du dossier
+                  <br />
+                  <span>Motif : {item.reason}</span>
+                  <br />
+                  <small>Décision prise par le compte administrateur {item.actor_id ? item.actor_id.slice(0, 8).toUpperCase() : "non identifié"} · motif visible par l’artisan</small>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
     </section>
   );

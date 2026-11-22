@@ -36,7 +36,8 @@ export const adminListUrl = (after: string | null, limit = ADMIN_LIMIT) => `${AD
 export const adminItemUrl = (id: string) => `${ADMIN_PATH}/${encodeURIComponent(id)}`;
 
 // ---- Paged list (personal or operator): identity-guarded, appended only when valid -------------------
-export type ListState = { phase: "loading" | "ready" | "error" | "forbidden"; rows: ErasureRequest[]; next: string | null; loadingMore: boolean; error: string; moreError: string };
+/** `executions` (operator list, SYS-09): request id → execution date; absent when the server did not send it. */
+export type ListState = { phase: "loading" | "ready" | "error" | "forbidden"; rows: ErasureRequest[]; next: string | null; loadingMore: boolean; error: string; moreError: string; executions?: Record<string, string> };
 export const LIST_INITIAL: ListState = { phase: "loading", rows: [], next: null, loadingMore: false, error: "", moreError: "" };
 export function createList({ fetcher, context, kind, get, set }: { fetcher: () => typeof fetch; context: Context; kind: "personal" | "admin"; get: () => ListState; set: (s: ListState) => void }) {
   let seq = 0;
@@ -59,7 +60,7 @@ export function createList({ fetcher, context, kind, get, set }: { fetcher: () =
       if (r.status === 401 || r.status === 403) return set({ ...LIST_INITIAL, phase: "forbidden", error: fail(r.status) });
       const p = r.status === 200 ? parse(r.body, null) : null;
       if (!p) return set({ ...LIST_INITIAL, phase: "error", error: fail(r.status) });
-      set({ ...LIST_INITIAL, phase: "ready", rows: p.rows, next: p.next_cursor });
+      set({ ...LIST_INITIAL, phase: "ready", rows: p.rows, next: p.next_cursor, ...(p.executions ? { executions: p.executions } : {}) });
     },
     async more() {
       const s = get();
@@ -74,7 +75,8 @@ export function createList({ fetcher, context, kind, get, set }: { fetcher: () =
       const p = r.status === 200 ? parse(r.body, after) : null;
       if (!p) return set({ ...get(), loadingMore: false, moreError: COPY.moreFailed });
       const seen = new Set(get().rows.map((x) => x.id));
-      set({ ...get(), rows: [...get().rows, ...p.rows.filter((x) => !seen.has(x.id))], next: p.next_cursor, loadingMore: false, moreError: "" });
+      const known = get().executions;
+      set({ ...get(), rows: [...get().rows, ...p.rows.filter((x) => !seen.has(x.id))], next: p.next_cursor, loadingMore: false, moreError: "", ...(known && p.executions ? { executions: { ...known, ...p.executions } } : {}) });
     },
   };
 }

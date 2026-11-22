@@ -2,6 +2,9 @@
 import { PLATFORM_COMMISSION_PERCENT, URGENCY_SURCHARGE_PERCENT } from "../../shared/commercial-facts";
 import { invoiceFunctionLabel, refundFunctionLabel } from "../../lib/features/platform-operations/config";
 import { auditActionLabel } from "../../lib/features/platform-operations/audit-labels";
+import { OperationsStatusPanel } from "../features/platform-operations/operations-status-panel";
+import { CredentialValidityOverview } from "../features/credential-reviews/credential-validity-overview";
+import { RetentionNotice } from "../features/site-documents/retention-notice";
 import { DemoBanner } from "../app/demo-banner";
 import floatingNav from "./floating-navigation.module.css";
 // Platform Super Admin space (reference M43). The operator of the platform, not the owner of a
@@ -1015,6 +1018,8 @@ export function AdminSpace({ session }: { session: Session }) {
     const audit = [...o.audit].sort(byNewest);
     return (
       <>
+        {/* SYS-09: operational state checked by the server; what the application cannot observe is stated as such. */}
+        <OperationsStatusPanel key={`operations|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`} demo={demo} />
         <OperatorProfileEditor key={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`} demo={demo} superAdmin={session.platformAccess?.super_admin === true} context={session.mutationContext} />
         <CoverageEditor key={`coverage|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`} demo={demo} context={session.mutationContext} />
         <IndicativePricesAdmin key={`prices|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`} demo={demo} context={session.mutationContext} />
@@ -1515,10 +1520,14 @@ function ArtisanDossierPanel({
         </dl>
         <div className={styles.panelBody}>
           <h3 className={styles.subheading}>Justificatifs reliés</h3>
+          {/* SYS-06: validity (expired / expiring soon) and versions (current / replaced) per kind. */}
+          <CredentialValidityOverview credentials={dossier.credentials} today={today} audience="admin" documentName={(id) => (id ? documentName(id) : null)} />
+          <RetentionNotice audience="admin" demo={session.mode === "demo"} />
           {dossier.credentials.length ? (
             <ul className={styles.credList}>
               {dossier.credentials.map((c) => {
                 const expired = Boolean(c.expires_on && c.expires_on < today);
+                const replaced = dossier.credentials.some((other) => other.kind === c.kind && other.id !== c.id && Date.parse(other.created_at) > Date.parse(c.created_at));
                 return (
                   <li key={c.id} className={styles.credRow}>
                     <Icon name="document" size={18} />
@@ -1536,7 +1545,7 @@ function ArtisanDossierPanel({
                       {/* ART-03 / ADM-02: decision form only when the server says can_review. */}
                       <CredentialReviewPanel credentialId={c.id} mode="admin" context={session.mutationContext} demo={session.mode === "demo"} />
                     </div>
-                    {expired ? <Tag tone="amber">Expiré</Tag> : <Tag tone="neutral">Transmis</Tag>}
+                    {replaced ? <Tag tone="neutral">Version remplacée</Tag> : expired ? <Tag tone="amber">Expiré</Tag> : <Tag tone="neutral">Version en vigueur</Tag>}
                   </li>
                 );
               })}
