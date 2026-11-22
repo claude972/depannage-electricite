@@ -62,8 +62,8 @@ Ouvert le 22 novembre 2026. **Ce fichier est le seul registre courant** de ce qu
 | R-CPT-01 | Inscription artisan : e-mail de confirmation (PUB-07) | BLOQUÉ | La recette n’a ni SMTP ni boîte de test. |
 | R-CPT-02 | Double authentification du compte admin de recette (ADM-09) | BLOQUÉ | Activation par le titulaire du compte. |
 | R-CPT-03 | Périmètre de la double authentification (factures, avoirs, rapprochement, taux, zone, garantie, approbation artisan non soumis) | DÉCISION | — |
-| R-CPT-04 | Notification à la proposition et à la décision d’un avenant (CLI-07) | OUVERT | Migration SQL. |
-| R-CPT-05 | Artisan informé d’un refus d’approbation | OUVERT | Migration SQL. |
+| R-CPT-04 | Notification à la proposition et à la décision d’un avenant (CLI-07) | **CODÉ** | Migration `20261122140000_amendment_notifications.sql` : déclencheur sur `quote_amendments`, types de notification existants réutilisés (aucun changement côté web, iOS, Android), texte sans montant. Test `tests/sql-amendment-notifications-review.mjs` : rouge sans la migration, 16 contrôles verts avec (auteur non notifié, type coupé respecté, tiers sans lecture). Notification interne à l’application seulement. **Non appliquée à la recette.** |
+| R-CPT-05 | Artisan informé d’un refus d’approbation | OUVERT | Aujourd’hui `notify_approval_decided` prévient seulement le demandeur. À traiter après lecture de l’état du devis après un refus interne (circuit simple et circuit avancé) : ne pas annoncer « devis refusé » si le devis reste ouvert. |
 | R-CPT-06 | Préférences de notification (commit `31956ccb`) | CODÉ | À rejouer sur la recette. |
 | R-CPT-07 | Notifications système natives | OUVERT | Hors de portée d’Expo Go : binaire de développement requis. |
 | R-CPT-08 | Envoi externe e-mail et push (file privée inactive) | BLOQUÉ | Configuration fournisseur absente. |
@@ -85,8 +85,8 @@ Ouvert le 22 novembre 2026. **Ce fichier est le seul registre courant** de ce qu
 
 | ID | Reste | État | Preuve ou prochaine action |
 |---|---|---|---|
-| R-PAR-01 | L’artisan ne voit pas dans l’offre les photos partagées par le client (web) | OUVERT | Défaut connu du rapport. |
-| R-PAR-02 | Filtre « Site » de la recherche d’interventions liste le site archivé sans le signaler | OUVERT | C’est un filtre de lecture sur des dossiers passés : le site doit rester trouvable, mais marqué « (archivé) » comme dans le sélecteur de portée. |
+| R-PAR-01 | L’artisan ne voit pas dans l’offre les photos partagées par le client (web) | CODÉ | Déjà traité par `2cadd0d7` (galerie montée dans l’offre et dans la mission, `components/role/artisan-space.tsx`), déployé avec `846e28d3`, postérieur au rapport : à rejouer à l’écran. |
+| R-PAR-02 | Filtre « Site » de la recherche d’interventions liste le site archivé sans le signaler | **CODÉ** | Filtre de lecture sur des dossiers passés : le site reste sélectionnable et est marqué « (archivé) », comme dans le sélecteur de portée. Test `tests/ui/enterprise-archived-site-filter.test.ts` rouge puis vert. À rejouer à l’écran. |
 | R-PAR-03 | Limite de missions simultanées expliquée à l’artisan | CODÉ | `43b55a91`, à rejouer. |
 | R-PAR-04 | ART-10 ponctualité | OUVERT | Non développé. |
 | R-PAR-05 | ENT-06 restauration : tableau de bord, échéance par ticket | CODÉ partiel | `846e28d3` (tests d’échéance), déployé, non requalifié. |
@@ -126,7 +126,7 @@ Ouvert le 22 novembre 2026. **Ce fichier est le seul registre courant** de ce qu
 
 | ID | Reste | État | Preuve ou prochaine action |
 |---|---|---|---|
-| R-PROD-00 | **CI de `main` rouge depuis `2cadd0d7`** (cinq exécutions en échec, dernière verte : `50cb1dcc`) | **CODÉ** | Causes lues dans les journaux CI : (1) build refusé, `GET(request?: Request)` dans `app/api/admin/artisans/route.ts` ; (2) revue SQL E80 en 503 : la lecture optionnelle des remboursements faisait tomber tout l’état de paiement quand le client de service est indisponible ; (3) revues E34 et E36 non alignées sur le motif obligatoire (ADM-02). Corrigé au lot 3 ; `npm run check` vert sur `mini-brafa`. Preuve CI attendue sur la PR de la branche. |
+| R-PROD-00 | **CI de `main` rouge depuis `2cadd0d7`** (cinq exécutions en échec, dernière verte : `50cb1dcc`) | **PROUVÉ (branche)** | Causes lues dans les journaux CI : (1) build refusé, `GET(request?: Request)` dans `app/api/admin/artisans/route.ts` ; (2) revue SQL E80 en 503 : la lecture optionnelle des remboursements faisait tomber tout l’état de paiement quand le client de service est indisponible ; (3) revues E34 et E36 non alignées sur le motif obligatoire (ADM-02). Corrigé au lot 3 ; `npm run check` vert sur `mini-brafa`. **PROUVÉ sur la branche** : CI GitHub de la PR `#12` verte sur `23bb77be` (2 contrôles sur 2, Node 24). `main` reste rouge tant que la branche n’est pas fusionnée. |
 | R-PROD-01 | Déployer le candidat final sur la recette et requalifier les neuf commits non couverts | OUVERT | — |
 | R-PROD-02 | Appliquer les migrations en attente à la recette | OUVERT | Voir R-ACC-01. |
 | R-PROD-03 | Sauvegarde, restauration, alertes (SYS-09) | BLOQUÉ | Procédure écrite (`EXPLOITATION_REPRISE.md`, `594d25f5`), jamais exécutée. |
@@ -142,6 +142,7 @@ Ouvert le 22 novembre 2026. **Ce fichier est le seul registre courant** de ce qu
 | R-ACC-01 | Écriture SQL sur la base de recette | **Lecture prouvée** le 22 novembre depuis le mini de Claude (`supabase migration list` et `supabase db query --linked`) : 134 migrations appliquées, identiques au dépôt ; les deux migrations du 22 novembre sont les seules en attente. Écriture non tentée : l’application à la recette attend l’accord du propriétaire (base partagée avec les sessions de recette en cours). |
 | R-ACC-02 | `macbookpro` (Docker Intel) | Injoignable le 22 novembre. |
 | R-ACC-03 | EAS | CLI absente des deux Mac joignables. |
+| R-ACC-04 | Recette à l’écran avec comptes de test | Non faite dans cette session : les identifiants de la cohorte restent sur le poste de recette et ne sont pas saisis par cette session. Les lignes `CODÉ` côté interface attendent une requalification à l’écran. |
 
 ## Journal des lots
 
@@ -150,3 +151,5 @@ Ouvert le 22 novembre 2026. **Ce fichier est le seul registre courant** de ce qu
 | 1 | 22 novembre 2026 | R-FIN-01, R-FIN-02 : rapprochement manuel idempotent face à une commission prélevée ; total des estimations remplacées calculé en base | Sur `mini-brafa`, Node 26.13.1 : `npm test` 2 515 tests, 2 217 réussis, 298 ignorés, 0 échec ; `tsc --noEmit` propre ; 5 revues SQL isolées vertes dont la nouvelle (15 contrôles). Non déployé, migration non appliquée. |
 | 2 | 22 novembre 2026 | R-FIN-05 : écriture de règlement posée à la confirmation du paiement | Rouge sans la migration, 18 contrôles verts avec. Les 97 revues SQL rejouées : 92 vertes ; 1 alignée (`sql-adv-rollback-review`, 346 lignes PASS) ; 1 instable sous charge et verte deux fois seule (`sql-guest-settlement-review`, n’exécute pas la nouvelle migration) ; 3 rouges aussi sur `main`, traitées au lot 3. |
 | 3 | 22 novembre 2026 | R-PROD-00 : réparation de la CI de `main` (signature de route, lecture optionnelle des remboursements, fixtures de motif) | `npm run check` sur `mini-brafa` : sortie 0, 2 516 tests, 2 218 réussis, 0 échec, builds Turbopack et webpack compilés. Trois revues `sql-phase2-lot-a-*` vertes (1, 3 et 4 tests). |
+| 4 | 22 novembre 2026 | R-PAR-02 : site archivé marqué dans le filtre de recherche des interventions | Test UI rouge puis vert. Code poussé ; non vérifié à l’écran. |
+| 5 | 22 novembre 2026 | R-CPT-04 : notifications internes à la proposition et à la décision d’un avenant | Rouge sans la migration, 16 contrôles verts avec. Ensemble après lots 4 et 5 sur `mini-brafa` : 98 revues SQL sur 98 vertes, `npm test` 2 517 tests, 2 219 réussis, 0 échec, typage propre. Code poussé ; migration non appliquée à la recette. |
