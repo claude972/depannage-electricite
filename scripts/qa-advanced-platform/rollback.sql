@@ -312,7 +312,9 @@ begin
  lim := missing + 3;
  if lim > 500 then perform pg_temp.qa_fail(format('environnement non rapprochable : %s paiements réels non rapprochés (+3 QA) dépassent la limite 500 ; critère ledger non testé', missing)); end if;
  v := pg_temp.qa_call(pg_temp.qa_id('finWrite'),'authenticated',format('select public.platform_reconcile(%s) v',lim));
- perform pg_temp.qa_check((v->>'settled_added')::int >= 3 and (v->>'remaining_unsettled')::int = 0 and (v->>'commission_bps')::int = bps, format('014 rapprochement (limite %s) : +%s réglés dont 3 QA, 0 restant, taux %s bps version %s', lim, v->>'settled_added', bps, v->>'setting_version'));
+ -- Since 20261122130000 the settlement entry is written when the payment is confirmed: the run may add
+ -- none for the QA payments. The criterion is their presence in the ledger and nothing left to settle.
+ perform pg_temp.qa_check((select count(*) from public.platform_ledger_entries where payment_id in (pg_temp.qa_id('payA'),pg_temp.qa_id('payC'),pg_temp.qa_id('payD')) and entry_kind='payment_settled')=3 and (v->>'remaining_unsettled')::int = 0 and (v->>'commission_bps')::int = bps, format('014 rapprochement (limite %s) : 3 règlements QA au journal (+%s par ce passage), 0 restant, taux %s bps version %s', lim, v->>'settled_added', bps, v->>'setting_version'));
  fee := round(30000::numeric*bps/10000);
  perform pg_temp.qa_check((select count(*) from public.platform_ledger_entries where payment_id=payA and entry_kind='payment_settled' and amount_cents=30000 and direction='credit' and external_event_id=pg_temp.qa_get('sessionA'))=1, '014 ledger : payment_settled QA A (30000, session QA)');
  if fee > 0 then

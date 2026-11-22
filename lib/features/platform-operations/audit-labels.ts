@@ -16,6 +16,7 @@ const LABELS: Record<string, string> = {
   // --- platform_audit: finance
   reconciliation_run: "Rapprochement financier exécuté",
   commission_withheld: "Commission prélevée",
+  settlement_entry_failed: "Écriture de règlement non enregistrée (à rapprocher)",
   checkout_provider_linked: "Paiement rattaché au prestataire de paiement",
   stripe_observation_reviewed: "Observation du prestataire de paiement examinée",
   invoice_issued: "Facture émise",
@@ -138,7 +139,7 @@ export function auditTargetLabel(kind: string): string {
 /** Sensitive = changes rights, money, moderation or a person's access; used to filter the journal. */
 const SENSITIVE = new Set([
   "operator_scope_granted", "operator_scope_revoked", "super_admin_granted", "super_admin_revoked", "setting_updated",
-  "reconciliation_run", "commission_withheld", "invoice_issued", "credit_note_issued", "billing_contact_updated",
+  "reconciliation_run", "commission_withheld", "settlement_entry_failed", "invoice_issued", "credit_note_issued", "billing_contact_updated",
   "refund_requested", "refund_approved", "refund_rejected", "refund_cancelled", "refund_settled", "refund_execution_prepared", "refund_execution_qualified", "refund_execution_reassigned",
   "dispute_opened", "dispute_under_review", "dispute_resolved", "dispute_closed",
   "review_hidden", "review_restored", "contestation_decided", "support_triage_changed", "account_erasure_executed",

@@ -60,16 +60,16 @@ try {
   // ---- 1. Legacy case: an estimate was written BEFORE the provider confirmed the commission.
   const L = await paidCheckout("L");
   let run = await reconcile();
-  eq([run.settled_added, run.commission_added], [1, 1], "paiement sans commission prélevée : règlement et estimation écrits");
+  eq([run.settled_added, run.commission_added], [0, 1], "paiement sans commission prélevée : estimation écrite (règlement déjà posé à la confirmation)");
   await link(L);
   eq(await kinds(L.payment), ["commission_estimated", "commission_withheld", "payment_settled"], "l’estimation antérieure reste au journal immuable");
 
   // ---- 2. Commission already withheld: the manual reconciliation books the settlement only.
   const W = await paidCheckout("W");
   await link(W);
-  eq(await kinds(W.payment), ["commission_withheld"], "commission prélevée confirmée par le lien fournisseur");
+  eq(await kinds(W.payment), ["commission_withheld", "payment_settled"], "commission prélevée confirmée par le lien fournisseur");
   run = await reconcile();
-  eq([run.settled_added, run.commission_added], [1, 0], "aucune estimation pour une commission déjà prélevée");
+  eq([run.settled_added, run.commission_added], [0, 0], "aucune estimation pour une commission déjà prélevée");
   eq(await kinds(W.payment), ["commission_withheld", "payment_settled"], "une seule écriture de commission pour le paiement");
 
   // ---- 3. Replays stay without effect, whatever their number.
@@ -79,7 +79,7 @@ try {
   // ---- 4. A payment with no withheld commission still gets its estimate, exactly once.
   const E = await paidCheckout("E", { amount: 10850, fee: 1085 });
   run = await reconcile();
-  eq([run.settled_added, run.commission_added], [1, 1], "estimation conservée quand rien n’est prélevé");
+  eq([run.settled_added, run.commission_added], [0, 1], "estimation conservée quand rien n’est prélevé");
   eq(await one("select amount_cents v from public.platform_ledger_entries where payment_id=$1 and entry_kind='commission_estimated'", [E.payment]), 1085, "10 % du montant réglé");
   run = await reconcile();
   eq([run.settled_added, run.commission_added], [0, 0], "rejeu sans seconde estimation");
