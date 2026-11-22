@@ -459,6 +459,9 @@ export type PaymentStatusReport = {
   /** ART-11 (optional): commission and net share of a settled job, for the artisan who authored the
    *  quote only. Server snapshot; « transfer » never states a payout to a bank account. */
   artisan_settlement?: ArtisanSettlementReport;
+  /** FIN-04 (optional): refunds of this settled payment CONFIRMED by the payment provider. A
+   *  requested or approved refund is never listed. Absent when there is none. */
+  refunds?: { count: number; cents: number; last_settled_at: string | null };
 };
 export type ArtisanSettlementReport = {
   channel: "checkout" | "card_hold";

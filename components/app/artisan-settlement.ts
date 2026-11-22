@@ -12,7 +12,7 @@ export type ArtisanSettlementView = {
   payout: string;
 };
 
-const BANK_NOTE = "Le virement vers votre compte bancaire suit ensuite le calendrier de versement de Stripe ; la plateforme ne le confirme pas ici.";
+const BANK_NOTE = "Le virement vers votre compte bancaire suit ensuite le calendrier de versement de Stripe ; la plateforme ne le confirme pas ici. Les versements regroupés indiqués par Stripe sont listés dans Profil › Performance.";
 
 /** Rate in French notation from basis points: 1000 → « 10 % », 1250 → « 12,5 % ». */
 export function commissionRateLabel(bps: number): string {

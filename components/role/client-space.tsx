@@ -1,4 +1,5 @@
 "use client";
+import { RefundNotice } from "../features/payment-refunds/refund-notice";
 import { DemoBanner } from "../app/demo-banner";
 // Espace particulier (rôle "client"). Présentation uniquement : chaque mutation passe par
 // `session.*`. Références : M61 (accueil mobile), V8-C07 (détail d’intervention), V8-C06
@@ -1121,6 +1122,9 @@ function DetailView({
                 : "Paiement en attente de confirmation Stripe. Rien n’est considéré comme réglé tant que la plateforme ne l’a pas confirmé."}
           </span>
         </p>
+      )}
+      {accepted && payment?.status === "paid" && session.mode === "live" && (
+        <RefundNotice quoteId={accepted.id} viewer="payer" identity={`${session.profileId}|${session.mutationContext.generation()}`} refreshedAt={session.refreshedAt} load={session.loadPaymentStatus} className={styles.paymentLine} />
       )}
 
       <div className={styles.cardHead}>

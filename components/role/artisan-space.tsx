@@ -1,4 +1,6 @@
 "use client";
+import { RefundNotice } from "../features/payment-refunds/refund-notice";
+import { ArtisanPayoutsPanel } from "../features/artisan-payouts/payouts-panel";
 import { ReviewContestationPanel } from "../features/review-contestation/review-contestation-panel";
 import { DemoBanner } from "../app/demo-banner";
 // Artisan space (role "artisan"). Presentational: every mutation goes through `session`.
@@ -2610,6 +2612,9 @@ function PaymentPanel({ session, intervention: i }: { session: Session; interven
       )}
       <p>{text}</p>
       {settlement && <p data-artisan-payout="">{settlement.payout}</p>}
+      {accepted && session.mode === "live" && (
+        <RefundNotice quoteId={accepted.id} viewer="artisan" identity={`${session.profileId}|${session.mutationContext.generation()}`} refreshedAt={session.refreshedAt} load={session.loadPaymentStatus} />
+      )}
       {disputeLine && (
         <p data-artisan-dispute={dispute ?? undefined}>
           <Tag tone={disputeLine.tone}>{disputeLine.label}</Tag> {disputeLine.text}
@@ -3959,6 +3964,8 @@ function PerformanceView({ session }: { session: Session }) {
       )}
       {/* ART-10: revenue by period and source, completed interventions and punctuality (server). */}
       {livePerf.phase !== "demo" && <PeriodPerformancePanel source={session} />}
+      {/* FIN-06: payouts of the artisan's own settlement account, as reported by the provider. */}
+      {session.mode === "live" && <ArtisanPayoutsPanel identity={`${session.profileId}|${session.mutationContext.generation()}`} />}
       {/* Detailed list from the loaded dossiers only: a distinct panel, never the server totals. */}
       <section className="panel" aria-labelledby="perf-paid" data-perf-loaded-payments="">
         <h2 id="perf-paid" style={{ fontSize: 17, marginBottom: 8 }}>
