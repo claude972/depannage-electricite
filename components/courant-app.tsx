@@ -649,9 +649,13 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
         if (quote) {
           const report = await loadPaymentStatus(quote.id);
           if (!guard.alive(g)) return;
+          const reported = report?.payment as { status?: string; failure_code?: string | null } | null | undefined;
+          // An expired Checkout session is reported as « failed » with failure_code « expired ».
           const raw =
-            report?.payment?.status ??
-            (report ? "none" : data.payments.find((p) => p.quote_id === quote.id)?.status);
+            reported?.status === "failed" && reported.failure_code === "expired"
+              ? "expired"
+              : report?.payment?.status ??
+                (report ? "none" : data.payments.find((p) => p.quote_id === quote.id)?.status);
           status =
             raw === "paid" || raw === "pending" || raw === "failed" || raw === "expired"
               ? raw
