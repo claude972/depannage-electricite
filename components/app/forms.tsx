@@ -2,7 +2,7 @@
 import { RequestProgress } from "./request-progress";
 import { BookingLocationField } from "./booking-location";
 import { REQUEST_DESCRIPTION_LABEL } from "../../shared/request-details";
-import { URGENCY_NOTICE } from "../../shared/commercial-facts";
+import { URGENCY_NOTICE, WARRANTY_SUMMARY } from "../../shared/commercial-facts";
 import { CoverageNotice } from "../features/coverage/coverage-notice";
 // Operational forms extracted from the original monolith; behaviour preserved, shared by the
 // role spaces. Styling classes live in app/globals.css.
@@ -3345,9 +3345,9 @@ function WarrantyPanelBody({ interventionId, demo, role, context, ownerId, fetch
         <Icon name="shield" />
       </div>
       <p className="warranty-intro">
-        Le projet prévoit une garantie d’un an. Le dépôt réel des demandes
-        nécessite l’activation des conditions commerciales par l’exploitant.
-        Aucun droit contractuel n’est attesté par cette démonstration.
+        {WARRANTY_SUMMARY} Les conditions publiées figurent dans l’aide,
+        rubrique Garantie. Une demande se dépose depuis le dossier d’une
+        intervention terminée.
       </p>
       {error && (
         <div className="alert error" role="alert">

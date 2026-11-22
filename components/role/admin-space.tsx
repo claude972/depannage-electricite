@@ -1,4 +1,5 @@
 "use client";
+import { PLATFORM_COMMISSION_PERCENT, URGENCY_SURCHARGE_PERCENT } from "../../shared/commercial-facts";
 import { DemoBanner } from "../app/demo-banner";
 import floatingNav from "./floating-navigation.module.css";
 // Platform Super Admin space (reference M43). The operator of the platform, not the owner of a
@@ -1013,13 +1014,13 @@ export function AdminSpace({ session }: { session: Session }) {
         <OperatorProfileEditor key={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`} demo={demo} superAdmin={session.platformAccess?.super_admin === true} context={session.mutationContext} />
         <CoverageEditor key={`coverage|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`} demo={demo} context={session.mutationContext} />
         <IndicativePricesAdmin key={`prices|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`} demo={demo} context={session.mutationContext} />
-        <Unavailable title="Paramètres de la plateforme" reason="Aucun réglage n’est modifiable depuis cette interface : les valeurs ci-dessous restent à définir par l’exploitant." blocker="ADM-08">
+        <Panel title="Paramètres de la plateforme" intro="Lecture seule ici : la commission et l’émetteur des factures se règlent dans Finance (paramètres versionnés).">
           <dl className={styles.definitions} style={{ padding: "12px 0 0" }}>
-            {["Taux de commission", "TVA par défaut"].map((item) => (
-              <FragmentPair key={item} term={item} value="À définir par l’exploitant" />
-            ))}
+            <FragmentPair term="Taux de commission" value={`${PLATFORM_COMMISSION_PERCENT} % (décision du propriétaire du 21 novembre 2026)`} />
+            <FragmentPair term="Majoration d’urgence" value={`+${URGENCY_SURCHARGE_PERCENT} %`} />
+            <FragmentPair term="TVA par défaut" value="À définir par l’exploitant" />
           </dl>
-        </Unavailable>
+        </Panel>
         <Panel title="Fonctions activées sur le service" intro="Lecture seule : l’activation de ces fonctions ne se règle pas depuis cette interface.">
           <div className={`${styles.tableWrap} ${styles.capTable}`}>
             <table className={styles.table}>
