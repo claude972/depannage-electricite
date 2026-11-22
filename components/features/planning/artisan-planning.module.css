@@ -1,0 +1,347 @@
+/* Planning artisan (ADV-PLANNING-NOTIFICATIONS-001). DESIGN.md tokens, 8 px grid, 1 px borders. */
+.root {
+  display: grid;
+  gap: 24px;
+}
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+.toolbarNav {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.toolbarNav button {
+  min-width: 44px;
+  min-height: 44px;
+}
+.weekTitle {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 650;
+  color: #102a43;
+}
+.zone {
+  font-size: 13px;
+  color: #526178;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  color: #526178;
+}
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid #d8e0eb;
+}
+.week {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  margin: 0;
+  padding: 0; /* <ol> semantics without the native 40 px indent */
+  list-style: none;
+}
+@media (min-width: 960px) {
+  .week {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+}
+.day {
+  border: 1px solid #d8e0eb;
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  min-height: 96px;
+}
+.dayToday {
+  border-color: #1457d9;
+}
+.dayHead {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  font-size: 13px;
+  color: #526178;
+  min-width: 0;
+}
+.dayHead strong {
+  color: #102a43;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+/* Current-day marker on its own line: never wraps the date inside a narrow column. */
+.today {
+  display: inline-block;
+  padding: 0 6px;
+  border: 1px solid #1457d9;
+  border-radius: 4px;
+  color: #1457d9;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.dayEmpty {
+  margin: 0;
+  font-size: 13px;
+  color: #526178;
+}
+.block {
+  display: grid;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid #d8e0eb;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #172b4d;
+  background: #fff;
+}
+.block time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: #102a43;
+}
+.block small {
+  color: #526178;
+}
+/* Slot kinds: full 1px outline in the kind colour + fill (no side accent bar). */
+.blockFree {
+  border-color: #167344;
+  background: #f3faf6;
+}
+.blockAppointment {
+  border-color: #1457d9;
+  background: #f1f6ff;
+}
+.blockBusy {
+  border-color: #526178;
+  background: #f5f7fb;
+}
+.blockUnavailable {
+  border-color: #925c00;
+  background: repeating-linear-gradient(135deg, #fff 0 6px, #f5f7fb 6px 12px);
+}
+.blockAvailable {
+  border-color: #167344;
+  border-style: dashed;
+}
+.blockActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.blockActions button {
+  min-height: 44px;
+  padding: 0 8px;
+}
+.outside {
+  color: #925c00;
+}
+.section {
+  display: grid;
+  gap: 12px;
+}
+.sectionHead {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px 16px;
+}
+.sectionHead h2 {
+  margin: 0;
+  font-size: 17px;
+  color: #102a43;
+}
+.rules {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #d8e0eb;
+  border-radius: 8px;
+  background: #fff;
+}
+.rules li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 16px;
+  align-items: center;
+  padding: 8px 16px;
+  min-height: 44px;
+}
+.rules li + li {
+  border-top: 1px solid #d8e0eb;
+}
+.rules strong {
+  color: #102a43;
+}
+.rules small {
+  display: block;
+  color: #526178;
+}
+.form {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #d8e0eb;
+  border-radius: 8px;
+  background: #fff;
+}
+.formRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+@media (min-width: 720px) {
+  .formRow {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  }
+}
+.form :global(.field) {
+  margin: 0;
+}
+.formActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+}
+.formActions button {
+  min-height: 44px;
+}
+.error {
+  margin: 0;
+  color: #b42318;
+  font-size: 14px;
+}
+.notice {
+  margin: 0;
+  color: #167344;
+  font-size: 14px;
+}
+.readOnly {
+  margin: 0;
+  padding: 12px 16px;
+  border: 1px solid #925c00;
+  border-radius: 6px;
+  background: #fff;
+  color: #172b4d;
+  font-size: 14px;
+}
+.demoNote {
+  margin: 0;
+  font-size: 13px;
+  color: #526178;
+}
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---- Opt-in theme (FASTSPLIT-DOCUMENTS-PLANNING-THEME-001) -----------------------------------
+   Active only under the parent ThemeSurface (`.ui-v2`): --ui-* tokens, light and dark, same
+   selectors +1 class. Outside a themed space nothing changes. Slot kinds stay distinguishable
+   without relying on colour alone: free = success outline on a tinted surface, appointment =
+   strong text-colour outline on the card, busy = muted outline on the surface, unavailable =
+   warning outline + stripes, available = dashed success outline. Full 1px outlines only, no side
+   accent bar. */
+:global(.ui-v2) .weekTitle,
+:global(.ui-v2) .dayHead strong,
+:global(.ui-v2) .block time,
+:global(.ui-v2) .sectionHead h2,
+:global(.ui-v2) .rules strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .zone,
+:global(.ui-v2) .legend,
+:global(.ui-v2) .dayHead,
+:global(.ui-v2) .dayEmpty,
+:global(.ui-v2) .block small,
+:global(.ui-v2) .rules small,
+:global(.ui-v2) .demoNote {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .swatch {
+  border-color: var(--ui-border);
+}
+:global(.ui-v2) .day,
+:global(.ui-v2) .rules,
+:global(.ui-v2) .form {
+  border-color: var(--ui-border);
+  background: var(--ui-card);
+}
+:global(.ui-v2) .rules li + li {
+  border-top-color: var(--ui-border);
+}
+:global(.ui-v2) .dayToday {
+  border-color: var(--ui-accent);
+}
+:global(.ui-v2) .today {
+  border-color: var(--ui-accent);
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .block {
+  border-color: var(--ui-border);
+  color: var(--ui-text);
+  background: var(--ui-card);
+}
+:global(.ui-v2) .blockFree {
+  border-color: var(--ui-success);
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .blockAppointment {
+  border-color: var(--ui-text);
+  background: var(--ui-card);
+}
+:global(.ui-v2) .blockBusy {
+  border-color: var(--ui-text-muted);
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .blockUnavailable {
+  border-color: var(--ui-warning);
+  background: repeating-linear-gradient(135deg, var(--ui-card) 0 6px, var(--ui-surface) 6px 12px);
+}
+:global(.ui-v2) .blockAvailable {
+  border-color: var(--ui-success);
+}
+:global(.ui-v2) .outside {
+  color: var(--ui-warning);
+}
+:global(.ui-v2) .error {
+  color: var(--ui-danger);
+}
+:global(.ui-v2) .notice {
+  color: var(--ui-success);
+}
+:global(.ui-v2) .readOnly {
+  border-color: var(--ui-warning);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}

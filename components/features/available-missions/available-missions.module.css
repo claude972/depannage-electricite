@@ -1,0 +1,172 @@
+/* Available missions (artisan). --ui-* tokens only, light/dark, 1px borders, 44 px targets, focus. */
+.panel {
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-card);
+  color: var(--ui-text);
+}
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.head h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.hint,
+.meta {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ui-text-muted);
+}
+.note {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface);
+  font-size: 14px;
+}
+.error {
+  margin: 0;
+  color: var(--ui-danger);
+  font-size: 14px;
+}
+.list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.row {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  min-height: 44px;
+  padding: 12px 14px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-card);
+  color: var(--ui-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.row:hover {
+  background: var(--ui-surface);
+}
+.row[aria-current="true"] {
+  border-color: var(--ui-accent);
+}
+.rowHead {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+.urgent {
+  color: var(--ui-warning);
+  font-weight: 600;
+}
+.summary {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--ui-accent);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-surface);
+}
+.summary h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.kv {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px 16px;
+  margin: 0;
+}
+.kv dt {
+  font-size: 12px;
+  color: var(--ui-text-muted);
+}
+.kv dd {
+  margin: 0;
+  font-weight: 600;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.primary,
+.secondary {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.primary {
+  border-color: var(--ui-primary);
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+.secondary {
+  background: var(--ui-card);
+  color: var(--ui-text);
+}
+.primary:disabled,
+.secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.row:focus-visible,
+.primary:focus-visible,
+.secondary:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+@media (max-width: 640px) {
+  .panel {
+    padding: 16px;
+  }
+  .actions > * {
+    flex: 1 1 100%;
+  }
+}
+
+/* Sort control (nearest): two 44 px buttons, pressed state from the mount order. */
+.sort { display: flex; flex-wrap: wrap; gap: 8px; }
+.sort > button[aria-pressed="true"] { border-color: var(--ui-primary); color: var(--ui-text); opacity: 1; cursor: default; }
+@media (max-width: 640px) { .sort > button { flex: 1 1 100%; } }
+
+.declineForm,
+.declineForm label {
+  display: grid;
+  gap: 8px;
+}
+.declineForm textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 8px 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-card);
+  color: var(--ui-text);
+  font: inherit;
+  resize: vertical;
+}
+.declineForm textarea:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}

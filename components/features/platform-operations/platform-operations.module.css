@@ -1,0 +1,139 @@
+/* ADV-PLATFORM-FINANCE-001 — leaf views. Shared primitives (.button, .tag, .stat, .unavailable, .field, .field-error, .empty-state, .page-loader) come from app/globals.css. 8px grid, 1px borders, one accent. */
+.view { display: grid; gap: 24px; min-width: 0; }
+.head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px 16px; }
+.head h2 { margin: 0; font-size: 20px; line-height: 1.3; color: var(--navy, #102a43); }
+.head p { margin: 4px 0 0; color: var(--muted, #586b80); font-size: 14px; max-width: 72ch; }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line, #dce4ee); }
+.tab { min-height: 44px; padding: 8px 16px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted, #586b80); font: inherit; font-weight: 550; cursor: pointer; }
+.tab[aria-selected="true"] { color: var(--blue, #1457d9); border-bottom-color: var(--blue, #1457d9); }
+.tab:focus-visible { outline: 2px solid var(--blue, #1457d9); outline-offset: -2px; }
+.panel { border: 1px solid var(--line, #dce4ee); border-radius: 10px; background: var(--surface, #fff); padding: 16px; display: grid; gap: 16px; min-width: 0; }
+.panel h3 { margin: 0; font-size: 16px; color: var(--navy, #102a43); }
+.panelHead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.panelHead p { margin: 0; color: var(--muted, #586b80); font-size: 13px; }
+.strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+.stat { border: 1px solid var(--line, #dce4ee); border-radius: 8px; padding: 12px; display: grid; gap: 4px; }
+.stat dt { font-size: 13px; color: var(--muted, #586b80); }
+.stat dd { margin: 0; font-size: 18px; font-weight: 650; color: var(--text, #172b4d); font-variant-numeric: tabular-nums; }
+.stat small { font-size: 12px; color: var(--muted, #586b80); font-weight: 450; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: end; }
+.toolbar label { display: grid; gap: 4px; font-size: 13px; color: var(--muted, #586b80); }
+.toolbar select, .toolbar input { min-height: 44px; padding: 8px 12px; border: 1px solid var(--line, #dce4ee); border-radius: 8px; font: inherit; color: inherit; background: var(--surface, #fff); }
+.tableWrap { overflow-x: auto; border: 1px solid var(--line, #dce4ee); border-radius: 8px; }
+.table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.table th, .table td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line, #dce4ee); vertical-align: top; }
+.table th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.02em; color: var(--muted, #586b80); background: var(--bg, #f5f7fb); }
+.table tr:last-child td { border-bottom: 0; }
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; overflow-wrap: anywhere; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.form { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 720px) { .form { grid-template-columns: repeat(2, minmax(0, 1fr)); } .form .full { grid-column: 1 / -1; } }
+.form label { display: grid; gap: 4px; font-size: 14px; color: var(--text, #172b4d); }
+.form input, .form select, .form textarea { min-height: 44px; padding: 8px 12px; border: 1px solid var(--line, #dce4ee); border-radius: 8px; font: inherit; color: inherit; background: var(--surface, #fff); }
+.form textarea { min-height: 88px; resize: vertical; }
+.form input:focus-visible, .form select:focus-visible, .form textarea:focus-visible, .toolbar select:focus-visible, .toolbar input:focus-visible { outline: 2px solid var(--blue, #1457d9); outline-offset: 1px; }
+.hint { font-size: 12px; color: var(--muted, #586b80); }
+.error { color: var(--red, #b42318); font-size: 13px; margin: 0; }
+.success { color: var(--green, #167344); font-size: 13px; margin: 0; }
+.alert { border: 1px solid #e9d8b4; background: #fff8e8; color: #5c3b00; border-radius: 8px; padding: 12px; font-size: 14px; }
+.danger { border: 1px solid #f0c2bd; background: #fdf1f0; color: #7a1c14; border-radius: 8px; padding: 12px; font-size: 14px; display: grid; gap: 8px; }
+.pager { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; font-size: 13px; color: var(--muted, #586b80); }
+.button { min-height: 44px; padding: 8px 16px; border: 1px solid var(--line, #dce4ee); border-radius: 8px; background: var(--surface, #fff); color: var(--text, #172b4d); font: inherit; font-weight: 550; cursor: pointer; }
+.button:disabled { opacity: 0.6; cursor: not-allowed; }
+.button:focus-visible { outline: 2px solid var(--blue, #1457d9); outline-offset: 2px; }
+.primary { background: var(--blue, #1457d9); border-color: var(--blue, #1457d9); color: #fff; }
+.destructive { border-color: var(--red, #b42318); color: var(--red, #b42318); }
+.details { font-size: 13px; color: var(--muted, #586b80); display: grid; gap: 4px; }
+.kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; font-size: 13px; }
+.kv dt { color: var(--muted, #586b80); }
+.kv dd { margin: 0; overflow-wrap: anywhere; }
+.list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.card { border: 1px solid var(--line, #dce4ee); border-radius: 8px; padding: 12px; display: grid; gap: 8px; }
+.link { color: var(--blue, #1457d9); font-weight: 550; text-decoration: underline; text-underline-offset: 3px; min-height: 44px; display: inline-flex; align-items: center; }
+.link:focus-visible { outline: 2px solid var(--blue, #1457d9); outline-offset: 2px; border-radius: 4px; }
+.disabledLink { color: var(--muted, #586b80); text-decoration: underline dotted; min-height: 44px; display: inline-flex; align-items: center; cursor: not-allowed; }
+.srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* FASTSPLIT-PLATFORM-THEME-001 — opt-in Delivo theme. Applies only inside a ThemeSurface
+   (`.ui-v2`, which sets the --ui-* tokens for light and dark); unthemed consumers keep the rules
+   above. Stable hook for host skins: the view roots carry data-module="platform-operations"
+   (+ data-platform-view="operators|finance|moderation"). --ui-* tokens only, 1px borders. */
+:global(.ui-v2) .view { color: var(--ui-text); font-family: var(--ui-font); }
+:global(.ui-v2) .head h2,
+:global(.ui-v2) .panel h3 { color: var(--ui-text); font-weight: 700; }
+:global(.ui-v2) .head p,
+:global(.ui-v2) .panelHead p,
+:global(.ui-v2) .stat dt,
+:global(.ui-v2) .stat small,
+:global(.ui-v2) .toolbar label,
+:global(.ui-v2) .hint,
+:global(.ui-v2) .pager,
+:global(.ui-v2) .details,
+:global(.ui-v2) .kv dt { color: var(--ui-text-muted); }
+:global(.ui-v2) .tabs { border-bottom-color: var(--ui-border); }
+:global(.ui-v2) .tab { color: var(--ui-text-muted); }
+:global(.ui-v2) .tab:hover { color: var(--ui-text); }
+:global(.ui-v2) .tab[aria-selected="true"] { color: var(--ui-accent); border-bottom-color: var(--ui-accent); }
+:global(.ui-v2) .panel { border-color: var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-card); }
+:global(.ui-v2) .stat,
+:global(.ui-v2) .card { border-color: var(--ui-border); background: var(--ui-card); }
+:global(.ui-v2) .panel .stat,
+:global(.ui-v2) .panel .card { background: var(--ui-surface); }
+:global(.ui-v2) .stat dd { color: var(--ui-text); }
+:global(.ui-v2) .tableWrap { border-color: var(--ui-border); }
+:global(.ui-v2) .table th,
+:global(.ui-v2) .table td { border-bottom-color: var(--ui-border); }
+:global(.ui-v2) .table th { background: var(--ui-surface); color: var(--ui-text-muted); }
+:global(.ui-v2) .table td { color: var(--ui-text); }
+:global(.ui-v2) .toolbar select,
+:global(.ui-v2) .toolbar input,
+:global(.ui-v2) .form input,
+:global(.ui-v2) .form select,
+:global(.ui-v2) .form textarea { border-color: var(--ui-border); background: var(--ui-bg); color: var(--ui-text); color-scheme: var(--ui-scheme); }
+:global(.ui-v2) .form input::placeholder,
+:global(.ui-v2) .form textarea::placeholder,
+:global(.ui-v2) .toolbar input::placeholder { color: var(--ui-text-muted); opacity: 1; }
+:global(.ui-v2) .form label { color: var(--ui-text); }
+:global(.ui-v2) .form input[aria-invalid="true"],
+:global(.ui-v2) .form textarea[aria-invalid="true"] { border-color: var(--ui-danger); }
+:global(.ui-v2) .form input:focus-visible,
+:global(.ui-v2) .form select:focus-visible,
+:global(.ui-v2) .form textarea:focus-visible,
+:global(.ui-v2) .toolbar select:focus-visible,
+:global(.ui-v2) .toolbar input:focus-visible,
+:global(.ui-v2) .tab:focus-visible,
+:global(.ui-v2) .button:focus-visible,
+:global(.ui-v2) .link:focus-visible { outline: 3px solid var(--ui-focus); outline-offset: 2px; }
+:global(.ui-v2) .error { color: var(--ui-danger); }
+:global(.ui-v2) .success { color: var(--ui-success); }
+:global(.ui-v2) .alert { border-color: var(--ui-warning); background: var(--ui-surface); color: var(--ui-text); }
+:global(.ui-v2) .danger { border-color: var(--ui-danger); background: var(--ui-surface); color: var(--ui-text); }
+:global(.ui-v2) .danger > span:first-child { color: var(--ui-danger); font-weight: 600; }
+:global(.ui-v2) .button { border-color: var(--ui-border); border-radius: var(--ui-radius-md); background: transparent; color: var(--ui-text); font-weight: 600; }
+:global(.ui-v2) .button:hover:not(:disabled) { border-color: var(--ui-accent); }
+:global(.ui-v2) .primary { border-color: var(--ui-primary); background: var(--ui-primary); color: var(--ui-on-primary); }
+:global(.ui-v2) .primary:hover:not(:disabled) { border-color: var(--ui-primary); background: var(--ui-primary-hover); }
+:global(.ui-v2) .destructive { border-color: var(--ui-danger); background: transparent; color: var(--ui-danger); }
+:global(.ui-v2) .link { color: var(--ui-accent); }
+:global(.ui-v2) .disabledLink { color: var(--ui-text-muted); }
+/* Global primitives rendered by these views, scoped to the module root (meaning kept: green =
+   active/settled, amber = pending/hidden, red = refused; always with a text label). */
+:global(.ui-v2) .view :global(.tag) { background: var(--ui-surface); color: var(--ui-text-muted); border: 1px solid var(--ui-border); }
+:global(.ui-v2) .view :global(.tag-green) { color: var(--ui-success); }
+:global(.ui-v2) .view :global(.tag-blue) { color: var(--ui-accent); }
+:global(.ui-v2) .view :global(.tag-amber) { color: var(--ui-warning); }
+:global(.ui-v2) .view :global(.tag-red) { color: var(--ui-danger); }
+:global(.ui-v2) .view :global(.text-button) { color: var(--ui-accent); min-height: 44px; }
+:global(.ui-v2) .view :global(.field-error) { color: var(--ui-danger); }
+:global(.ui-v2) .view :global(.empty-state) h3 { color: var(--ui-text); }
+:global(.ui-v2) .view :global(.empty-state) p { color: var(--ui-text-muted); }
+:global(.ui-v2) .view :global(.unavailable) { border-color: var(--ui-border); background: var(--ui-surface); color: var(--ui-text-muted); }
+:global(.ui-v2) .view :global(.unavailable) strong { color: var(--ui-text); }
+:global(.ui-v2) .view :global(.page-loader) { color: var(--ui-text-muted); }
+/* Responsive (19/11) : une liste déroulante de filtre prenait la largeur de son option la plus
+   longue et élargissait la page (Remboursements : 357 px à 320 px). Les champs des barres d'outils
+   et des formulaires peuvent maintenant rétrécir avec leur conteneur. */
+.toolbar { min-width: 0; max-width: 100%; }
+.toolbar label { grid-template-columns: minmax(0, 1fr); min-width: 0; max-width: 100%; }
+.toolbar select, .toolbar input, .form select, .form input, .form textarea { min-width: 0; max-width: 100%; }

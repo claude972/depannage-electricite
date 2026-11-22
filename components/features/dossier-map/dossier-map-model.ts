@@ -1,0 +1,97 @@
+// Client dossier map (CLI-05) — pure model (no React). There is ONE map concept in the app: the
+// tracking leaf's TrackingMap (OSM raster tiles, already the authorized flow), shown under the
+// tracking card's rules. This panel reuses it — only with a fresh consented position and/or a
+// confirmed destination from the server — and never renders a second map when the « Suivi de
+// l’artisan » card already shows it on the same page. The declared address stays text, never
+// geocoded or sent anywhere automatically. Data: the tracking contract (lib/features/tracking/
+// types.ts) through the session's TrackingClient; trackingDisplay reused from ../tracking/model.
+import type { TrackingSnapshot } from "../../../lib/features/tracking/types";
+import { MAX_SAMPLE_AGE_MS, trackingDisplay, type TrackingDisplay } from "../tracking/model";
+
+export type DeclaredAddress = { address: string; postal_code: string; city: string };
+
+/** Server snapshot older than this ⇒ the shown state is labelled « à actualiser ». */
+export const SNAPSHOT_STALE_MS = 2 * 60_000;
+/** A shared position older than this is never shown as current (same bound as the tracking leaf). */
+export const POSITION_STALE_MS = MAX_SAMPLE_AGE_MS;
+
+export const STAGE_LABEL: Record<TrackingSnapshot["tracking"]["travel_stage"], string> = {
+  planned: "Déplacement prévu",
+  en_route: "Artisan en route",
+  on_site: "Artisan sur place",
+};
+export const MAP_COPY = {
+  noMap: "Pas de carte pour l’instant : ni position partagée récente ni destination confirmée par le serveur. Votre adresse n’est envoyée à aucun service.",
+  tiles: "Fond de carte chargé depuis OpenStreetMap (tile.openstreetmap.org) : ce service voit la zone affichée. Votre adresse déclarée ne lui est pas transmise.",
+  inCard: "La carte, la position partagée, la destination et l’heure d’arrivée estimée sont affichées dans la section « Suivi de l’artisan » de ce dossier.",
+  declared: "Adresse déclarée dans votre demande, non vérifiée.",
+  noEta: "Ce panneau ne calcule aucune durée de trajet ni heure d’arrivée : une estimation n’existe que si un itinéraire récent est disponible, et elle figure alors dans « Suivi de l’artisan » ci-dessous.",
+  notYet: "Le suivi du déplacement est proposé une fois l’intervention acceptée.",
+  loading: "Lecture du suivi…",
+  loadFailed: "Le suivi n’a pas pu être lu. Réessayez.",
+  offline: "Hors connexion : le suivi n’est pas lisible pour le moment. L’adresse déclarée reste affichée.",
+  unavailable: "Suivi du déplacement momentanément indisponible.",
+  demo: "Démonstration : suivi fictif, aucune position réelle.",
+  externalNotice:
+    "Ouvrir dans votre application de cartes transmet l’adresse de l’intervention à cette application (service tiers, hors de la plateforme). Rien n’est envoyé tant que vous ne l’ouvrez pas.",
+} as const;
+
+const hhmm = (iso: string) => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+export function ago(iso: string, now: number): string {
+  const s = Math.max(0, Math.round((now - Date.parse(iso)) / 1000));
+  if (s < 60) return "il y a moins d’une minute";
+  const m = Math.round(s / 60);
+  if (m < 60) return `il y a ${m} min`;
+  const h = Math.floor(m / 60);
+  return `il y a ${h} h ${String(m % 60).padStart(2, "0")}`;
+}
+
+export type MapView = {
+  stage: string;
+  freshness: { text: string; stale: boolean };
+  /** Sharing / consent state, always explicit. */
+  sharing: { kind: TrackingDisplay["kind"] | "not_shared"; text: string };
+  /** Only when the server returned a fresh, consented position. */
+  position: { latitude: number; longitude: number; accuracyM: number; text: string } | null;
+};
+/** Milliseconds until the shown state must change on its own (a fresh position becoming stale, the
+ *  snapshot crossing « à actualiser ») — so the panel re-renders at the threshold even if nothing
+ *  else does. Capped at 60 s to keep « il y a … » honest; null when nothing is time-dependent. */
+export function nextTransitionMs(snapshot: TrackingSnapshot, now: number): number | null {
+  const deadlines: number[] = [];
+  const server = Date.parse(snapshot.server_time);
+  if (Number.isFinite(server)) deadlines.push(server + SNAPSHOT_STALE_MS);
+  const sampled = snapshot.tracking.position ? Date.parse(snapshot.tracking.position.sampled_at) : NaN;
+  // trackingDisplay rounds the age to whole seconds: « fresh » holds until age ≥ limit + 500 ms.
+  if (Number.isFinite(sampled)) deadlines.push(sampled + POSITION_STALE_MS + 500);
+  const future = deadlines.filter((d) => d > now).map((d) => d - now);
+  const ticking = Number.isFinite(server) ? 60_000 : null;
+  const candidates = [...future, ...(ticking ? [ticking] : [])];
+  return candidates.length ? Math.max(0, Math.min(...candidates)) + 1 : null;
+}
+/** Server snapshot → what can honestly be said. Never invents a position, ETA or distance. */
+export function mapView(snapshot: TrackingSnapshot, now: number): MapView {
+  const t = snapshot.tracking;
+  const display = trackingDisplay(snapshot, now)!;
+  const serverAge = now - Date.parse(snapshot.server_time);
+  const stale = !(serverAge <= SNAPSHOT_STALE_MS);
+  const freshness = { text: `Mis à jour à ${hhmm(snapshot.server_time)} (${ago(snapshot.server_time, now)})${stale ? " — à actualiser" : ""}. Source : suivi de la plateforme.`, stale };
+  let sharing: MapView["sharing"];
+  let position: MapView["position"] = null;
+  if (display.kind === "fresh" && display.position) {
+    position = { latitude: display.position.latitude, longitude: display.position.longitude, accuracyM: display.position.accuracyM, text: `Position partagée par l’artisan à ${hhmm(display.position.sampledAt)} (précision ±${Math.round(display.position.accuracyM)} m).` };
+    sharing = { kind: "fresh", text: "Partage de position actif, avec l’accord de l’artisan." };
+  } else if (display.kind === "stale") {
+    sharing = { kind: "stale", text: display.knownTime ? `Dernière position partagée à ${hhmm(display.knownTime)} : périmée (plus d’une minute), non affichée.` : "Position périmée, non affichée." };
+  } else if (display.kind === "stopped") {
+    sharing = { kind: "stopped", text: "Partage de position arrêté par l’artisan." };
+  } else if (t.shared) {
+    sharing = { kind: "no_position", text: "Partage accepté par l’artisan, en attente d’une première position." };
+  } else {
+    sharing = { kind: "not_shared", text: t.consent_at ? "Partage de position terminé." : "L’artisan ne partage pas sa position (aucun accord de partage en cours)." };
+  }
+  return { stage: STAGE_LABEL[t.travel_stage], freshness, sharing, position };
+}
+
+/** Device map app link (geo: URI), built ONLY after the explicit consent click; no web domain. */
+export const externalMapsHref = (a: DeclaredAddress) => `geo:0,0?q=${encodeURIComponent(`${a.address}, ${a.postal_code} ${a.city}`)}`;

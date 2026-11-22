@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
+    <title>Préparer une demande hors connexion — DomDépannage</title>
+    <style>
+      /* Self-contained (no external request): same DESIGN.md tokens as offline.html, light/dark
+         from the system. No script here: behaviour lives in /offline-request.js only. */
+      :root {
+        color-scheme: light dark;
+        --bg: #ffffff;
+        --surface: #f4f6fa;
+        --card: #ffffff;
+        --text: #111318;
+        --muted: #4b5563;
+        --border: #d9dee7;
+        --primary: #2246e5;
+        --on-primary: #ffffff;
+        --accent: #2246e5;
+        --focus: #2246e5;
+        --danger: #b42318;
+        --warning: #925c00;
+        --success: #0f5c3a;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #121417;
+          --surface: #1b1e23;
+          --card: #1a1a1a;
+          --text: #f5f7fa;
+          --muted: #b5bac4;
+          --border: #343a44;
+          --primary: #4062f7;
+          --accent: #8ea2ff;
+          --focus: #8ea2ff;
+          --danger: #ff8a80;
+          --warning: #f5b860;
+          --success: #5bd49a;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Plus Jakarta Sans", "Avenir Next", Avenir, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+        font-size: 1rem;
+        line-height: 1.6;
+      }
+      main { max-width: 40rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+      @media (min-width: 720px) { main { padding: 3rem 1.5rem 4rem; } }
+      .brand { margin: 0 0 1.5rem; color: var(--text); font-weight: 500; font-size: 1rem; letter-spacing: normal; }
+      .brand span { color: var(--accent); }
+      h1 { margin: 0 0 0.75rem; color: var(--text); line-height: 32px; font-size: 23px; font-weight: 500; letter-spacing: -0.2px; }
+      p { max-width: 62ch; margin: 0 0 1rem; color: var(--muted); }
+      @media (min-width: 1024px) { h1 { font-size: 28px; line-height: 36px; } }
+      .lead { color: var(--text); }
+      .warning {
+        margin: 0 0 1.5rem;
+        padding: 1rem;
+        border: 1px solid var(--warning);
+        border-radius: 12px;
+        background: var(--surface);
+        color: var(--text);
+      }
+      .warning strong { display: block; margin-bottom: 0.25rem; color: var(--text); }
+      .warning ul { margin: 0.5rem 0 0; padding-left: 1.25rem; color: var(--muted); }
+      .warning li + li { margin-top: 0.25rem; }
+      form {
+        display: grid;
+        gap: 1.25rem;
+        padding: 1.25rem 1rem;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--card);
+      }
+      @media (min-width: 720px) { form { padding: 2rem; } }
+      fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+      .fields { display: grid; gap: 1.25rem; }
+      .actions-clear { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+      legend, label { color: var(--text); font-weight: 500; font-size: 0.9375rem; }
+      legend { padding: 0; margin-bottom: 0.5rem; }
+      .field { display: grid; gap: 0.375rem; }
+      .hint { margin: 0; color: var(--muted); font-size: 0.8125rem; line-height: 1.5; }
+      .optional { color: var(--muted); font-weight: 500; }
+      .row { display: grid; gap: 1.25rem; }
+      @media (min-width: 520px) { .row { grid-template-columns: minmax(0, 9rem) minmax(0, 1fr); } }
+      input[type="text"], textarea {
+        width: 100%;
+        min-height: 48px;
+        padding: 0.625rem 0.875rem;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--bg);
+        color: var(--text);
+        font: inherit;
+        font-size: 1rem;
+      }
+      textarea { min-height: 7.5rem; resize: vertical; }
+      ::placeholder { color: var(--muted); opacity: 1; }
+      input:user-invalid, textarea:user-invalid { border-color: var(--danger); }
+      .choices { display: grid; gap: 0.5rem; }
+      @media (min-width: 520px) { .choices.two { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+      .choice {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        min-height: 48px;
+        padding: 0.75rem 0.875rem;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--bg);
+        font-weight: 500;
+        cursor: pointer;
+      }
+      .choice small { display: block; color: var(--muted); font-weight: 500; font-size: 0.8125rem; line-height: 1.45; }
+      .choice input { flex: none; width: 20px; height: 20px; margin: 0.125rem 0 0; accent-color: var(--primary); }
+      .choice:has(input:checked) { border-color: var(--accent); background: var(--surface); box-shadow: inset 0 0 0 1px var(--accent); }
+      .choice:has(input:focus-visible) { outline: 3px solid var(--focus); outline-offset: 2px; }
+      .actions { display: flex; flex-wrap: wrap; gap: 0.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+      button, .resume {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 48px;
+        padding: 0 1.25rem;
+        border: 1px solid transparent;
+        border-radius: 12px;
+        font: inherit;
+        font-size: 0.9375rem;
+        font-weight: 500;
+        text-decoration: none;
+        cursor: pointer;
+      }
+      button[type="submit"] { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+      button[type="submit"]:hover { background: #1a37b8; }
+      button[type="button"] { background: transparent; border-color: var(--border); color: var(--text); }
+      button[type="button"]:hover { border-color: var(--danger); color: var(--danger); }
+      /* Disabled until /offline-request.js has installed its listeners: readable (AA), not faded. */
+      button:disabled,
+      button[type="submit"]:disabled,
+      button[type="button"]:disabled { background: var(--surface); border-color: var(--border); color: var(--muted); cursor: not-allowed; }
+      fieldset:disabled .choice { background: var(--surface); cursor: not-allowed; }
+      fieldset:disabled input[type="text"],
+      fieldset:disabled textarea { background: var(--surface); color: var(--muted); cursor: not-allowed; }
+      fieldset:disabled input[type="radio"] { cursor: not-allowed; }
+      .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+      .resume { background: transparent; border-color: var(--accent); color: var(--accent); }
+      .resume:hover { background: var(--surface); }
+      :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+      input[type="text"]:focus-visible, textarea:focus-visible { outline-offset: 1px; }
+      @media (max-width: 519px) { .actions > *, .actions-clear > * { flex: 1 1 100%; } }
+      /* Status region: written by /offline-request.js. data-state: saved | error | quota | info. */
+      #offline-status { margin: 0; font-size: 0.9375rem; color: var(--text); }
+      #offline-status:empty { display: none; }
+      #offline-status:not(:empty) {
+        padding: 0.75rem 1rem;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--surface);
+      }
+      #offline-status[data-state="saved"] { border-color: var(--success); }
+      #offline-status[data-state="error"],
+      #offline-status[data-state="quota"] { border-color: var(--danger); color: var(--danger); font-weight: 500; }
+      #offline-status[data-state="info"] { border-color: var(--warning); }
+      .resume-block { margin-top: 1.5rem; padding: 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+      .resume-block p { margin-bottom: 0.75rem; }
+      .back { margin-top: 1.5rem; }
+      .back a { color: var(--accent); font-weight: 500; display: inline-flex; align-items: center; min-height: 44px; }
+      @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+    </style>
+  </head>
+  <body>
+    <main id="main">
+      <p class="brand">DomDépannage</p>
+      <h1>Préparer une demande hors connexion</h1>
+      <p class="lead">Notez votre problème maintenant et reprenez-le dès que la connexion revient.</p>
+
+      <div class="warning" role="note">
+        <strong>Aucune demande n’est envoyée hors connexion.</strong>
+        Cette page sert uniquement à préparer votre note.
+        <ul>
+          <li>La note est conservée dans cet onglet pendant 30 minutes seulement, sur cet appareil.</li>
+          <li>Une fois en ligne, ouvrez « Reprendre ma demande » pour la vérifier et l’envoyer vous-même.</li>
+          <li>Les photos pourront être ajoutées une fois en ligne.</li>
+        </ul>
+      </div>
+
+      <form id="offline-request-form" novalidate>
+        <p id="offline-status" role="status" aria-live="polite" data-state="info">Brouillon non enregistré. Le formulaire doit être chargé pour permettre l’enregistrement local.</p>
+
+        <fieldset id="offline-fields" class="fields" disabled>
+        <legend class="sr-only">Votre note</legend>
+        <p class="hint" id="offline-partial-note">Vous pouvez garder une note incomplète : elle sera vérifiée avant l’envoi, une fois en ligne.</p>
+        <fieldset>
+          <legend>Type de problème</legend>
+          <div class="choices">
+            <label class="choice"><input type="radio" name="category" value="outage" required /><span>Coupure de courant<small>Tout ou partie du logement</small></span></label>
+            <label class="choice"><input type="radio" name="category" value="panel" /><span>Tableau électrique<small>Disjoncteur, fusible ou tableau</small></span></label>
+            <label class="choice"><input type="radio" name="category" value="socket" /><span>Prise ou interrupteur<small>Une prise ou un point de commande</small></span></label>
+            <label class="choice"><input type="radio" name="category" value="lighting" /><span>Éclairage<small>Luminaire ou circuit d’éclairage</small></span></label>
+            <label class="choice"><input type="radio" name="category" value="diagnostic" /><span>Recherche de panne<small>L’origine du problème est inconnue</small></span></label>
+          </div>
+        </fieldset>
+
+        <div class="field">
+          <label for="offline-description">Décrivez le problème</label>
+          <textarea id="offline-description" name="description" required minlength="15" maxlength="2000" rows="4" aria-describedby="offline-description-hint" placeholder="Par exemple : le disjoncteur se déclenche depuis ce matin lorsque j’allume le four…"></textarea>
+          <p class="hint" id="offline-description-hint">Ce que vous constatez, les pièces concernées et depuis quand. 15 caractères minimum.</p>
+        </div>
+
+        <div class="field">
+          <label for="offline-address">Adresse d’intervention</label>
+          <input type="text" id="offline-address" name="address" required minlength="5" maxlength="250" autocomplete="street-address" />
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="offline-postal-code">Code postal</label>
+            <input type="text" id="offline-postal-code" name="postal_code" required inputmode="numeric" pattern="[0-9]{5}" minlength="5" maxlength="5" autocomplete="postal-code" aria-describedby="offline-postal-hint" />
+            <p class="hint" id="offline-postal-hint">5 chiffres.</p>
+          </div>
+          <div class="field">
+            <label for="offline-city">Ville</label>
+            <input type="text" id="offline-city" name="city" required minlength="2" maxlength="100" autocomplete="address-level2" />
+          </div>
+        </div>
+
+        <fieldset>
+          <legend>Quel est votre besoin ?</legend>
+          <div class="choices two">
+            <label class="choice"><input type="radio" name="urgency" value="scheduled" checked /><span>Intervention à planifier<small>Le problème peut attendre un rendez-vous.</small></span></label>
+            <label class="choice"><input type="radio" name="urgency" value="urgent" /><span>Demande urgente<small>Le problème nécessite une prise en charge prioritaire.</small></span></label>
+          </div>
+        </fieldset>
+
+        <div class="actions">
+          <button type="submit" id="offline-save" disabled>Garder ma note sur cet appareil</button>
+        </div>
+        </fieldset>
+
+        <div class="actions-clear">
+          <button type="button" id="offline-clear" disabled>Effacer la note</button>
+        </div>
+      </form>
+
+      <div class="resume-block">
+        <p>De retour en ligne ? Votre note est reprise dans le formulaire de demande, où vous pourrez la vérifier, ajouter des photos puis l’envoyer.</p>
+        <a class="resume" id="offline-resume" href="/#new">Reprendre ma demande</a>
+      </div>
+
+      <p class="back"><a href="/offline.html">Retour à la page hors connexion</a></p>
+    </main>
+    <script type="module" src="/offline-request.js"></script>
+  </body>
+</html>

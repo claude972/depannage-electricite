@@ -17,3 +17,65 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
+
+  isolated-sql:
+    name: Isolated PostgreSQL (Auth and Storage stubs)
+    runs-on: ubuntu-latest
+    # Full migration review suite exceeds ten minutes; retain every scenario.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Install pinned isolated PostgreSQL runtime outside application
+        run: npm install --prefix "$RUNNER_TEMP/courant-sql" --no-save --no-package-lock @electric-sql/pglite@0.5.13
+      - name: Mandatory 020 retention checks (native absence refusal and explicit scheduler stub, not a real worker)
+        env:
+          PGLITE_MODULE: ${{ runner.temp }}/courant-sql/node_modules/@electric-sql/pglite/dist/index.js
+        run: node tests/sql-tracking-retention-review.mjs
+      - name: Verify strict isolated migration adaptation
+        run: node --test tests/sql-isolated-migrations.test.mjs
+      - name: Execute migrations and negative authorization scenarios (not live Supabase)
+        env:
+          PGLITE_MODULE: ${{ runner.temp }}/courant-sql/node_modules/@electric-sql/pglite/dist/index.js
+        run: node tests/sql-review.mjs
+
+      - name: Verify global artisan aggregates and appointment isolation (not live Supabase)
+        env:
+          PGLITE_MODULE: ${{ runner.temp }}/courant-sql/node_modules/@electric-sql/pglite/dist/index.js
+        run: node tests/sql-performance-review.mjs
+
+      - name: Verify site-scoped member access and atomic invitations (not live Supabase)
+        env:
+          PGLITE_MODULE: ${{ runner.temp }}/courant-sql/node_modules/@electric-sql/pglite/dist/index.js
+        run: node tests/sql-site-access-review.mjs
+
+      - name: Verify private quotation drafts and publication rollback (not live Supabase)
+        env:
+          PGLITE_MODULE: ${{ runner.temp }}/courant-sql/node_modules/@electric-sql/pglite/dist/index.js
+        run: node tests/sql-quote-draft-review.mjs
+
+      - name: Verify private support access, transitions and rollback (not live Supabase)
+        env:
+          PGLITE_MODULE: ${{ runner.temp }}/courant-sql/node_modules/@electric-sql/pglite/dist/index.js
+        run: node tests/sql-support-review.mjs
+
+      - name: Verify artisan work and pending-settlement dossier guard (not live Supabase)
+        env:
+          PGLITE_MODULE: ${{ runner.temp }}/courant-sql/node_modules/@electric-sql/pglite/dist/index.js
+        run: node tests/sql-artisan-active-guard-review.mjs
+
+      - name: Verify every other SQL review script of advanced lots (not live Supabase)
+        env:
+          PGLITE_MODULE: ${{ runner.temp }}/courant-sql/node_modules/@electric-sql/pglite/dist/index.js
+        run: |
+          set -eu
+          listed="sql-tracking-retention-review.mjs sql-review.mjs sql-performance-review.mjs sql-site-access-review.mjs sql-quote-draft-review.mjs sql-support-review.mjs sql-artisan-active-guard-review.mjs"
+          for f in tests/sql-*-review.mjs tests/sql-review.mjs; do
+            name="$(basename "$f")"
+            case " $listed " in *" $name "*) continue;; esac
+            echo "== $f"; node "$f"
+          done

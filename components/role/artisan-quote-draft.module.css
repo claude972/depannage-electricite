@@ -1,0 +1,378 @@
+/* Quote draft editor (contract QUOTE-DRAFT-001). Rendered inside .space, so the --a-* tokens
+   of artisan.module.css apply; fallbacks keep the colours when used elsewhere. Shared
+   primitives (panel, button, field, alert, text-button, icon-button) come from globals. */
+
+.editor {
+  margin-bottom: 16px;
+}
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px 16px;
+}
+.head h2 {
+  margin: 0 0 4px;
+}
+.lead {
+  margin: 0;
+  font-size: 14px;
+  color: var(--a-muted, #526178);
+}
+.saved {
+  margin: 0;
+  font-size: 13px;
+  color: var(--a-muted, #526178);
+}
+.note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--a-line, #dce4ee);
+  border-radius: 8px;
+  background: var(--a-bg, #f5f7fb);
+  font-size: 13px;
+  color: #172b4d;
+}
+.note svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--a-blue, #1457d9);
+}
+
+/* Conflict, external publication and failures: inline, close to the actions. */
+.editor .conflict,
+.editor .failure {
+  margin: 14px 0 0;
+  font-size: 13px;
+  align-items: flex-start;
+}
+.editor .failure > span {
+  font-size: 13px;
+}
+.conflictBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.conflictBody p {
+  margin: 0;
+  font-size: 13px;
+  color: inherit;
+}
+.conflictBody h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--a-navy, #102a43);
+}
+.compare {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+@media (min-width: 720px) {
+  .compare {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.compare > div {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--a-line, #dce4ee);
+  border-radius: 8px;
+  background: #fff;
+  color: #172b4d;
+}
+.summary {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 13px;
+}
+.summary li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid #edf0f4;
+  overflow-wrap: anywhere;
+}
+.summary li span {
+  flex: none;
+  color: var(--a-muted, #526178);
+}
+.summaryEmpty,
+.summaryFooter {
+  margin: 6px 0 0 !important;
+  font-size: 13px !important;
+  color: var(--a-muted, #526178) !important;
+}
+
+/* Lines (M34 « Lignes du devis / Prix HT ») : carte, une ligne = une rangée, total HT par ligne. */
+.linesCard {
+  margin-top: 16px;
+  border: 1px solid var(--a-line, #dce4ee);
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+}
+.linesHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--a-bg, #f5f7fb);
+  border-bottom: 1px solid var(--a-line, #dce4ee);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--a-muted, #526178);
+}
+.rows {
+  display: flex;
+  flex-direction: column;
+}
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(88px, 0.6fr) minmax(130px, 0.9fr) minmax(96px, auto) 44px;
+  gap: 10px;
+  align-items: start;
+  padding: 12px 14px;
+  border-bottom: 1px solid #edf0f4;
+}
+.row:last-child {
+  border-bottom: 0;
+}
+.row :global(.field) {
+  margin-bottom: 0;
+}
+.lineTotal {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
+  text-align: right;
+  padding-top: 26px;
+  font-size: 12px;
+  color: var(--a-muted, #526178);
+  white-space: nowrap;
+}
+.lineTotal strong {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--a-navy, #102a43);
+}
+.remove {
+  margin-top: 26px;
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--a-line, #dce4ee);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--a-muted, #526178);
+}
+.remove:disabled {
+  opacity: 0.5;
+}
+@media (max-width: 640px) {
+  /* Carte de ligne : libellé, puis quantité | prix, puis total HT | supprimer. */
+  .row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px 10px;
+  }
+  .row > :global(.field):first-child {
+    grid-column: 1 / -1;
+  }
+  .lineTotal {
+    padding-top: 0;
+    align-items: flex-start;
+    align-self: center;
+    text-align: left;
+  }
+  .remove {
+    margin-top: 0;
+    justify-self: end;
+  }
+}
+.emptyLines {
+  margin: 4px 0 8px;
+  padding: 12px 14px;
+  font-size: 14px;
+  color: var(--a-muted, #526178);
+}
+.addLine {
+  margin-top: 8px;
+}
+.tax {
+  margin-top: 12px;
+  max-width: 240px;
+}
+
+/* Browser-side totals (M34) : carte Sous-total HT / TVA / Total TTC mis en avant. */
+.totals {
+  margin-top: 16px;
+  border: 1px solid var(--a-line, #dce4ee);
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+}
+.totals > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  font-size: 14px;
+  border-bottom: 1px solid #edf0f4;
+}
+.totals strong {
+  font-weight: 550;
+  color: var(--a-navy, #102a43);
+  white-space: nowrap;
+}
+.total {
+  border-bottom: 0 !important;
+  background: #edf3fd;
+  padding: 14px !important;
+  font-size: 16px !important;
+  font-weight: 650;
+  color: var(--a-navy, #102a43);
+}
+.total strong {
+  font-size: 20px;
+  font-weight: 700;
+}
+.estimate {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--a-muted, #526178);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+.actions > button,
+.actions :global(.button),
+.actions :global(.text-button) {
+  min-height: 44px;
+}
+@media (max-width: 640px) {
+  /* M34 : envoi en bouton pleine largeur ; enregistrer / abandonner au-dessus. */
+  .actions :global(.button.primary) {
+    flex: 1 1 100%;
+    min-height: 52px;
+    font-size: 16px;
+  }
+}
+.hint {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--a-muted, #526178);
+}
+
+/* Draft route unavailable: the reason, then the direct-send editor. */
+.fallback {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.fallback :global(.unavailable) {
+  margin: 0;
+  background: #fff;
+}
+.fallback :global(.unavailable) p {
+  margin: 4px 0 8px;
+  font-size: 13px;
+}
+.fallback :global(.unavailable) button {
+  min-height: 44px;
+  margin-top: 4px;
+}
+
+/* ---- Opt-in theme (artisan quote draft, after FASTSPLIT-DOCUMENTS-PLANNING-THEME-001) ---------
+   Active only under the parent ThemeSurface (`.ui-v2`): --ui-* tokens, light and dark, same
+   selectors +1 class so they win over the rules above; unthemed consumers are unchanged.
+   Draft / conflict / failure / read-only / hint states and the totals keep their structure; the
+   conflict and failure frames are global alerts repainted by the role skin. */
+:global(.ui-v2) .lead,
+:global(.ui-v2) .saved,
+:global(.ui-v2) .summary li span,
+:global(.ui-v2) .linesHead,
+:global(.ui-v2) .lineTotal,
+:global(.ui-v2) .emptyLines,
+:global(.ui-v2) .estimate,
+:global(.ui-v2) .hint {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .summaryEmpty,
+:global(.ui-v2) .summaryFooter {
+  color: var(--ui-text-muted) !important;
+}
+:global(.ui-v2) .note {
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .note svg {
+  color: var(--ui-accent);
+}
+:global(.ui-v2) .conflictBody h3,
+:global(.ui-v2) .lineTotal strong,
+:global(.ui-v2) .totals strong {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .compare > div {
+  border-color: var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .summary li,
+:global(.ui-v2) .row,
+:global(.ui-v2) .totals > div {
+  border-bottom-color: var(--ui-border);
+}
+:global(.ui-v2) .row:last-child {
+  border-bottom: 0;
+}
+:global(.ui-v2) .linesCard,
+:global(.ui-v2) .totals {
+  border-color: var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-card);
+}
+:global(.ui-v2) .linesHead {
+  border-bottom-color: var(--ui-border);
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .remove {
+  border-color: var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .remove:hover:not(:disabled) {
+  border-color: var(--ui-danger);
+  color: var(--ui-danger);
+}
+/* Total TTC: emphasised by a surface band and a 1px accent rule (no blue tint). */
+:global(.ui-v2) .total {
+  border-top: 1px solid var(--ui-accent);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .fallback :global(.unavailable) {
+  background: var(--ui-card);
+}

@@ -1,0 +1,26 @@
+// Display name from the current profile. Prefer the exact given name when available, including
+// compound given names. Legacy records retain their existing display without a data migration.
+import type { Session } from "./session-types";
+
+type Role = Session["role"];
+
+/** Neutral account label used when no real name is known (same as the database default). */
+export const ACCOUNT_LABEL = "Mon compte";
+const PLACEHOLDERS = new Set(["mon compte", "bienvenue"]);
+
+export function realName(fullName: string | null | undefined): string | null {
+  const name = (fullName ?? "").replace(/\s+/g, " ").trim();
+  return name && !PLACEHOLDERS.has(name.toLowerCase()) ? name : null;
+}
+
+export function resolveDisplayName(
+  mode: "live" | "demo",
+  role: Role,
+  profile: { role?: Role | null; full_name?: string | null; first_name?: string | null } | null,
+  demoNames: Record<Role, string>,
+): { displayName: string; firstName: string | null } {
+  const name =
+    mode === "demo" ? (profile?.role === role ? realName(profile?.full_name) : null) ?? demoNames[role] : realName(profile?.full_name);
+  const givenName = mode === "demo" && profile?.role !== role ? null : realName(profile?.first_name);
+  return { displayName: name ?? ACCOUNT_LABEL, firstName: name ? givenName ?? name.split(" ")[0] : null };
+}

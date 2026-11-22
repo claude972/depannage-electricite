@@ -1,0 +1,497 @@
+/* Public service sheet, with the Mobile B hierarchy and a photo column on larger screens. */
+.main {
+  padding: 24px 0 72px;
+}
+/* Room for the fixed booking bar: no content, FAQ or footer line is ever hidden under it. */
+/* Booking bar height: ONE custom property, used by the fixed bar (its min-height), this page
+   reserve and the wizard fields' scroll margin, so they cannot drift. 88 px in one row (reserve
+   88 + 24 = 112 px); the narrow stacked bar (text above, full-width 48 px button) gets 152 px
+   (reserve 176 px). Inherited by the bar, which lives inside this ThemeSurface root. */
+.withBar {
+  --booking-bar-h: 88px;
+  overflow-x: clip; /* full-bleed bands (100vw) never add a horizontal scroll; public header is unaffected */
+  padding-bottom: calc(var(--booking-bar-h) + 24px + env(safe-area-inset-bottom, 0px));
+}
+@media (max-width: 480px) {
+  .withBar {
+    --booking-bar-h: 152px;
+  }
+}
+/* Closed page: compact one-row bar (72 px declared, reserve 72 + 24 = 96 px + safe area). The
+   wizard keeps the 88 / 152 px bar above. */
+.withBar.withCompactBar {
+  --booking-bar-h: 72px;
+}
+@media (max-width: 767px) {
+  .withBar {
+    --floating-nav-offset: calc(78px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(var(--booking-bar-h) + 102px + env(safe-area-inset-bottom, 0px));
+  }
+}
+/* Shared width and gutters with the landing and catalogue. */
+.wrap {
+  width: 100%;
+  max-width: var(--public-width);
+  margin: 0 auto;
+  padding-inline: var(--public-gutter);
+}
+.crumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  color: var(--ui-text-muted);
+}
+.crumb a,
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  color: var(--ui-accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+.crumb a:hover,
+.backLink:hover {
+  text-decoration: underline;
+}
+.crumb [aria-current] {
+  color: var(--ui-text);
+}
+.backLink {
+  margin-bottom: 16px;
+  font-size: 15px;
+}
+
+/* The heading leads on narrow screens. The wider layout keeps the details next to the photo. */
+.hero {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: auto auto auto auto 1fr;
+  grid-template-areas:
+    "media heading"
+    "media price"
+    "media panel"
+    "media cta"
+    "media faq";
+  column-gap: 56px;
+  row-gap: 16px;
+  align-items: start;
+}
+.heroMedia {
+  grid-area: media;
+  margin: 0;
+}
+.heroHeading {
+  grid-area: heading;
+  display: grid;
+  gap: 8px;
+}
+.eyebrow {
+  color: var(--ui-accent);
+  font-size: .75rem;
+  font-weight: 750;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+.heroHeading p,
+.price p {
+  margin: 0;
+  color: var(--ui-text-muted);
+  font-size: .9375rem;
+}
+.price {
+  grid-area: price;
+}
+.pictoPanel {
+  grid-area: panel;
+}
+.ctaRow {
+  grid-area: cta;
+}
+.topFaq {
+  grid-area: faq;
+}
+.heroMedia img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  object-fit: cover;
+  border-radius: 18px;
+  background: var(--ui-surface);
+}
+.heroTitle {
+  margin: 0;
+  color: var(--ui-text);
+  font-size: clamp(1.75rem, 3.5vw, 2.6rem);
+  font-weight: 750;
+  line-height: 1.3;
+  letter-spacing: -0.2px;
+}
+.price {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  border: 1px solid var(--ui-border);
+  border-radius: 18px;
+  background: var(--ui-card);
+}
+.price span {
+  color: var(--ui-text-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.price strong {
+  color: var(--ui-accent);
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.5px;
+}
+.pictoPanel {
+  display: grid;
+  gap: 12px;
+  padding: 16px 20px;
+  border-radius: 16px;
+  background: var(--ui-surface);
+}
+.pictos {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pictos li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ui-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+.pictoIcon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--ui-card);
+  color: var(--ui-accent);
+}
+.pictoNote {
+  margin: 0;
+  color: var(--ui-text-muted);
+  font-size: 13px;
+}
+.ctaRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+}
+.proof {
+  margin: 0;
+  flex: 1 1 200px;
+  color: var(--ui-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 32px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cta:hover {
+  background: var(--ui-primary-hover);
+}
+.topFaq {
+  border-top: 1px solid var(--ui-border);
+}
+.faqRow {
+  border-bottom: 1px solid var(--ui-border);
+}
+.faqRow summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 48px;
+  padding: 8px 0;
+  color: var(--ui-text);
+  font-size: 15px;
+  font-weight: 600;
+  list-style: none;
+  cursor: pointer;
+}
+.faqRow summary::-webkit-details-marker {
+  display: none;
+}
+.faqRow summary::after {
+  content: "+";
+  flex-shrink: 0;
+  color: var(--ui-accent);
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1;
+}
+.faqRow[open] summary::after {
+  content: "−";
+}
+.faqRow p {
+  margin: 0 0 12px;
+  color: var(--ui-text-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Full-width bands: heading + pictogram left (~x72), content right (~x408, max 620px) */
+.band {
+  margin: 48px calc(50% - 50vw) 0;
+  padding: 40px 0;
+  background: var(--ui-surface);
+}
+.bandInner,
+.section {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 620px);
+  gap: 36px;
+  align-items: start;
+}
+.bandInner {
+  max-width: var(--public-width);
+  margin: 0 auto;
+  padding-inline: var(--public-gutter);
+}
+.section {
+  padding: 32px 0;
+  border-bottom: 1px solid var(--ui-border);
+}
+.bandHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.bandHead h2 {
+  margin: 0;
+  color: var(--ui-text);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.bandBody {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  color: var(--ui-text);
+}
+.bandBody p {
+  margin: 0;
+  color: var(--ui-text);
+  line-height: 1.6;
+}
+.list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.list li {
+  position: relative;
+  padding-left: 22px;
+  color: var(--ui-text);
+  line-height: 1.5;
+}
+.list li::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 0.55em;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ui-accent);
+}
+.bandBody .note,
+.note {
+  color: var(--ui-text-muted);
+  font-size: 14px;
+}
+.steps {
+  padding: 0;
+  list-style: none;
+}
+.steps li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.steps li > span:last-child {
+  display: grid;
+  gap: 2px;
+}
+.steps li > span:last-child > span {
+  color: var(--ui-text-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.steps strong {
+  color: var(--ui-text);
+}
+.stepNumber {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+  font-weight: 700;
+}
+
+/* Related services */
+.related {
+  margin-top: 40px;
+}
+.related h2 {
+  margin: 0 0 16px;
+  color: var(--ui-text);
+  font-size: 20px;
+  font-weight: 700;
+}
+.relatedGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.relatedCard {
+  display: grid;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--ui-border);
+  border-radius: 16px;
+  background: var(--ui-card);
+  color: var(--ui-text);
+  text-decoration: none;
+}
+.relatedCard:hover {
+  border-color: var(--ui-accent);
+}
+.relatedCard img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  object-fit: cover;
+}
+.relatedBody {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px 16px;
+}
+.relatedBody strong {
+  font-size: 16px;
+}
+.relatedBody span {
+  color: var(--ui-text-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.credit {
+  margin: 24px 0 0;
+  color: var(--ui-text-muted);
+  font-size: 13px;
+}
+.backLink:focus-visible,
+.crumb a:focus-visible,
+.cta:focus-visible,
+.faqRow summary:focus-visible,
+.relatedCard:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 1100px) {
+  .hero {
+    column-gap: 32px;
+  }
+  .bandInner,
+  .section {
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 24px;
+  }
+}
+@media (max-width: 860px) {
+  .hero {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas:
+      "heading"
+      "media"
+      "price"
+      "panel"
+      "cta"
+      "faq";
+  }
+  .bandInner,
+  .section {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .relatedGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 640px) {
+  .pictos {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .ctaRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .cta {
+    width: 100%;
+  }
+  .price strong {
+    font-size: 28px;
+  }
+  .band {
+    padding: 28px 0;
+  }
+}
+
+/* « Confirmer » before hydration: visibly disabled (not hidden), label kept. */
+.preparing {
+  font-size: 13px;
+  color: var(--ui-text-muted);
+}
+.cta:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}

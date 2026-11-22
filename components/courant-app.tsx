@@ -1,817 +1,740 @@
 "use client";
-
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+// Session controller: identity, mode (public/demo/live), role guards, hash routing, data
+// loading with late-response protection, and every mutation (live contract or explicit demo
+// counterpart). Role spaces under components/role render the screens.
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { createClient } from "../lib/supabase/client";
-import { CATEGORIES as DOMAIN_CATEGORIES } from "../lib/domain";
+import { UNVERIFIED_RECEIPT, validSupportReceipt } from "./app/support-receipt";
+import { api, ApiRequestError, contractStateFromError, uploadDocument } from "./app/api";
+import { createGuard, createRunner, runForResult, type RunContext, type Runner } from "./app/guard";
+import { adoptIdentity } from "./app/identity";
+import { demoTicketPermissions } from "./role/support-lists";
+import { createDemoFeatureClients, createFeatureClients, planningProbeRange, reprobe, type FeatureKey, type ReprobeHint } from "./app/features";
+import type { PlatformAccess } from "../lib/features/platform-operations/types";
+import { PLATFORM_DEMO } from "../lib/features/platform-operations/demo";
+import { demoNotificationPage } from "../lib/features/notifications/demo";
+import { createRevalidationScheduler, startAccessRevalidation } from "./app/revalidate";
+import { createRefreshCoordinator, refreshContextKey, type ReadResult, type RefreshCoordinator } from "./app/workspace-refresh";
+import { safeCheckoutUrl } from "./app/booking-status";
+import { CARD_RETURN_COPY, PENDING_COPY, cancelCardReturn, cardAction, lookupPending, sameReturn, verifyCardReturn, type CardReturn } from "./app/card-return";
+import { createWorkspaceReader, loadInitialWorkspace } from "./app/workspace-reader";
+import {
+  acknowledgeUpload,
+  allUploaded,
+  processUploadQueue,
+  reconcileUncertain,
+  removeQueue,
+  uploadSummary,
+  upsertQueue,
+} from "./app/uploads";
+import {
+  DEMO_IDS,
+  DEMO_KEYS,
+  DEMO_NAMES,
+  adminOverviewFromDemo,
+  adminSeed,
+  artisanSeed,
+  clearDemo,
+  demoParticipants,
+  proSeed,
+  readDemo,
+  seed,
+  writeDemo,
+  type DemoOperations,
+} from "./app/demo";
+import { resolveDisplayName } from "./app/display-name";
+import { draftNotice, getDraftStorage, readBootDraft } from "./app/request-draft-boot";
+import { BOOKING_DRAFT_KEY, PAYMENT_LABEL, clearBooking, readBooking, saveBooking, type BookingDraft } from "./app/booking-draft";
+import { DEFINITIVE_REFUSAL, REQUEST_KEY_STORAGE, markRequestEstimateReview, prepareRequestKey, readRequestKey, settleRequestKey, updateFrozenVersion } from "./app/request-key";
+import { ESTIMATE_REVIEW_CODE, REVIEW_COPY, REVIEW_SCOPES, getPricesState, loadPrices, reviewDecision, shownVersion } from "./features/indicative-prices/model";
+import { sendReviewedBooking } from "./features/indicative-prices/review-submit";
+import { purgePrivateStorage } from "./app/private-storage";
+import { bookingForEditedRequest, bookingFromSignedRequest, readPhotoCount, writePhotoCount } from "./app/signed-booking";
 
-type Role = "client" | "artisan" | "manager" | "admin";
-type View =
-  | "overview"
-  | "requests"
-  | "new"
-  | "detail"
-  | "missions"
-  | "messages"
-  | "documents"
-  | "sites"
-  | "profile"
-  | "help"
-  | "auth"
-  | "admin";
-type Status =
-  | "requested"
-  | "assigned"
-  | "quoted"
-  | "accepted"
-  | "in_progress"
-  | "completed"
-  | "paid"
-  | "cancelled";
-type Category = "outage" | "panel" | "socket" | "lighting" | "diagnostic";
-type Line = { label: string; quantity: number; unit_price_cents: number };
-type Intervention = {
-  id: string;
-  category: Category;
-  description: string;
-  address: string;
-  postal_code: string;
-  city: string;
-  urgency: "urgent" | "scheduled";
-  status: Status;
-  created_at: string;
-  estimate_min_cents: number;
-  estimate_max_cents: number;
-  artisan_id?: string | null;
-  client_id?: string;
-  site_id?: string | null;
+type BookingReceipt = {
+  status: "confirmed";
+  intervention: { id: string; status: string; estimate_min_cents?: number; estimate_max_cents?: number };
+  payment?: { method: "on_site" | "card_hold"; status: string };
 };
-type Quote = {
-  id: string;
-  intervention_id: string;
-  lines: Line[];
-  subtotal_cents: number;
-  tax_cents: number;
-  total_cents: number;
-  tax_rate: number;
-  status: string;
-  created_at: string;
-};
-type Site = {
-  id: string;
-  name: string;
-  type?: string;
-  vertical?: string;
-  address: string;
-  budget_cents?: number;
-};
-type Message = {
-  id: string;
-  intervention_id: string;
-  author_id: string;
-  body: string;
-  created_at: string;
-};
-type Profile = {
-  id: string;
-  full_name: string;
-  role: Role;
-  artisan_approved?: boolean;
-  approved?: boolean;
-  phone?: string;
-};
-type ApprovalRule = {
-  id: string;
-  site_id: string;
-  threshold_cents: number;
-  required_role: string;
-  enabled: boolean;
-};
-type Approval = {
-  id: string;
-  quote_id: string;
-  site_id?: string;
-  status: string;
-  note?: string;
-};
-type Contract = {
-  id: string;
-  organization_id: string;
-  title: string;
-  reference: string;
-  starts_on: string;
-  ends_on?: string;
-  terms: string;
-  status: string;
-};
-type ComplianceRecord = {
-  id: string;
-  site_id: string;
-  title: string;
-  kind: string;
-  due_on: string;
-  status: string;
-  notes: string;
-};
-type ProfessionalData = {
-  approval_rules: ApprovalRule[];
-  approvals: Approval[];
-  contracts: Contract[];
-  compliance_records: ComplianceRecord[];
-};
-const EMPTY_PRO: ProfessionalData = {
-  approval_rules: [],
-  approvals: [],
-  contracts: [],
-  compliance_records: [],
-};
-const PRO_DEMO_KEY = "courant-professional-demo-v1";
-function proSeed(): ProfessionalData {
-  return {
-    approval_rules: [
-      {
-        id: "rule-demo",
-        site_id: "site-1",
-        threshold_cents: 20000,
-        required_role: "manager",
-        enabled: true,
-      },
-    ],
-    approvals: [
-      {
-        id: "approval-demo",
-        quote_id: "quote-demo-1",
-        site_id: "site-1",
-        status: "pending",
-      },
-    ],
-    contracts: [],
-    compliance_records: [
-      {
-        id: "compliance-demo",
-        site_id: "site-3",
-        title: "Revue de l’éclairage des espaces de travail",
-        kind: "maintenance",
-        due_on: "2026-11-15",
-        status: "pending",
-        notes: "Exemple de suivi de maintenance, sans valeur de diagnostic.",
-      },
-    ],
-  };
-}
-type StoredDocument = {
-  id: string;
-  intervention_id?: string | null;
-  name: string;
-  mime_type: string;
-  created_at: string;
-};
-type Review = {
-  id: string;
-  intervention_id: string;
-  rating: number;
-  body: string;
-};
-type Workspace = {
-  documents: StoredDocument[];
-  reviews: Review[];
-  profile: Profile | null;
-  interventions: Intervention[];
-  quotes: Quote[];
-  sites: Site[];
-  organizations: { id: string; name: string; type?: string }[];
-  messages: Message[];
-};
-const EMPTY: Workspace = {
-  documents: [],
-  reviews: [],
-  profile: null,
-  interventions: [],
-  quotes: [],
-  sites: [],
-  organizations: [],
-  messages: [],
-};
-const CATEGORIES: {
-  id: Category;
-  label: string;
-  description: string;
-  icon: string;
-  min: number;
-  max: number;
-}[] = [
-  {
-    id: "outage",
-    label: "Coupure de courant",
-    description: "Tout ou partie du logement",
-    icon: "power",
-    min: 15000,
-    max: 25000,
-  },
-  {
-    id: "panel",
-    label: "Tableau électrique",
-    description: "Disjoncteur, fusible ou tableau",
-    icon: "panel",
-    min: 15000,
-    max: 35000,
-  },
-  {
-    id: "socket",
-    label: "Prise ou interrupteur",
-    description: "Une prise ou un point de commande",
-    icon: "plug",
-    min: 8000,
-    max: 18000,
-  },
-  {
-    id: "lighting",
-    label: "Éclairage",
-    description: "Luminaire ou circuit d’éclairage",
-    icon: "bulb",
-    min: 8000,
-    max: 20000,
-  },
-  {
-    id: "diagnostic",
-    label: "Recherche de panne",
-    description: "L’origine du problème est inconnue",
-    icon: "search",
-    min: 12000,
-    max: 28000,
-  },
-];
-const STATUS: Record<Status, string> = {
-  requested: "Recherche d’un artisan",
-  assigned: "Artisan affecté",
-  quoted: "Devis à valider",
-  accepted: "Devis accepté",
-  in_progress: "Intervention en cours",
-  completed: "À régler",
-  paid: "Terminée et réglée",
-  cancelled: "Annulée",
-};
-const ROLE_NAMES: Record<Role, string> = {
-  client: "Particulier",
-  artisan: "Artisan",
-  manager: "Professionnel",
-  admin: "Administration",
-};
-const VIEW_NAMES: Record<View, string> = {
-  overview: "Vue d’ensemble",
-  requests: "Mes demandes",
-  new: "Nouvelle demande",
-  detail: "Détail de l’intervention",
-  missions: "Mes missions",
-  messages: "Messages",
-  documents: "Documents",
-  sites: "Mes sites",
-  profile: "Mon profil",
-  help: "Aide et informations",
-  auth: "Connexion",
-  admin: "Administration",
-};
-const money = (cents: number) =>
-  new Intl.NumberFormat("fr-FR", {
-    style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: 2,
-  }).format((cents || 0) / 100);
-const date = (value: string) =>
-  new Intl.DateTimeFormat("fr-FR", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(
-    new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00` : value),
-  );
-const category = (id: string) => {
-  const visual = CATEGORIES.find((c) => c.id === id) || CATEGORIES[4];
-  const domain = DOMAIN_CATEGORIES.find((c) => c.id === visual.id)!;
-  return { ...visual, min: domain.min, max: domain.max };
-};
-const shortId = (id: string) =>
-  id.startsWith("demo-")
-    ? `INT-${id.toUpperCase()}`
-    : `INT-${id.replaceAll("-", "").slice(0, 6).toUpperCase()}`;
-const uid = () => crypto.randomUUID();
-const DEMO_KEY = "courant-demo-v2";
-const PATHS: Record<string, ReactNode> = {
-  bolt: <path d="m13 2-9 12h7l-1 8 10-12h-7l1-8Z" />,
-  home: (
-    <>
-      <path d="m3 10 9-7 9 7v10H3Z" />
-      <path d="M9 20v-7h6v7" />
-    </>
-  ),
-  list: (
-    <>
-      <rect x="5" y="3" width="14" height="18" rx="2" />
-      <path d="M9 8h6M9 12h6M9 16h4" />
-    </>
-  ),
-  plus: <path d="M12 5v14M5 12h14" />,
-  arrow: <path d="m9 5 7 7-7 7" />,
-  back: <path d="m15 5-7 7 7 7" />,
-  check: <path d="m5 12 4 4L19 6" />,
-  clock: (
-    <>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 7v5l3 2" />
-    </>
-  ),
-  search: (
-    <>
-      <circle cx="10.5" cy="10.5" r="6.5" />
-      <path d="m16 16 5 5" />
-    </>
-  ),
-  plug: (
-    <>
-      <path d="M8 3v5m8-5v5M6 8h12v3a6 6 0 0 1-12 0ZM12 17v5" />
-    </>
-  ),
-  panel: (
-    <>
-      <rect x="4" y="3" width="16" height="18" rx="2" />
-      <path d="M8 7v4m4-4v4m4-4v4M8 16h8" />
-    </>
-  ),
-  power: (
-    <>
-      <path d="M12 2v10M6 5a9 9 0 1 0 12 0" />
-    </>
-  ),
-  bulb: (
-    <>
-      <path d="M9 18h6m-5 3h4M8 14a6 6 0 1 1 8 0l-1 3H9Z" />
-    </>
-  ),
-  message: <path d="M21 11a8 8 0 0 1-8 8H5l-3 3V11a9 9 0 0 1 19 0Z" />,
-  document: (
-    <>
-      <path d="M14 2H5v20h14V7ZM14 2v6h5M8 12h8M8 16h8" />
-    </>
-  ),
-  building: (
-    <>
-      <path d="M4 22V4h12v18M16 10h4v12M8 8h4m-4 4h4m-4 4h4m-4 4h4" />
-    </>
-  ),
-  person: (
-    <>
-      <circle cx="12" cy="7" r="4" />
-      <path d="M4 22v-3a8 8 0 0 1 16 0v3" />
-    </>
-  ),
-  help: (
-    <>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M9 9a3 3 0 0 1 6 0c0 2-3 2-3 5m0 3h.01" />
-    </>
-  ),
-  shield: (
-    <>
-      <path d="m12 2 8 3v7c0 5-8 10-8 10S4 17 4 12V5Z" />
-      <path d="m8 11 3 3 5-6" />
-    </>
-  ),
-  location: (
-    <>
-      <path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0Z" />
-      <circle cx="12" cy="10" r="2.5" />
-    </>
-  ),
-  logout: (
-    <>
-      <path d="M9 3H3v18h6M12 12h10m-4-4 4 4-4 4" />
-    </>
-  ),
-  menu: <path d="M3 6h18M3 12h18M3 18h18" />,
-  close: <path d="m6 6 12 12M6 18 18 6" />,
-  download: (
-    <>
-      <path d="M12 3v12m-4-4 4 4 4-4M4 17v4h16v-4" />
-    </>
-  ),
-  send: <path d="m22 2-7 20-4-9-9-4ZM11 13 22 2" />,
-  wrench: <path d="M21 5a6 6 0 0 1-8 8l-8 8-3-3 8-8a6 6 0 0 1 8-8l-4 4 4 3Z" />,
-  euro: (
-    <>
-      <path d="M19 5a7 7 0 0 0-11 5v4a7 7 0 0 0 11 5M4 10h11M4 14h9" />
-    </>
-  ),
-  star: <path d="m12 2 3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1Z" />,
-  refresh: (
-    <>
-      <path d="M20 7v5h-5M4 17v-5h5" />
-      <path d="M6 6a8 8 0 0 1 14 6M4 12a8 8 0 0 0 14 6" />
-    </>
-  ),
-  mail: (
-    <>
-      <rect x="2" y="4" width="20" height="16" rx="2" />
-      <path d="m2 5 10 8L22 5" />
-    </>
-  ),
-  lock: (
-    <>
-      <rect x="5" y="10" width="14" height="12" rx="2" />
-      <path d="M8 10V6a4 4 0 0 1 8 0v4" />
-    </>
-  ),
-  warning: (
-    <>
-      <path d="m12 2 10 19H2Z" />
-      <path d="M12 8v5m0 4h.01" />
-    </>
-  ),
-  calendar: (
-    <>
-      <rect x="3" y="5" width="18" height="16" rx="2" />
-      <path d="M7 2v6m10-6v6M3 11h18" />
-    </>
-  ),
-  bell: (
-    <>
-      <path d="M5 16V9a7 7 0 0 1 14 0v7l2 3H3ZM9 22h6" />
-    </>
-  ),
-};
-function Icon({ name, size = 20 }: { name: string; size?: number }) {
+import { publicBookingPhoto } from "./app/public-booking-photo";
+import { savePublicDraft } from "../lib/shared/request-draft";
+import { REALTIME_CHANNEL_CONFIG, REALTIME_TABLES, createRealtimeCatchUp, nextConnection } from "./app/realtime";
+import { category, uid } from "./app/format";
+import {
+  CONNECT_RETURN_MESSAGE,
+  INVITE_TOKEN,
+  buildHash,
+  enterpriseContext,
+  canAccess,
+  homeFor,
+  loginLanding,
+  membershipRole,
+  monthPeriods,
+  parseHash,
+  parseReturnParams,
+  paymentReturnMessage,
+  protectedLink,
+  pickQuote,
+  validateContext,
+  type DeepLink,
+  type PaymentServerStatus,
+} from "./app/session";
+import type { PublicSession, Session } from "./app/session-types";
+import {
+  EMPTY_PROFESSIONAL,
+  EMPTY_WORKSPACE,
+  UNKNOWN_CAPABILITIES,
+  type AdminInterventionDetail,
+  type AdminInterventionsPage,
+  type AdminListFilters,
+  type AdminOverview,
+  type DirectoryFilters,
+  type DirectoryItem,
+  type DirectoryKind,
+  type DirectoryPage,
+  type ArtisanCommand,
+  type ArtisanDossier,
+  type ArtisanPerformanceReport,
+  type InvitationCreated,
+  type OrganizationCommand,
+  type OrganizationOverview,
+  type PaymentStatusReport,
+  type SiteAccessCommand,
+  type SiteAccessOverview,
+  type SupportCommand,
+  type SupportCommandResult,
+  type SupportCreateResult,
+  type SupportDetail,
+  type SupportEvent,
+  type SupportListFilters,
+  type SupportListPage,
+  type SupportMessage,
+  type SupportTicket,
+  type UploadQueue,
+  type Capabilities,
+  type Category,
+  type Intervention,
+  type InterventionAction,
+  type Line,
+  type Mode,
+  type OperationBody,
+  type Operations,
+  type ProfessionalData,
+  type Profile,
+  type Quote,
+  type QuoteDraft,
+  type QuoteDraftCommand,
+  type QuoteDraftEnvelope,
+  type QuoteDraftResult,
+  type RequestValues,
+  type ReturnContext,
+  type Role,
+  type Status,
+  type StoredDocument,
+  type View,
+  type Workspace,
+} from "./app/types";
+import { PublicSite } from "./role/public-site";
+import { isTaxRate } from "./app/tax-rate";
+
+function SpaceLoader() {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      {PATHS[name] || PATHS.bolt}
-    </svg>
+    <main id="main" className="page-loader boot" role="status">
+      <span className="spinner" />
+      Chargement…
+    </main>
   );
-}
-function Brand({ compact = false }: { compact?: boolean }) {
-  return (
-    <span className="brand">
-      <span className="brand-mark">
-        <Icon name="bolt" size={23} />
-      </span>
-      <span>
-        courant<span className="brand-dot">.</span>
-        {!compact && <small>Le dépannage électrique, au clair.</small>}
-      </span>
-    </span>
-  );
-}
-function Badge({ status }: { status: Status }) {
-  return (
-    <span className={`badge status-${status}`}>
-      <span />
-      {STATUS[status]}
-    </span>
-  );
-}
-function Empty({
-  icon = "list",
-  title,
-  children,
-  action,
-}: {
-  icon?: string;
-  title: string;
-  children?: ReactNode;
-  action?: ReactNode;
-}) {
-  return (
-    <div className="empty-state">
-      <span className="empty-icon">
-        <Icon name={icon} size={30} />
-      </span>
-      <h3>{title}</h3>
-      {children && <p>{children}</p>}
-      {action}
-    </div>
-  );
-}
-function Field({
-  label,
-  children,
-  hint,
-}: {
-  label: string;
-  children: ReactNode;
-  hint?: string;
-}) {
-  return (
-    <label className="field">
-      <span>{label}</span>
-      {children}
-      {hint && <small>{hint}</small>}
-    </label>
-  );
-}
-function seed(): Workspace {
-  return {
-    documents: [],
-    reviews: [],
-    profile: null,
-    organizations: [{ id: "org-demo", name: "Maison & lieux", type: "syndic" }],
-    sites: [
-      {
-        id: "site-1",
-        name: "Résidence des Alizés",
-        type: "syndic",
-        address: "12 rue des Alizés, Fort-de-France",
-        budget_cents: 500000,
-      },
-      {
-        id: "site-2",
-        name: "Restaurant Le Patio",
-        type: "restaurant",
-        address: "8 rue du Marché, Fort-de-France",
-        budget_cents: 300000,
-      },
-      {
-        id: "site-3",
-        name: "Bureaux Bellevue",
-        type: "office",
-        address: "24 avenue Bellevue, Fort-de-France",
-        budget_cents: 400000,
-      },
-    ],
-    interventions: [
-      {
-        id: "demo-001",
-        category: "panel",
-        description:
-          "Le disjoncteur du tableau se déclenche lorsque plusieurs appareils fonctionnent. Demande d’un diagnostic et de remise en service.",
-        address: "12 rue des Alizés",
-        postal_code: "97200",
-        city: "Fort-de-France",
-        urgency: "urgent",
-        status: "quoted",
-        created_at: "2026-10-30T09:30:00Z",
-        estimate_min_cents: 15000,
-        estimate_max_cents: 35000,
-        artisan_id: "demo-artisan",
-        client_id: "demo-client",
-        site_id: "site-1",
-      },
-      {
-        id: "demo-002",
-        category: "socket",
-        description:
-          "Deux prises ne fonctionnent plus dans la salle principale.",
-        address: "8 rue du Marché",
-        postal_code: "97200",
-        city: "Fort-de-France",
-        urgency: "scheduled",
-        status: "requested",
-        created_at: "2026-10-29T11:00:00Z",
-        estimate_min_cents: 8000,
-        estimate_max_cents: 18000,
-        client_id: "demo-client",
-        site_id: "site-2",
-      },
-      {
-        id: "demo-003",
-        category: "lighting",
-        description:
-          "Remplacement d’un point lumineux et vérification du circuit.",
-        address: "24 avenue Bellevue",
-        postal_code: "97200",
-        city: "Fort-de-France",
-        urgency: "scheduled",
-        status: "paid",
-        created_at: "2026-10-20T08:00:00Z",
-        estimate_min_cents: 8000,
-        estimate_max_cents: 20000,
-        artisan_id: "demo-artisan",
-        client_id: "demo-client",
-        site_id: "site-3",
-      },
-    ],
-    quotes: [
-      {
-        id: "quote-demo-1",
-        intervention_id: "demo-001",
-        lines: [
-          {
-            label: "Déplacement et diagnostic",
-            quantity: 1,
-            unit_price_cents: 6000,
-          },
-          {
-            label: "Main-d’œuvre (forfait)",
-            quantity: 1,
-            unit_price_cents: 9000,
-          },
-          {
-            label: "Fournitures électriques",
-            quantity: 1,
-            unit_price_cents: 3500,
-          },
-        ],
-        subtotal_cents: 18500,
-        tax_cents: 3700,
-        total_cents: 22200,
-        tax_rate: 20,
-        status: "sent",
-        created_at: "2026-10-30T10:00:00Z",
-      },
-      {
-        id: "quote-demo-3",
-        intervention_id: "demo-003",
-        lines: [
-          {
-            label: "Vérification et remplacement du luminaire",
-            quantity: 1,
-            unit_price_cents: 12000,
-          },
-        ],
-        subtotal_cents: 12000,
-        tax_cents: 2400,
-        total_cents: 14400,
-        tax_rate: 20,
-        status: "accepted",
-        created_at: "2026-10-20T10:00:00Z",
-      },
-    ],
-    messages: [
-      {
-        id: "message-1",
-        intervention_id: "demo-001",
-        author_id: "demo-artisan",
-        body: "Bonjour, le devis détaillé est disponible dans votre demande. Vous pouvez le consulter avant de prendre votre décision.",
-        created_at: "2026-10-30T10:10:00Z",
-      },
-    ],
-  };
-}
-async function api<T>(
-  path: string,
-  body?: unknown,
-  method?: string,
-): Promise<T> {
-  const response = await fetch(path, {
-    method: method || (body === undefined ? "GET" : "POST"),
-    headers:
-      body === undefined ? undefined : { "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    cache: "no-store",
-  });
-  const data = await response.json().catch(() => ({
-    error: "Le service n’a pas renvoyé de réponse exploitable.",
-  }));
-  if (!response.ok)
-    throw new Error(
-      data.error || "L’action n’a pas pu être réalisée. Réessayez.",
-    );
-  return data as T;
-}
-function download(
-  name: string,
-  content: string,
-  type = "text/plain;charset=utf-8",
-) {
-  const url = URL.createObjectURL(new Blob([content], { type }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export default function CourantApp() {
-  const [professional, setProfessional] = useState<ProfessionalData>(EMPTY_PRO);
-  const [connection, setConnection] = useState("");
-  const [mode, setMode] = useState<"public" | "demo" | "live">("public");
-  const [view, setView] = useState<View>("overview");
+// Public visits need the session controller, but none of the private role screens.
+const ClientSpace = dynamic(() => import("./role/client-space").then(module => module.ClientSpace), { ssr: false, loading: SpaceLoader });
+const ArtisanSpace = dynamic(() => import("./role/artisan-space").then(module => module.ArtisanSpace), { ssr: false, loading: SpaceLoader });
+const EnterpriseSpace = dynamic(() => import("./role/enterprise-space").then(module => module.EnterpriseSpace), { ssr: false, loading: SpaceLoader });
+const AdminSpace = dynamic(() => import("./role/admin-space").then(module => module.AdminSpace), { ssr: false, loading: SpaceLoader });
+
+const DRAFT_KEY = "courant-request-draft";
+const INVITE_KEY = "courant-invitation-code";
+type AuthMode = "login" | "signup" | "reset";
+
+// Explicit result of a dossier action, so the user knows what was recorded (never a generic
+// « modification » after refusing or accepting a quote). Demo wording says nothing was sent.
+const ACTION_NOTICES: Record<string, string> = {
+  accept_mission: "Mission acceptée : le dossier est maintenant le vôtre.",
+  decline_offer: "Offre déclinée.",
+  send_quote: "Devis envoyé au client.",
+  accept_quote: "Devis accepté. Il sert de base au règlement après l’intervention.",
+  reject_quote: "Devis refusé. L’artisan peut vous proposer une nouvelle version.",
+  start: "Intervention démarrée.",
+  complete: "Intervention terminée.",
+  save_appointment: "Rendez-vous enregistré.",
+  save_report: "Compte rendu enregistré.",
+  sign_report: "Compte rendu signé.",
+};
+export function actionNotice(name: string, demo: boolean): string {
+  const text = ACTION_NOTICES[name];
+  if (!text) return demo ? "Modification enregistrée dans la démonstration." : "Modification enregistrée.";
+  return demo ? `${text} (démonstration, rien n’est envoyé)` : text;
+}
+
+export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }: { supportWhatsAppPhone?: string; showSupportPreview?: boolean } = {}) {
+  const [mode, setMode] = useState<Mode>("public");
   const [role, setRole] = useState<Role>("client");
-  const [data, setData] = useState<Workspace>(EMPTY);
-  const [selected, setSelected] = useState("");
+  const [data, setData] = useState<Workspace>(EMPTY_WORKSPACE);
+  const [professional, setProfessional] =
+    useState<ProfessionalData>(EMPTY_PROFESSIONAL);
+  const [capabilities, setCapabilities] =
+    useState<Capabilities>(UNKNOWN_CAPABILITIES);
+  const [returnContext, setReturnContext] = useState<ReturnContext | null>(null);
+  const [mobileReturnId, setMobileReturnId] = useState<string | null>(null);
+  const returnRef = useRef<ReturnContext | null>(null);
+  returnRef.current = returnContext;
+  /** E47: a successful card return seen while signed out, kept across the FIRST sign-in only. It is
+   *  verified automatically once, and only if the signed-in account's pending attempt is that same
+   *  reference (another account never posts for an inherited reference). */
+  const inheritedReturn = useRef<string | null>(null);
+  const [view, setView] = useState<View>("home");
+  const [param, setParam] = useState("");
+  const [selectedId, setSelectedId] = useState("");
+  const [selectedQuoteId, setSelectedQuoteId] = useState("");
+  const [activeOrganizationId, setActiveOrganizationId] = useState("");
+  const [activeSiteId, setActiveSiteId] = useState("");
+  const [platformAccess, setPlatformAccess] = useState<PlatformAccess | null>(null);
+  // Counts identity changes (logout, login as someone else, demo switch) so that the client bundle
+  // handed to the leaves is rebuilt for the new actor; the old bundle refuses to send anything.
+  const [identityEpoch, setIdentityEpoch] = useState(0);
+  const [unreadNotifications, setUnreadNotifications] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [booting, setBooting] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [mobile, setMobile] = useState(false);
-  const [filter, setFilter] = useState("active");
-  const [search, setSearch] = useState("");
+  const [connection, setConnection] = useState("");
+  const [authMode, setAuthMode] = useState<AuthMode>("login");
+  // Sign-in address of the live account (auth session, never the profile): shown read-only on the
+  // client profile and used as the contact e-mail of a request made while signed in.
+  const [accountEmail, setAccountEmail] = useState("");
   const [categoryId, setCategoryId] = useState<Category>("panel");
-  const [siteFilter, setSiteFilter] = useState("all");
-  const [verticalFilter, setVerticalFilter] = useState("all");
   const [pendingDraft, setPendingDraft] = useState<RequestValues | null>(null);
-  const [authMode, setAuthMode] = useState<"login" | "signup" | "reset">(
-    "login",
-  );
-  async function loadProfessional() {
-    if (mode !== "live" || role !== "manager") return;
-    try {
-      const result = await api<ProfessionalData>("/api/professional");
-      setProfessional(result);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
-  function go(next: View) {
-    setView(next);
+  // Service booking extras (FASTSPLIT-SERVICE-BOOKING-FLOW-001): kept with the draft across login
+  // by the SAME identity chain only, consumed after POST 201, dropped on any identity reset.
+  const [booking, setBooking] = useState<BookingDraft | null>(null);
+  const bookingCarry = useRef<BookingDraft | null>(null);
+  const anonymousPhotos = useRef<File[]>([]);
+  // Card-hold provider return, independent of the booking draft (see components/app/card-return.ts).
+  const [cardReturn, setCardReturn] = useState<CardReturn | null>(null);
+  const cardReturnRef = useRef<CardReturn | null>(null);
+  cardReturnRef.current = cardReturn;
+  // Card verify/cancel bypass run(ctx): their own single flight + identity/session generation check.
+  const cardFlight = useRef(false);
+  const bookingRef = useRef<BookingDraft | null>(null);
+  /** Photos chosen on the signed-in request form: kept IN MEMORY only (File objects cannot be
+   *  stored), uploaded after the booking is confirmed; lost on reload / bank return (announced). */
+  const bookingPhotos = useRef<File[]>([]);
+  /** Demo only: the same booking confirmation step, kept in memory (never in tab storage, never sent). */
+  const [demoBooking, setDemoBooking] = useState<{ draft: RequestValues; booking: BookingDraft } | null>(null);
+  bookingRef.current = booking;
+  // A request made while signed in carries the account address as its contact e-mail when the
+  // kept booking has none (prepared before the address was known); the client can still edit it.
+  const liveBooking = booking && !booking.contact.email.trim() && accountEmail ? { ...booking, contact: { ...booking.contact, email: accountEmail } } : booking;
+  const cardContext = { generation: () => guard.generation(), userId: () => userId.current };
+  // Pending card attempt lookup: once per identity (after login / opening the requests), no polling.
+  const [pendingLookup, setPendingLookup] = useState<"idle" | "error">("idle");
+  const pendingCheckedFor = useRef<string | null>(null);
+  const [pendingInvitation, setPendingInvitation] = useState<string | null>(null);
+  const [uploads, setUploads] = useState<UploadQueue[]>([]);
+  // Incremented on every identity change: forces role spaces to remount with fresh local state.
+  const [sessionKey, setSessionKey] = useState(0);
+
+  // Identity and request bookkeeping (refs: no re-render, read inside async callbacks).
+  // `guard` tracks the identity generation; `runner` binds every mutation chain to it.
+  const guard = useRef(createGuard()).current;
+  const runnerRef = useRef<Runner | null>(null);
+  if (!runnerRef.current)
+    runnerRef.current = createRunner(guard, { setBusy, setError, setNotice });
+  const runner = runnerRef.current;
+  const seq = useRef(0);
+  const userId = useRef<string | null>(null);
+  const modeRef = useRef<Mode>("public");
+  const roleRef = useRef<Role>("client");
+  // Signed-in deep link opened by a signed-out visitor (#detail/<id> at load or by hash change),
+  // kept across the login form and consumed once by the login chain (WEB-DEEPLINK-LOGIN-001).
+  const pendingLink = useRef<DeepLink | null>(null);
+  const hashSeen = useRef(false);
+  const activeOrgRef = useRef("");
+  const activeSiteRef = useRef("");
+  modeRef.current = mode;
+  roleRef.current = role;
+  activeOrgRef.current = activeOrganizationId;
+  activeSiteRef.current = activeSiteId;
+  const [refreshedAt, setRefreshedAt] = useState(0);
+
+  const clearSessionState = useCallback(() => {
+    seq.current += 1; // any in-flight workspace response is now stale
+    guard.bump();
+    setIdentityEpoch((e) => e + 1); // any in-flight mutation chain is now foreign
+    runner.reset();
+    userId.current = null;
+    inheritedReturn.current = null; // E47: never survives an identity change (401 included)
+    setData(EMPTY_WORKSPACE);
+    setProfessional(EMPTY_PROFESSIONAL);
+    setCapabilities(UNKNOWN_CAPABILITIES);
+    setPlatformAccess(null);
+    setUnreadNotifications(null);
+    setReturnContext(null);
+    setSelectedId("");
+    setSelectedQuoteId("");
+    setActiveOrganizationId("");
+    setActiveSiteId("");
+    setConnection("");
     setError("");
     setNotice("");
-    setMobile(false);
+    setPendingDraft(null);
+    setBooking(null);
+    setDemoBooking(null);
+    bookingPhotos.current = [];
+    setCardReturn(null);
+    setPendingLookup("idle");
+    pendingCheckedFor.current = null;
+    setUploads([]);
+    clearBooking(getDraftStorage());
+    writePhotoCount(getDraftStorage(), 0);
+    try {
+      sessionStorage.removeItem(DRAFT_KEY);
+      // Pending private content of the outgoing user (unsent assistance request, identity-fenced
+      // leaf commands with emails/notes/addresses, request payloads) never survives a logout or an
+      // identity change; a same-user reload keeps it (no reset happens then).
+      purgePrivateStorage(sessionStorage);
+    } catch {}
+    setSessionKey((k) => k + 1);
+  }, []);
+
+  const navigate = useCallback((next: View, nextParam?: string) => {
+    setView(next);
+    setParam(nextParam || "");
+    setError("");
+    setNotice("");
     if (typeof window !== "undefined") {
-      window.location.hash = next;
+      const hash = buildHash(next, nextParam);
+      if (window.location.hash.slice(1) !== hash)
+        window.history.pushState(null, "", `#${hash}`);
       window.scrollTo({ top: 0 });
     }
-  }
-  async function refresh() {
-    if (mode !== "live") setLoading(true);
-    setError("");
+  }, []);
+
+  // Apply a workspace response only if it belongs to the request and user still current.
+  // One workspace read, applied in place; the outcome is explicit so a caller can tell « loaded
+  // and still absent » from « failed » (WEB-DEEPLINK-REFRESH-001). Only the refresh coordinator
+  // calls it, so two reads are never in flight at once.
+  const readWorkspace = useCallback(
+    (): Promise<ReadResult> =>
+      createWorkspaceReader({
+        api: (path) => api<unknown>(path),
+        nextSeq: () => ++seq.current,
+        currentSeq: () => seq.current,
+        expectedUser: () => userId.current,
+        apply: (ws) => {
+          const profileOfWs = ws.profile!; // validated by createWorkspaceReader
+          userId.current = profileOfWs.id;
+          // Login resolves its protected destination before React renders the new workspace.
+          roleRef.current = profileOfWs.role;
+          setData({ ...EMPTY_WORKSPACE, ...ws });
+          setRole(profileOfWs.role);
+          setMode("live");
+          setRefreshedAt(Date.now());
+          // An organisation or site that vanished from the authorised workspace is no longer a
+          // valid context: drop it (and the professional data loaded for it) immediately.
+          const kept = validateContext(
+            ws.organizations ?? [],
+            ws.sites ?? [],
+            activeOrgRef.current,
+            activeSiteRef.current,
+          );
+          if (kept.organizationDropped) {
+            setActiveOrganizationId("");
+            setActiveSiteId("");
+            setProfessional(EMPTY_PROFESSIONAL);
+            setNotice("L’organisation active n’est plus accessible depuis votre compte. Le périmètre a été réinitialisé.");
+          } else if (kept.siteId !== activeSiteRef.current) setActiveSiteId("");
+        },
+        signOut: (message) => {
+          clearSessionState();
+          setMode("public");
+          if (message) setError(message);
+        },
+        setError,
+      })(),
+    [clearSessionState],
+  );
+  const readWorkspaceRef = useRef(readWorkspace);
+  readWorkspaceRef.current = readWorkspace;
+  // Single flight with causal freshness for every refresh cause (contract A3/A4).
+  const coordinator = useRef<RefreshCoordinator | null>(null);
+  if (!coordinator.current)
+    coordinator.current = createRefreshCoordinator({
+      read: () => readWorkspaceRef.current(),
+      contextKey: () => refreshContextKey(guard.generation(), roleRef.current, activeOrgRef.current, activeSiteRef.current),
+    });
+  /** Every cause (post-write, « Actualiser », realtime event, focus, deep link) takes a barrier. */
+  const ensureFresh = useCallback((options?: { barrier?: boolean }) => (coordinator.current as RefreshCoordinator).request(options), []);
+  const initialWorkspace = useCallback((id: string, active: () => boolean = () => true) => {
+    const generation = guard.generation();
+    return loadInitialWorkspace(ensureFresh, () => active() && guard.alive(generation) && userId.current === id);
+  }, [ensureFresh, guard]);
+  const refresh = useCallback(async () => {
+    await ensureFresh();
+  }, [ensureFresh]);
+
+  const loadProfessional = useCallback(async () => {
+    if (modeRef.current !== "live" || roleRef.current !== "manager") return;
+    const my = seq.current;
     try {
-      const ws = await api<Workspace>("/api/workspace");
-      setData({ ...EMPTY, ...ws });
-      if (ws.profile) {
-        setRole(ws.profile.role);
-        setMode("live");
-      }
+      const result = await api<ProfessionalData>("/api/professional");
+      if (my !== seq.current) return;
+      setProfessional({ ...EMPTY_PROFESSIONAL, ...result });
+      setCapabilities((c) => ({ ...c, professional: "available" }));
     } catch (e) {
+      if (my !== seq.current) return;
+      if (e instanceof ApiRequestError && e.status === 403) {
+        setProfessional(EMPTY_PROFESSIONAL);
+        setActiveOrganizationId("");
+        setActiveSiteId("");
+        setError("Vos droits sur cet espace ont changé. Le périmètre a été réinitialisé ; rechargez vos données.");
+        return;
+      }
+      setCapabilities((c) => ({ ...c, professional: contractStateFromError(e) }));
       setError((e as Error).message);
-    } finally {
-      setLoading(false);
     }
-  }
+  }, []);
+
+  // Revalidation when the tab becomes visible or focused again (live only). Signals are never
+  // dropped: a run in progress gets one trailing run, a recent run delays the next to the end
+  // of the quiet window (CL-UI-008). Workspace, then professional data for managers.
+  const revalidateNow = useCallback(async () => {
+    if (modeRef.current !== "live") return;
+    await refresh();
+    if (roleRef.current === "manager") await loadProfessional();
+  }, [refresh, loadProfessional]);
+  useEffect(() => {
+    if (mode !== "live") return;
+    const scheduler = createRevalidationScheduler(revalidateNow, { minIntervalMs: 15000 });
+    const onVisible = () => {
+      if (document.visibilityState === "visible") scheduler.signal();
+    };
+    const onFocus = () => scheduler.signal();
+    const stopAccessRevalidation = startAccessRevalidation(revalidateNow, () =>
+      modeRef.current === "live" && roleRef.current === "manager" &&
+      document.visibilityState === "visible" && navigator.onLine !== false,
+    );
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("online", onFocus);
+    return () => {
+      scheduler.cancel();
+      stopAccessRevalidation();
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("online", onFocus);
+    };
+  }, [mode, revalidateNow]);
+
+  // Boot: draft, return parameters, existing session, auth listener.
   useEffect(() => {
     let active = true;
+    let unsubscribe: (() => void) | undefined;
+    // Canonical bounded format shared with /offline-request.html (strict category, 30 min TTL).
+    const bootDraft = readBootDraft(getDraftStorage());
+    if (bootDraft) setPendingDraft(bootDraft);
+    if (bootDraft) {
+      let rawBooking: string | null = null;
+      try {
+        rawBooking = getDraftStorage()?.getItem(BOOKING_DRAFT_KEY) ?? null;
+      } catch {}
+      const stored = readBooking(rawBooking);
+      if (stored) setBooking(stored.booking);
+    }
+    try {
+      const token = sessionStorage.getItem(INVITE_KEY);
+      if (token && INVITE_TOKEN.test(token)) setPendingInvitation(token);
+    } catch {}
+    const back = parseReturnParams(window.location.search);
+    if (back?.kind === "payment" && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(back.interventionId))
+      setMobileReturnId(back.interventionId);
+    if (back) {
+      const url = new URL(window.location.href);
+      url.search = "";
+      window.history.replaceState(null, "", url.toString());
+    }
     async function init() {
       try {
         const client = createClient();
         const { data: auth } = await client.auth.getUser();
-        if (active && auth.user) await refresh();
+        if (!active) return;
+        const initialUserId = auth.user?.id ?? null;
+        const initialGeneration = guard.generation();
+        if (initialUserId) userId.current = initialUserId;
+        const sub = client.auth.onAuthStateChange((event, session) => {
+          if (!active) return;
+          const nextId = session?.user?.id ?? null;
+          // The initial snapshot of the identity already checked by getUser is not a new login.
+          if (event === "INITIAL_SESSION" && nextId === initialUserId) return;
+          if (event === "SIGNED_OUT" || (!nextId && userId.current !== null)) {
+            pendingLink.current = null;
+            inheritedReturn.current = null;
+            clearSessionState();
+            setMode("public");
+            setView("home");
+            return;
+          }
+          if (nextId && nextId !== userId.current) {
+            // E47: a booking return hint read while signed out survives this first sign-in only:
+            // computed BEFORE the clean-up, assigned AFTER it (clearSessionState empties it).
+            const hint = returnRef.current;
+            const inherited = userId.current === null && hint?.kind === "booking" && hint.state === "success" ? hint.requestId : null;
+            // Another account (same browser, other tab or renewed session): start clean.
+            clearSessionState();
+            inheritedReturn.current = inherited;
+            userId.current = nextId;
+            void refresh();
+          }
+        });
+        unsubscribe = () => sub.data.subscription.unsubscribe();
+        if (initialUserId) {
+          const isInitialSession = () => active && guard.alive(initialGeneration);
+          const outcome = await initialWorkspace(initialUserId, isInitialSession);
+          if (outcome.kind === "loaded" && isInitialSession() && userId.current === initialUserId)
+            pendingLink.current = null; // already signed in: the hash routing handles the link
+        }
       } catch {
-        /* Public access remains available without a configured backend. */
+        /* Public access stays available without a configured backend. */
       } finally {
-        if (active) setLoading(false);
+        if (active) {
+          setLoading(false);
+          setBooting(false);
+          if (back) setReturnContext(back);
+        }
       }
     }
-    try {
-      const draft = JSON.parse(
-        sessionStorage.getItem("courant-request-draft") || "null",
-      );
-      if (
-        draft &&
-        draft.savedAt > Date.now() - 1800000 &&
-        draft.values?.category
-      )
-        setPendingDraft(draft.values);
-    } catch {}
     void init();
     return () => {
       active = false;
+      unsubscribe?.();
     };
-  }, []);
+  }, [initialWorkspace, refresh, clearSessionState, guard]);
+
+  // The address comes from the session of the SAME user as the loaded profile; anything else ⇒ "".
+  const liveProfileId = mode === "live" ? data.profile?.id ?? "" : "";
   useEffect(() => {
-    if (mode === "demo") {
-      try {
-        localStorage.setItem(DEMO_KEY, JSON.stringify({ version: 1, data }));
-      } catch {
+    if (!liveProfileId) {
+      setAccountEmail("");
+      return;
+    }
+    let active = true;
+    const apply = (email: string) => {
+      if (active) setAccountEmail(email);
+    };
+    try {
+      void createClient()
+        .auth.getSession()
+        .then(({ data: current }) => apply(current.session?.user.id === liveProfileId ? current.session.user.email ?? "" : ""))
+        .catch(() => apply(""));
+    } catch {
+      apply("");
+    }
+    return () => {
+      active = false;
+    };
+  }, [liveProfileId]);
+
+  useEffect(() => {
+    if (mode !== "live" || booting || role !== "client" || !userId.current) return;
+    if (!["overview", "profile", "requests", "new", "detail"].includes(view)) return;
+    if (pendingCheckedFor.current === userId.current) return;
+    void checkPendingCardHold();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, booting, role, view, data.profile?.id]);
+
+  // Return parameters are hints: re-read server state, never mark anything as paid.
+  useEffect(() => {
+    if (!returnContext || booting) return;
+    if (returnContext.kind === "booking") {
+      // Wait for an identified session: the hint is kept until then (never a status from the URL).
+      if (mode !== "live" || !userId.current) {
+        setAuthMode("login");
+        navigate("auth"); // clears notices: the explanation is set AFTER it (E46)
+        setNotice("Connectez-vous avec le même compte pour vérifier votre réservation. Aucun statut n’est déduit du lien.");
+        return;
+      }
+      const back = returnContext;
+      setReturnContext(null);
+      const state: CardReturn = {
+        requestId: back.requestId,
+        userId: userId.current,
+        phase: back.state === "success" ? "checking" : "needs_action",
+        message: back.state === "success" ? CARD_RETURN_COPY.checking : CARD_RETURN_COPY.interrupted,
+      };
+      setCardReturn(state);
+      if (back.state === "success") void verifyCardHoldReturn(back.requestId);
+      return;
+    }
+    if (returnContext.kind === "auth") {
+      if (returnContext.state === "confirmed") {
+        // Same-tab return from the signup email with a request prepared before: open its
+        // confirmation (never an automatic POST), as the login chain does.
+        const resume = mode === "live" && pendingDraft !== null;
+        if (resume) navigate("new");
+        if (mode === "public") {
+          setAuthMode("login");
+          navigate("auth");
+        }
+        // Navigation clears feedback. Set it afterwards, and never certify an email from
+        // a forgeable URL parameter: only the independently loaded session is known here.
         setNotice(
-          "Le navigateur ne permet pas de conserver cette démonstration. Gardez cette page ouverte.",
+          resume
+            ? "Votre session est ouverte. Vérifiez votre demande puis confirmez son envoi."
+            : mode === "live"
+              ? "Votre espace est chargé."
+              : "Connectez-vous pour vérifier votre compte et ouvrir votre espace.",
+        );
+      } else {
+        if (mode === "public") navigate("auth");
+        setError(
+          "Ce lien de confirmation est expiré ou déjà utilisé. Demandez un nouveau lien depuis la connexion.",
         );
       }
+      setReturnContext(null);
+      return;
     }
-  }, [data, mode]);
+    if (mode !== "live") {
+      setAuthMode("login");
+      navigate("auth");
+      setError(
+        "Connectez-vous pour relire l’état de votre retour Stripe. Aucun statut n’est déduit du lien.",
+      );
+      setReturnContext(null);
+      return;
+    }
+    if (returnContext.kind === "payment") {
+      const back = returnContext;
+      const job = data.interventions.find((i) => i.id === back.interventionId);
+      const quote = job ? pickQuote(data.quotes, job.id) : undefined;
+      if (job) {
+        setSelectedId(job.id);
+        setSelectedQuoteId(quote?.id || "");
+        navigate("detail", job.id);
+      }
+      // The redirect only says "the customer came back". Ask the server what really happened,
+      // whatever the URL claims (a cancel URL can be forged or outrun a confirmation).
+      const g = guard.generation();
+      void (async () => {
+        let status: PaymentServerStatus = "unknown";
+        if (quote) {
+          const report = await loadPaymentStatus(quote.id);
+          if (!guard.alive(g)) return;
+          const raw =
+            report?.payment?.status ??
+            (report ? "none" : data.payments.find((p) => p.quote_id === quote.id)?.status);
+          status =
+            raw === "paid" || raw === "pending" || raw === "failed" || raw === "expired"
+              ? raw
+              : raw === "none"
+                ? "none"
+                : job?.status === "paid"
+                  ? "paid"
+                  : "unknown";
+        } else if (job?.status === "paid") status = "paid";
+        const message = paymentReturnMessage(back.state, status);
+        if (message.tone === "error") setError(message.text);
+        else setNotice(message.text);
+      })();
+    } else if (returnContext.kind === "connect") {
+      navigate("profile");
+      setNotice(CONNECT_RETURN_MESSAGE[returnContext.state]);
+    }
+    setReturnContext(null);
+  }, [returnContext, booting, mode, data, navigate, pendingDraft]);
+
+  // A kept invitation code is accepted once a live session exists (verified recipient server-side).
+  const inviteAttempt = useRef("");
   useEffect(() => {
-    const onHash = () => {
-      const h = window.location.hash.slice(1) as View;
-      if (Object.keys(VIEW_NAMES).includes(h)) setView(h);
+    if (mode !== "live" || !pendingInvitation || inviteAttempt.current === pendingInvitation) return;
+    inviteAttempt.current = pendingInvitation;
+    void acceptInvitation(pendingInvitation).then((ok) => {
+      if (!ok) {
+        setPendingInvitation(null);
+        try {
+          sessionStorage.removeItem(INVITE_KEY);
+        } catch {}
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, pendingInvitation]);
+
+  // Hash routing with role guard. Unknown or forbidden targets never mount their view.
+  useEffect(() => {
+    const onHash = (event?: Event) => {
+      const parsed = parseHash(window.location.hash);
+      // Only a link the visitor opened (first load or a real hash change) is remembered — not the
+      // stale hash a logout leaves behind when this effect re-runs on the mode change.
+      if (mode === "public" && (event || !hashSeen.current)) {
+        const link = protectedLink(window.location.hash);
+        if (link) pendingLink.current = link;
+      }
+      hashSeen.current = true;
+      // End of the service booking wizard: « Créer mon compte » opens the account form on creation.
+      if (mode === "public" && parsed.view === "auth" && parsed.param === "signup") setAuthMode("signup");
+      const followFromAccount = mode === "live" && parsed.view === "auth" && parsed.param === "requests";
+      const sitesFromAccount = mode === "live" && parsed.view === "auth" && parsed.param === "sites";
+      const target = sitesFromAccount ? (role === "manager" ? "sites" : homeFor(role, mode))
+        : followFromAccount ? (role === "client" ? "requests" : homeFor(role, mode))
+          : parsed.view ?? homeFor(mode === "public" ? null : role, mode);
+      setParam(followFromAccount || sitesFromAccount ? "" : parsed.param);
+      setView(canAccess(target, mode === "public" ? null : role, mode) ? target : "forbidden");
     };
     onHash();
     window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
-  }, []);
+    window.addEventListener("popstate", onHash);
+    return () => {
+      window.removeEventListener("hashchange", onHash);
+      window.removeEventListener("popstate", onHash);
+    };
+  }, [mode, role]);
+
+  // Demo persistence is scoped to demo mode only.
   useEffect(() => {
-    if (mode === "demo") {
-      try {
-        localStorage.setItem(
-          PRO_DEMO_KEY,
-          JSON.stringify({ version: 1, data: professional }),
-        );
-      } catch {}
-    }
+    if (mode === "demo" && !writeDemo(DEMO_KEYS.workspace, data))
+      setNotice("Le navigateur ne conserve pas cette démonstration. Gardez cette page ouverte.");
+  }, [data, mode]);
+  useEffect(() => {
+    if (mode === "demo") writeDemo(DEMO_KEYS.professional, professional);
   }, [professional, mode]);
   useEffect(() => {
     if (mode === "live" && role === "manager") void loadProfessional();
-  }, [mode, role]);
+  }, [mode, role, loadProfessional]);
+
+  // Realtime: refresh on authorised table changes, debounced.
+  const profileIdForRealtime = mode === "live" ? data.profile?.id : undefined;
   useEffect(() => {
-    if (mode !== "live" || !data.profile?.id) return;
+    if (!profileIdForRealtime) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let active = true;
-    const client = createClient();
-    let channel = client.channel(`workspace-${data.profile.id}`);
-    for (const table of ["interventions", "quotes", "messages"])
+    let client: ReturnType<typeof createClient>;
+    try {
+      client = createClient();
+    } catch {
+      return;
+    }
+    let channel = client.channel(`workspace-${profileIdForRealtime}`, REALTIME_CHANNEL_CONFIG);
+    // E51: after a lost connection the rejoined channel triggers one catch-up GET of the workspace.
+    const catchUp = createRealtimeCatchUp(() => {
+      if (active) void refresh();
+    });
+    channel = channel.on("system", {}, (payload: { status?: string }) => {
+      if (!active) return;
+      setConnection((c) => nextConnection(c, { kind: "system", status: payload?.status }));
+      if (payload?.status === "error") catchUp("CHANNEL_ERROR");
+    });
+    for (const table of REALTIME_TABLES)
       channel = channel.on(
         "postgres_changes",
         { event: "*", schema: "public", table },
@@ -823,4452 +746,2404 @@ export default function CourantApp() {
         },
       );
     channel.subscribe((status) => {
-      if (active) setConnection(status);
+      if (!active) return;
+      setConnection((c) => nextConnection(c, { kind: "status", status }));
+      catchUp(status);
     });
     return () => {
       active = false;
       if (timer) clearTimeout(timer);
       void client.removeChannel(channel);
     };
-  }, [mode, data.profile?.id]);
-  function demo(next: View = "overview") {
-    let ds = seed();
-    try {
-      const saved = JSON.parse(localStorage.getItem(DEMO_KEY) || "null");
-      if (
-        saved?.version === 1 &&
-        Array.isArray(saved.data?.interventions) &&
-        Array.isArray(saved.data?.quotes) &&
-        Array.isArray(saved.data?.sites) &&
-        Array.isArray(saved.data?.messages)
-      )
-        ds = { ...EMPTY, ...saved.data };
-    } catch {}
-    let pro = proSeed();
-    try {
-      const stored = JSON.parse(localStorage.getItem(PRO_DEMO_KEY) || "null");
-      if (stored?.version === 1) pro = { ...EMPTY_PRO, ...stored.data };
-    } catch {}
-    setProfessional(pro);
-    setData(ds);
+  }, [profileIdForRealtime, refresh]);
+
+  const run = useCallback(
+    (task: (ctx: RunContext) => Promise<void>) => runner.run(task),
+    [runner],
+  );
+
+  function startDemo(nextRole: Role = "client", next?: View, nextParam?: string) {
+    if (modeRef.current === "live") return; // never mix a live account with demo data
+    const valid = (v: unknown) => {
+      const d = v as Workspace;
+      return (
+        !!d &&
+        Array.isArray(d.interventions) &&
+        Array.isArray(d.quotes) &&
+        Array.isArray(d.sites) &&
+        Array.isArray(d.messages)
+      );
+    };
+    setData({ ...EMPTY_WORKSPACE, ...readDemo(DEMO_KEYS.workspace, seed(), valid) });
+    setProfessional({ ...EMPTY_PROFESSIONAL, ...readDemo(DEMO_KEYS.professional, proSeed()) });
+    setCapabilities({
+      operations: "available",
+      artisan: "available",
+      adminOverview: "available",
+      professional: "available",
+      organizations: "available",
+      performance: "available",
+      payments: "available",
+      siteAccess: "available",
+      adminLists: "available",
+      quoteDraft: "available",
+      adminDirectory: "available",
+      support: "available",
+      quoteDocuments: "available",
+      planning: "available",
+      notifications: "available",
+      siteOperations: "available",
+      platformOperations: "available",
+      tracking: "available",
+    });
+    guard.bump();
+    setIdentityEpoch((e) => e + 1);
+    runner.reset();
     setMode("demo");
-    setRole("client");
+    setRole(nextRole);
     setLoading(false);
-    go(next);
-  }
-  async function run(task: () => Promise<void>) {
-    if (busy) return;
-    setBusy(true);
-    setError("");
-    setNotice("");
-    try {
-      await task();
-      return true;
-    } catch (e) {
-      setError((e as Error).message);
-      return false;
-    } finally {
-      setBusy(false);
-    }
+    setSessionKey((k) => k + 1);
+    if (nextParam) setSelectedId(nextParam);
+    navigate(next || homeFor(nextRole, "demo"), nextParam);
   }
   async function logout() {
-    if (mode === "live")
-      await run(async () => {
+    if (modeRef.current === "live") {
+      try {
         const result = await createClient().auth.signOut();
         if (result.error) throw result.error;
-        setData(EMPTY);
-        setMode("public");
-        go("overview");
-      });
-    else {
-      setMode("public");
-      setData(EMPTY);
-      go("overview");
+      } catch (e) {
+        setError((e as Error).message);
+        return;
+      }
     }
+    clearSessionState();
+    setMode("public");
+    navigate("home");
   }
-  const profile = data.profile;
-  const name =
-    mode === "demo"
-      ? data.profile?.role === role
-        ? data.profile.full_name
-        : role === "artisan"
-          ? "Alex Martin"
-          : role === "manager"
-            ? "Camille Bernard"
-            : "Camille"
-      : profile?.full_name || "Bienvenue";
-  const active = data.interventions.filter(
-    (i) => !["paid", "cancelled"].includes(i.status),
-  );
-  const awaiting = data.interventions.filter((i) => i.status === "quoted");
-  const completed = data.interventions.filter((i) => i.status === "paid");
-  const current = data.interventions.find((i) => i.id === selected);
-  const currentQuote = data.quotes
-    .filter((q) => q.intervention_id === selected)
-    .sort(
-      (a, b) =>
-        Number(["sent", "accepted"].includes(b.status)) -
-          Number(["sent", "accepted"].includes(a.status)) ||
-        Date.parse(b.created_at) - Date.parse(a.created_at),
-    )[0];
-  const nav: { id: View; label: string; icon: string; count?: number }[] = [
-    { id: "overview", label: "Vue d’ensemble", icon: "home" },
-    {
-      id: role === "artisan" ? "missions" : "requests",
-      label: role === "artisan" ? "Mes missions" : "Mes demandes",
-      icon: "list",
-      count: active.length,
-    },
-    {
-      id: "messages",
-      label: "Messages",
-      icon: "message",
-      count: data.messages.length,
-    },
-    { id: "documents", label: "Documents", icon: "document" },
-    ...(role === "manager"
-      ? [{ id: "sites" as View, label: "Mes sites", icon: "building" }]
-      : []),
-    ...(role === "admin"
-      ? [{ id: "admin" as View, label: "Administration", icon: "shield" }]
-      : []),
-  ];
-  function detail(id: string) {
-    setSelected(id);
-    go("detail");
-  }
-  function newRequest(id?: Category) {
-    if (id) setCategoryId(id);
-    go("new");
-  }
-  function saveDemo(next: Workspace) {
-    setData(next);
-  }
-  async function action(
+
+  // ---- Mutations --------------------------------------------------------------------------
+  const demoOps = () =>
+    readDemo<DemoOperations>(DEMO_KEYS.operations, {}, (v) => !!v && typeof v === "object");
+  const saveDemoOps = (ops: DemoOperations) => writeDemo(DEMO_KEYS.operations, ops);
+
+  // Demo transition of a dossier, run INSIDE the caller's chain (never opens a second run: the
+  // global busy guard would refuse it). Throws a user-facing Error when the action is refused.
+  function demoTransition(
+    ctx: RunContext,
     id: string,
-    actionName: string,
+    name: InterventionAction | "simulate_payment",
     extra?: Record<string, unknown>,
   ) {
-    await run(async () => {
-      if (mode === "demo") {
-        const i = data.interventions.find((x) => x.id === id);
-        if (!i) throw new Error("Demande introuvable.");
-        if (actionName === "accept_mission") {
-          const stored = localStorage.getItem("courant-admin-demo-v1");
-          const artisan = stored
-            ? (JSON.parse(stored) as Profile[]).find(
-                (p) => p.id === "demo-artisan",
-              )
-            : null;
-          if (artisan && !artisan.artisan_approved)
-            throw new Error(
-              "L’accès aux nouvelles missions de cet artisan de démonstration est suspendu. Réactivez sa candidature dans l’administration de démonstration.",
-            );
-        }
-        const transitions: Record<string, Status> = {
-          accept_mission: "assigned",
-          send_quote: "quoted",
-          accept_quote: "accepted",
-          start: "in_progress",
-          complete: "completed",
-          cancel: "cancelled",
-          simulate_payment: "paid",
-        };
-        const status = transitions[actionName];
-        if (!status) throw new Error("Action inconnue.");
-        if (actionName === "accept_quote") {
-          const quote = data.quotes.find(
-            (q) => q.intervention_id === id && q.status === "sent",
-          );
-          if (
-            quote &&
-            professional.approvals.some(
-              (a) => a.quote_id === quote.id && a.status !== "approved",
-            )
-          )
-            throw new Error(
-              "Ce devis nécessite une approbation dans l’espace professionnel avant son acceptation.",
-            );
-        }
-        const allowed: Record<string, Status[]> = {
-          accept_mission: ["requested"],
-          send_quote: ["assigned"],
-          accept_quote: ["quoted"],
-          start: ["accepted"],
-          complete: ["in_progress"],
-          cancel: ["requested", "assigned", "quoted"],
-          simulate_payment: ["completed"],
-        };
-        if (!allowed[actionName]?.includes(i.status))
-          throw new Error(
-            "Cette action n’est plus disponible pour cette demande.",
-          );
-        let qs = data.quotes;
-        if (actionName === "send_quote") {
-          const lines = extra?.lines as Line[];
-          const rate = Number(extra?.tax_rate);
-          const subtotal = lines.reduce(
-            (n, l) => n + Math.round(l.quantity * l.unit_price_cents),
-            0,
-          );
-          qs = [
-            ...qs,
+    const i = data.interventions.find((x) => x.id === id);
+    if (!i) throw new Error("Demande introuvable.");
+    if (name === "accept_mission") {
+      const artisan = readDemo(DEMO_KEYS.admin, adminSeed(), Array.isArray).find(
+        (p) => p.id === DEMO_IDS.artisan,
+      );
+      if (artisan && !artisan.artisan_approved)
+        throw new Error(
+          "L’accès aux nouvelles missions de cet artisan de démonstration est suspendu. Réactivez sa candidature dans l’administration de démonstration.",
+        );
+    }
+    const transitions: Record<string, Status> = {
+      accept_mission: "assigned",
+      send_quote: "quoted",
+      accept_quote: "accepted",
+      start: "in_progress",
+      complete: "completed",
+      cancel: "cancelled",
+      simulate_payment: "paid",
+    };
+    const allowed: Record<string, Status[]> = {
+      accept_mission: ["requested"],
+      send_quote: ["assigned", "quoted"],
+      accept_quote: ["quoted"],
+      start: ["accepted"],
+      complete: ["in_progress"],
+      cancel: ["requested", "assigned", "quoted"],
+      simulate_payment: ["completed"],
+    };
+    const status = transitions[name];
+    if (!status) throw new Error("Action inconnue.");
+    if (!allowed[name]?.includes(i.status))
+      throw new Error("Cette action n’est plus disponible pour cette demande.");
+    let qs = data.quotes;
+    let pro = professional;
+    if (name === "accept_quote") {
+      const shown = qs.find((q) => q.id === extra?.quote_id);
+      if (!shown || shown.intervention_id !== id || shown.status !== "sent")
+        throw new Error(
+          "Le devis affiché n’est plus la version active. Rechargez le dossier avant d’accepter.",
+        );
+      if (pro.approvals.some((a) => a.quote_id === shown.id && a.status !== "approved"))
+        throw new Error(
+          "Ce devis nécessite une approbation dans l’espace entreprise avant son acceptation.",
+        );
+      qs = qs.map((q) =>
+        q.id === shown.id
+          ? { ...q, status: "accepted", accepted_at: new Date().toISOString() }
+          : q,
+      );
+    }
+    if (name === "send_quote") {
+      const lines = extra?.lines as Line[];
+      // Explicit supported rate only: no coercion (Number(null) would be 0), no default.
+      const rate = extra?.tax_rate;
+      if (!isTaxRate(rate)) throw new Error("Choisissez le taux de TVA applicable avant d’envoyer le devis.");
+      const subtotal = lines.reduce(
+        (n, l) => n + Math.round(l.quantity * l.unit_price_cents),
+        0,
+      );
+      // A revision replaces the previously sent (not accepted) version, as the server does.
+      qs = qs.map((q) =>
+        q.intervention_id === id && q.status === "sent" ? { ...q, status: "rejected" } : q,
+      );
+      const quote: Quote = {
+        id: typeof extra?.quote_id === "string" ? extra.quote_id : uid(),
+        intervention_id: id,
+        artisan_id: DEMO_IDS.artisan,
+        lines,
+        subtotal_cents: subtotal,
+        tax_cents: Math.round((subtotal * rate) / 100),
+        total_cents: subtotal + Math.round((subtotal * rate) / 100),
+        tax_rate: rate,
+        status: "sent",
+        created_at: new Date().toISOString(),
+      };
+      qs = [...qs, quote];
+      const rule = i.site_id
+        ? pro.approval_rules.find((r) => r.site_id === i.site_id && r.enabled)
+        : undefined;
+      if (rule && quote.total_cents > rule.threshold_cents)
+        pro = {
+          ...pro,
+          approvals: [
+            ...pro.approvals,
             {
               id: uid(),
-              intervention_id: id,
-              lines,
-              subtotal_cents: subtotal,
-              tax_cents: Math.round((subtotal * rate) / 100),
-              total_cents: subtotal + Math.round((subtotal * rate) / 100),
-              tax_rate: rate,
-              status: "sent",
+              site_id: i.site_id!,
+              quote_id: quote.id,
+              status: "pending",
+              created_at: new Date().toISOString(),
+            },
+          ],
+        };
+    }
+    let payments = data.payments;
+    if (name === "simulate_payment") {
+      const accepted = qs.find((q) => q.intervention_id === id && q.status === "accepted");
+      if (accepted)
+        payments = [
+          ...payments.filter((p) => p.quote_id !== accepted.id),
+          {
+            id: uid(),
+            quote_id: accepted.id,
+            total_cents: accepted.total_cents,
+            currency: "eur",
+            status: "paid",
+            created_at: new Date().toISOString(),
+            paid_at: new Date().toISOString(),
+          },
+        ];
+    }
+    ctx.when(setProfessional)(pro);
+    ctx.when(setData)({
+      ...data,
+      quotes: qs,
+      payments,
+      interventions: data.interventions.map((x) =>
+        x.id === id
+          ? {
+              ...x,
+              status,
+              artisan_id: name === "accept_mission" ? DEMO_IDS.artisan : x.artisan_id,
+              completed_at: name === "complete" ? new Date().toISOString() : x.completed_at,
+              paid_at: name === "simulate_payment" ? new Date().toISOString() : x.paid_at,
+            }
+          : x,
+      ),
+    });
+    ctx.notice(
+      name === "simulate_payment"
+        ? "Paiement simulé dans la démonstration. Aucun débit bancaire n’a été effectué."
+        : actionNotice(name, true),
+    );
+  }
+
+  async function action(
+    id: string,
+    name: InterventionAction | "simulate_payment",
+    extra?: Record<string, unknown>,
+  ) {
+    return run(async (ctx) => {
+      if (modeRef.current === "demo") {
+        demoTransition(ctx, id, name, extra);
+        return;
+      }
+      if (name === "simulate_payment")
+        throw new Error("La simulation de paiement n’existe qu’en démonstration.");
+      if (name === "accept_quote" && !extra?.quote_id)
+        throw new Error("Le devis affiché est introuvable. Rechargez le dossier.");
+      await api(`/api/interventions/${id}/actions`, { action: name, ...extra });
+      if (ctx.alive()) await refresh();
+      ctx.notice(actionNotice(name, false));
+    });
+  }
+
+  async function operate(id: string, body: OperationBody) {
+    return run(async (ctx) => {
+      if (modeRef.current === "demo") {
+        const ops = demoOps();
+        const entry = { ...(ops[id] || {}) };
+        const i = data.interventions.find((x) => x.id === id);
+        if (!i) throw new Error("Dossier introuvable.");
+        let next = data;
+        if (body.action === "decline_offer") {
+          if (i.status !== "requested") throw new Error("Cette offre n’est plus ouverte.");
+          entry.declined = true;
+        } else if (body.action === "reject_quote") {
+          const q = data.quotes.find((x) => x.id === body.quote_id);
+          if (!q || q.intervention_id !== id || q.status !== "sent")
+            throw new Error("Ce devis n’est plus la version active ; rechargez le dossier.");
+          next = {
+            ...data,
+            quotes: data.quotes.map((x) => (x.id === q.id ? { ...x, status: "rejected" } : x)),
+            interventions: data.interventions.map((x) =>
+              x.id === id ? { ...x, status: "assigned" } : x,
+            ),
+            messages: [
+              ...data.messages,
+              {
+                id: uid(),
+                intervention_id: id,
+                author_id: `demo-${roleRef.current}`,
+                body: `Devis refusé : ${body.reason}`,
+                created_at: new Date().toISOString(),
+              },
+            ],
+          };
+        } else if (body.action === "save_appointment") {
+          if (!["assigned", "quoted", "accepted"].includes(i.status))
+            throw new Error("Un rendez-vous ne peut être fixé qu’avant le début des travaux.");
+          if (Date.parse(body.ends_at) <= Date.parse(body.starts_at))
+            throw new Error("La fin du créneau doit suivre son début.");
+          entry.appointment = {
+            intervention_id: id,
+            starts_at: body.starts_at,
+            ends_at: body.ends_at,
+            note: body.note,
+            updated_by: `demo-${roleRef.current}`,
+            updated_at: new Date().toISOString(),
+          };
+        } else if (body.action === "set_travel_stage") {
+          if (!["accepted", "in_progress"].includes(i.status))
+            throw new Error("L’étape de déplacement concerne une intervention acceptée ou en cours.");
+          entry.travel_stage = body.stage;
+          next = {
+            ...data,
+            interventions: data.interventions.map((x) =>
+              x.id === id ? { ...x, travel_stage: body.stage } : x,
+            ),
+          };
+        } else if (body.action === "save_report") {
+          if (!["in_progress", "completed", "paid"].includes(i.status))
+            throw new Error("Le compte rendu se rédige pendant ou après l’intervention.");
+          entry.report = {
+            intervention_id: id,
+            artisan_id: DEMO_IDS.artisan,
+            summary: body.summary,
+            checks: body.checks,
+            signature_name: body.signature_name,
+            updated_at: new Date().toISOString(),
+          };
+        } else if (body.action === "reassign") {
+          if (!["requested", "assigned", "quoted"].includes(i.status))
+            throw new Error("La réaffectation n’est possible qu’avant l’acceptation du devis.");
+          next = {
+            ...data,
+            quotes: data.quotes.map((x) =>
+              x.intervention_id === id && x.status === "sent" ? { ...x, status: "rejected" } : x,
+            ),
+            interventions: data.interventions.map((x) =>
+              x.id === id
+                ? {
+                    ...x,
+                    artisan_id: body.artisan_id,
+                    status: body.artisan_id ? "assigned" : "requested",
+                    travel_stage: "planned",
+                  }
+                : x,
+            ),
+            messages: [
+              ...data.messages,
+              {
+                id: uid(),
+                intervention_id: id,
+                author_id: DEMO_IDS.admin,
+                body: `Réaffectation : ${body.reason}`,
+                created_at: new Date().toISOString(),
+              },
+            ],
+          };
+          delete entry.appointment;
+        }
+        ops[id] = entry;
+        saveDemoOps(ops);
+        ctx.when(setData)(next);
+        ctx.notice(actionNotice(body.action, true));
+        return;
+      }
+      try {
+        await api(`/api/interventions/${id}/operations`, body);
+        ctx.when(setCapabilities)((c) => ({ ...c, operations: "available" }));
+      } catch (e) {
+        const state = contractStateFromError(e);
+        if (state === "missing") ctx.when(setCapabilities)((c) => ({ ...c, operations: "missing" }));
+        throw e;
+      }
+      if (ctx.alive()) await refresh();
+      ctx.notice(actionNotice(body.action, false));
+    });
+  }
+
+  async function loadOperations(id: string): Promise<Operations | null> {
+    if (modeRef.current === "demo") {
+      const i = data.interventions.find((x) => x.id === id);
+      const entry = demoOps()[id] || {};
+      return {
+        participants: i ? demoParticipants(i) : [],
+        appointment: entry.appointment || null,
+        report: entry.report || null,
+        history: [],
+        history_limit: 100,
+        travel_stage: entry.travel_stage || i?.travel_stage || "planned",
+      };
+    }
+    const my = seq.current;
+    try {
+      const result = await api<Operations>(`/api/interventions/${id}/operations`);
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, operations: "available" }));
+      return result;
+    } catch (e) {
+      if (my !== seq.current) return null;
+      if (e instanceof ApiRequestError && (e.status === 403 || e.status === 404)) {
+        // The dossier is no longer readable (access withdrawn or removed): never keep it open.
+        setSelectedId("");
+        setSelectedQuoteId("");
+        setCapabilities((c) => ({ ...c, operations: "available" }));
+        void refresh();
+        setError("Ce dossier n’est plus accessible depuis votre compte. Vos données ont été rechargées.");
+        navigate(homeFor(roleRef.current, "live"));
+        return null;
+      }
+      setCapabilities((c) => ({ ...c, operations: contractStateFromError(e) }));
+      return null;
+    }
+  }
+
+  async function loadArtisanDossier(userId?: string): Promise<ArtisanDossier | null> {
+    if (modeRef.current === "demo") {
+      if (userId && userId !== DEMO_IDS.artisan)
+        return { artisan_profile: null, credentials: [] };
+      return readDemo<ArtisanDossier>(
+        DEMO_KEYS.artisan,
+        artisanSeed(),
+        (v) => !!v && typeof v === "object" && "credentials" in (v as object),
+      );
+    }
+    const my = seq.current;
+    try {
+      const result = await api<ArtisanDossier>(
+        userId ? `/api/artisan?user_id=${encodeURIComponent(userId)}` : "/api/artisan",
+      );
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, artisan: "available" }));
+      return result;
+    } catch (e) {
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, artisan: contractStateFromError(e) }));
+      return null;
+    }
+  }
+
+  async function artisanCommand(body: ArtisanCommand) {
+    return run(async (ctx) => {
+      if (modeRef.current === "demo") {
+        const dossier = readDemo<ArtisanDossier>(DEMO_KEYS.artisan, artisanSeed());
+        const profile = dossier.artisan_profile || artisanSeed().artisan_profile!;
+        let nextProfile = profile;
+        let credentials = dossier.credentials;
+        if (body.action === "save_profile") {
+          // Mirrors the platform rule (CL-BE-001): no dossier edit while work is active or unpaid.
+          const blocking = data.interventions.filter(
+            (i) =>
+              i.artisan_id === DEMO_IDS.artisan &&
+              ["assigned", "quoted", "accepted", "in_progress", "completed"].includes(i.status),
+          ).length;
+          if (blocking)
+            throw new Error(
+              `Modification refusée : ${blocking} mission${blocking > 1 ? "s" : ""} en cours ou terminée${blocking > 1 ? "s" : ""} sans règlement. Terminez-les et attendez leur règlement, ou obtenez leur annulation ou réaffectation, avant de modifier le dossier. Rien n’a été modifié ; vos saisies restent dans le formulaire.`,
+            );
+          const { action: _a, ...fields } = body;
+          nextProfile = {
+            ...profile,
+            ...fields,
+            application_status: "draft",
+            available: false,
+            submitted_at: null,
+            updated_at: new Date().toISOString(),
+          };
+        } else if (body.action === "submit_application") {
+          if (
+            !profile.company_name.trim() ||
+            profile.siret.length !== 14 ||
+            profile.address.trim().length < 5 ||
+            !profile.postal_codes.length ||
+            !profile.categories.length
+          )
+            throw new Error(
+              "Complétez société, SIRET à 14 chiffres, adresse, zone et compétences avant de soumettre.",
+            );
+          nextProfile = {
+            ...profile,
+            application_status: "submitted",
+            submitted_at: new Date().toISOString(),
+          };
+        } else if (body.action === "set_availability") {
+          nextProfile = { ...profile, available: body.available };
+        } else if (body.action === "link_credential") {
+          credentials = [
+            ...credentials.filter((c) => c.document_id !== body.document_id),
+            {
+              id: uid(),
+              user_id: DEMO_IDS.artisan,
+              document_id: body.document_id,
+              kind: body.kind,
+              expires_on: body.expires_on,
               created_at: new Date().toISOString(),
             },
           ];
         }
-        if (actionName === "send_quote" && i.site_id) {
-          const rule = professional.approval_rules.find(
-            (r) => r.site_id === i.site_id && r.enabled,
-          );
-          const quote = qs.at(-1);
-          if (rule && quote && quote.total_cents > rule.threshold_cents)
-            setProfessional({
-              ...professional,
-              approvals: [
-                ...professional.approvals,
-                {
-                  id: uid(),
-                  site_id: i.site_id,
-                  quote_id: quote.id,
-                  status: "pending",
-                },
-              ],
-            });
-        }
-        if (actionName === "accept_quote")
-          qs = qs.map((q) =>
-            q.intervention_id === id ? { ...q, status: "accepted" } : q,
-          );
-        saveDemo({
-          ...data,
-          quotes: qs,
-          interventions: data.interventions.map((x) =>
-            x.id === id
-              ? {
-                  ...x,
-                  status,
-                  artisan_id:
-                    actionName === "accept_mission"
-                      ? "demo-artisan"
-                      : x.artisan_id,
-                }
-              : x,
-          ),
-        });
-        setNotice(
-          actionName === "simulate_payment"
-            ? "Paiement simulé. Aucun débit bancaire n’a été effectué."
-            : "Modification enregistrée dans la démonstration.",
-        );
-      } else {
-        await api(`/api/interventions/${id}/actions`, {
-          action: actionName,
-          ...extra,
-        });
-        await refresh();
-        setNotice("Modification enregistrée.");
+        writeDemo(DEMO_KEYS.artisan, { artisan_profile: nextProfile, credentials });
+        ctx.when(setData)({ ...data, artisan_profile: nextProfile });
+        ctx.notice("Dossier enregistré dans la démonstration. Aucune vérification réelle n’est effectuée.");
+        return;
       }
+      try {
+        await api("/api/artisan", body);
+        ctx.when(setCapabilities)((c) => ({ ...c, artisan: "available" }));
+      } catch (e) {
+        const state = contractStateFromError(e);
+        if (state === "missing") ctx.when(setCapabilities)((c) => ({ ...c, artisan: "missing" }));
+        if (body.action === "save_profile" && e instanceof ApiRequestError && e.status === 409)
+          // Active-work guard: the dossier and the approval are untouched; the form keeps the input.
+          throw new Error(
+            `${e.message} Rien n’a été modifié et votre approbation est inchangée ; vos saisies restent dans le formulaire.`,
+          );
+        throw e;
+      }
+      if (ctx.alive()) await refresh();
+      ctx.notice("Dossier enregistré. L’examen reste réalisé par l’opérateur.");
     });
   }
-  async function checkout() {
-    if (!currentQuote) return;
-    await run(async () => {
-      const result = await api<{ url: string }>("/api/payments/checkout", {
-        quote_id: currentQuote.id,
-      });
-      if (!result.url?.startsWith("https://checkout.stripe.com/"))
-        throw new Error("La session de paiement n’est pas disponible.");
-      window.location.assign(result.url);
-    });
-  }
-  function exportCsv() {
-    const rows = [
-      [
-        "Référence",
-        "Type",
-        "Statut",
-        "Adresse",
-        "Site",
-        "Estimation min EUR",
-        "Estimation max EUR",
-      ],
-      ...data.interventions
-        .filter((i) => siteFilter === "all" || i.site_id === siteFilter)
-        .map((i) => [
-          shortId(i.id),
-          category(i.category).label,
-          STATUS[i.status],
-          `${i.address} ${i.city}`,
-          data.sites.find((s) => s.id === i.site_id)?.name || "",
-          String(i.estimate_min_cents / 100),
-          String(i.estimate_max_cents / 100),
-        ]),
-    ];
-    download(
-      "courant-interventions.csv",
-      "\uFEFF" +
-        rows
-          .map((r) =>
-            r
-              .map(
-                (c) =>
-                  `"${String(c)
-                    .replace(/^[=+@-]/, "'$&")
-                    .replaceAll('"', '""')}"`,
-              )
-              .join(";"),
-          )
-          .join("\r\n"),
-      "text/csv;charset=utf-8",
-    );
-    setNotice("L’export a été téléchargé.");
-  }
-  function requestList(items: Intervention[], limit?: number) {
-    const list = limit ? items.slice(0, limit) : items;
-    return list.length ? (
-      <div className="request-list">
-        {list.map((i) => (
-          <button
-            className="request-row"
-            key={i.id}
-            onClick={() => detail(i.id)}
-          >
-            <span className={`service-icon ${i.category}`}>
-              <Icon name={category(i.category).icon} size={24} />
-            </span>
-            <span className="request-content">
-              <span className="request-title">
-                {category(i.category).label}
-              </span>
-              <span className="request-address">
-                <Icon name="location" size={13} />
-                {i.address ? `${i.address}, ` : ""}
-                {i.city}
-              </span>
-              <span className="request-ref">
-                {shortId(i.id)} <span>·</span> {date(i.created_at)}
-              </span>
-            </span>
-            <span className="request-meta">
-              <Badge status={i.status} />
-              <span className="request-price">
-                {i.urgency === "urgent" && (
-                  <span className="urgent-text">Urgent</span>
-                )}
-                {money(i.estimate_min_cents)} – {money(i.estimate_max_cents)}
-              </span>
-            </span>
-            <Icon name="arrow" size={18} />
-          </button>
-        ))}
-      </div>
-    ) : (
-      <Empty
-        title="Aucune demande dans cette liste"
-        action={
-          <button className="button primary" onClick={() => newRequest()}>
-            Créer une demande
-          </button>
-        }
-      >
-        Vous retrouverez ici les interventions correspondant à vos filtres.
-      </Empty>
-    );
-  }
-  const renderPublic = () => (
-    <>
-      <header className="public-header">
-        <button
-          className="brand-button"
-          onClick={() => go("overview")}
-          aria-label="Courant, accueil"
-        >
-          <Brand />
-        </button>
-        <nav aria-label="Navigation principale">
-          <button onClick={() => go("help")}>Comment ça marche</button>
-          <button
-            onClick={() => {
-              setAuthMode("signup");
-              go("auth");
-            }}
-          >
-            Vous êtes artisan ?
-          </button>
-          <button
-            className="button outline"
-            onClick={() => {
-              setAuthMode("login");
-              go("auth");
-            }}
-          >
-            Se connecter
-          </button>
-        </nav>
-      </header>
-      <main id="main" className="public-main">
-        {view === "auth" ? (
-          Auth()
-        ) : view === "new" ? (
-          NewRequest()
-        ) : view === "help" ? (
-          Help()
-        ) : (
-          <>
-            <section className="landing">
-              <div className="landing-copy">
-                <span className="context-line">
-                  <span className="mini-bolt">
-                    <Icon name="bolt" size={16} />
-                  </span>
-                  Dépannage électrique pour particuliers et professionnels
-                </span>
-                <h1>
-                  Une panne électrique.
-                  <br />
-                  Un parcours clair.
-                </h1>
-                <p>
-                  Décrivez le problème, consultez une estimation et validez le
-                  devis de votre artisan. Retrouvez chaque étape au même
-                  endroit.
-                </p>
-                <div className="landing-actions">
-                  <button
-                    className="button primary large"
-                    onClick={() => newRequest()}
-                  >
-                    <Icon name="plus" />
-                    Demander une intervention
-                  </button>
-                  <button className="text-button" onClick={() => demo()}>
-                    Explorer la démonstration <Icon name="arrow" size={16} />
-                  </button>
-                </div>
-                <div className="landing-assurance">
-                  <span>
-                    <Icon name="document" />
-                    Devis avant intervention
-                  </span>
-                  <span>
-                    <Icon name="lock" />
-                    Paiement avec Stripe
-                  </span>
-                </div>
-              </div>
-              <div className="service-board">
-                <div className="service-board-head">
-                  <Icon name="panel" size={24} />
-                  <span>De la demande à la résolution</span>
-                  <span className="board-mark">C.</span>
-                </div>
-                <div className="board-flow">
-                  <div>
-                    <span className="flow-node">1</span>
-                    <section>
-                      <strong>Vous décrivez la panne</strong>
-                      <p>Le problème, le lieu et votre besoin.</p>
-                    </section>
-                  </div>
-                  <div>
-                    <span className="flow-node">2</span>
-                    <section>
-                      <strong>Vous validez le devis</strong>
-                      <p>Un détail des prestations et du prix.</p>
-                    </section>
-                  </div>
-                  <div>
-                    <span className="flow-node last">
-                      <Icon name="check" size={18} />
-                    </span>
-                    <section>
-                      <strong>Vous suivez l’intervention</strong>
-                      <p>Le suivi et les documents réunis.</p>
-                    </section>
-                  </div>
-                </div>
-                <div className="board-note">
-                  <Icon name="shield" />
-                  <span>Vous gardez la main sur votre demande.</span>
-                </div>
-              </div>
-            </section>
-            <section className="public-services">
-              <div className="section-heading">
-                <div>
-                  <h2>Quel est le problème ?</h2>
-                  <p>Commencez par ce qui vous ressemble le plus.</p>
-                </div>
-              </div>
-              <div className="service-options">
-                {CATEGORIES.map((c) => (
-                  <button key={c.id} onClick={() => newRequest(c.id)}>
-                    <Icon name={c.icon} size={28} />
-                    <strong>{c.label}</strong>
-                    <span>{c.description}</span>
-                    <Icon name="arrow" size={16} />
-                  </button>
-                ))}
-              </div>
-            </section>
-            <section className="professional-band">
-              <span className="band-icon">
-                <Icon name="building" size={38} />
-              </span>
-              <div>
-                <h2>Plusieurs sites. Un seul espace de suivi.</h2>
-                <p>
-                  Syndics, restaurants, bureaux et établissements recevant du
-                  public : organisez vos demandes par site.
-                </p>
-              </div>
-              <button
-                className="button outline"
-                onClick={() => {
-                  demo();
-                  setRole("manager");
-                }}
-              >
-                Découvrir l’espace professionnel
-              </button>
-            </section>
-          </>
-        )}
-      </main>
-      <footer className="public-footer">
-        <Brand compact />
-        <span>Courant est un nom de travail. Application en préparation.</span>
-        <button onClick={() => go("help")}>Aide et informations</button>
-      </footer>
-    </>
-  );
-  function Alerts() {
-    return (
-      <>
-        {error && (
-          <div className="alert error" role="alert">
-            <Icon name="warning" />
-            <span>{error}</span>
-            <button
-              onClick={() => setError("")}
-              aria-label="Fermer le message d’erreur"
-            >
-              <Icon name="close" size={16} />
-            </button>
-          </div>
-        )}
-        {notice && (
-          <div className="alert success" role="status">
-            <Icon name="check" />
-            <span>{notice}</span>
-            <button
-              onClick={() => setNotice("")}
-              aria-label="Fermer le message"
-            >
-              <Icon name="close" size={16} />
-            </button>
-          </div>
-        )}
-      </>
-    );
-  }
-  // Components below are rendered as function calls to preserve form focus across parent updates.
-  function Overview() {
-    const focus = awaiting[0] || active[0];
-    return (
-      <>
-        <div className="welcome">
-          <div>
-            <h1>
-              Bonjour {name.split(" ")[0]}
-              <span className="hello-dot">.</span>
-            </h1>
-            <p>
-              {role === "artisan"
-                ? "Vos missions et vos devis, au même endroit."
-                : role === "manager"
-                  ? "Gardez une vue claire sur les interventions de vos sites."
-                  : "Le point sur vos demandes et vos interventions."}
-            </p>
-          </div>
-          <button
-            className="button primary"
-            onClick={() => (role === "artisan" ? go("missions") : newRequest())}
-          >
-            <Icon name={role === "artisan" ? "search" : "plus"} />
-            {role === "artisan" ? "Voir les missions" : "Nouvelle demande"}
-          </button>
-        </div>
-        {role === "artisan" &&
-        mode === "live" &&
-        !profile?.artisan_approved &&
-        !profile?.approved ? (
-          <div className="alert warning">
-            <Icon name="shield" />
-            <span>
-              Votre candidature doit être approuvée avant de pouvoir accepter
-              une mission.
-            </span>
-          </div>
-        ) : null}
-        <div className="stats-strip">
-          <div>
-            <span className="stat-icon blue">
-              <Icon name="list" />
-            </span>
-            <section>
-              <span>Interventions en cours</span>
-              <strong>{active.length.toString().padStart(2, "0")}</strong>
-            </section>
-          </div>
-          <div>
-            <span className="stat-icon amber">
-              <Icon name="document" />
-            </span>
-            <section>
-              <span>
-                {role === "artisan" ? "Devis envoyés" : "Devis à valider"}
-              </span>
-              <strong>{awaiting.length.toString().padStart(2, "0")}</strong>
-            </section>
-          </div>
-          <div>
-            <span className="stat-icon green">
-              <Icon name="check" />
-            </span>
-            <section>
-              <span>Interventions terminées</span>
-              <strong>{completed.length.toString().padStart(2, "0")}</strong>
-            </section>
-          </div>
-          {role === "manager" && (
-            <div>
-              <span className="stat-icon blue">
-                <Icon name="building" />
-              </span>
-              <section>
-                <span>Sites suivis</span>
-                <strong>{data.sites.length.toString().padStart(2, "0")}</strong>
-              </section>
-            </div>
-          )}
-        </div>
-        <div className="overview-grid">
-          <div className="main-column">
-            {focus && (
-              <section className="attention-panel">
-                <div className="attention-title">
-                  <span>
-                    <Icon
-                      name={focus.status === "quoted" ? "document" : "clock"}
-                      size={22}
-                    />
-                  </span>
-                  <strong>
-                    {focus.status === "quoted"
-                      ? "Un devis attend votre attention"
-                      : "Votre prochaine étape"}
-                  </strong>
-                  <Badge status={focus.status} />
-                </div>
-                <div className="attention-body">
-                  <section>
-                    <h2>{category(focus.category).label}</h2>
-                    <p>
-                      <Icon name="location" size={15} />
-                      {focus.address}, {focus.city}
-                    </p>
-                    <span>
-                      {focus.status === "quoted"
-                        ? "Consultez les prestations proposées et le montant détaillé."
-                        : "Consultez votre demande pour retrouver son avancement."}
-                    </span>
-                  </section>
-                  <button
-                    className="button primary"
-                    onClick={() => detail(focus.id)}
-                  >
-                    {focus.status === "quoted"
-                      ? "Consulter le devis"
-                      : "Voir la demande"}
-                    <Icon name="arrow" size={16} />
-                  </button>
-                </div>
-              </section>
-            )}
-            <section className="panel">
-              <div className="section-heading">
-                <h2>Interventions récentes</h2>
-                <button
-                  className="text-button"
-                  onClick={() => {
-                    setFilter("all");
-                    go(role === "artisan" ? "missions" : "requests");
-                  }}
-                >
-                  Tout voir <Icon name="arrow" size={15} />
-                </button>
-              </div>
-              {requestList(data.interventions, 4)}
-            </section>
-            <section className="quick-start">
-              <div>
-                <h2>Un nouveau problème électrique ?</h2>
-                <p>
-                  Quelques informations suffisent pour commencer votre demande.
-                </p>
-              </div>
-              <div className="quick-categories">
-                {CATEGORIES.slice(0, 4).map((c) => (
-                  <button key={c.id} onClick={() => newRequest(c.id)}>
-                    <Icon name={c.icon} size={24} />
-                    <span>{c.label}</span>
-                  </button>
-                ))}
-              </div>
-            </section>
-          </div>
-          <aside className="side-column">
-            <section className="help-panel">
-              <span className="help-symbol">
-                <Icon name="shield" size={27} />
-              </span>
-              <h2>
-                Le devis vous donne
-                <br />
-                le dernier mot.
-              </h2>
-              <p>
-                L’estimation est indicative. Avant de commencer, votre artisan
-                vous propose un devis détaillé à accepter.
-              </p>
-              <button className="text-button" onClick={() => go("help")}>
-                Comprendre les étapes <Icon name="arrow" size={15} />
-              </button>
-            </section>
-            <section className="sidebar-note">
-              <Icon name="document" />
-              <h3>Vos documents, rassemblés.</h3>
-              <p>Retrouvez les devis de vos interventions dans votre espace.</p>
-              <button className="text-button" onClick={() => go("documents")}>
-                Voir mes documents <Icon name="arrow" size={15} />
-              </button>
-            </section>
-            <div className="support-link">
-              <span>
-                <Icon name="help" />
-              </span>
-              <section>
-                <strong>Une question sur le parcours ?</strong>
-                <button onClick={() => go("help")}>Consulter l’aide</button>
-              </section>
-            </div>
-          </aside>
-        </div>
-      </>
-    );
-  }
-  function Requests() {
-    let rows = data.interventions.filter(
-      (i) =>
-        (filter === "all" ||
-          (filter === "active" && !["paid", "cancelled"].includes(i.status)) ||
-          (filter === "past" && ["paid", "cancelled"].includes(i.status)) ||
-          (filter === "available" && i.status === "requested")) &&
-        (siteFilter === "all" || i.site_id === siteFilter),
-    );
-    if (search.trim())
-      rows = rows.filter((i) =>
-        `${category(i.category).label} ${i.address} ${i.city} ${shortId(i.id)}`
-          .toLowerCase()
-          .includes(search.toLowerCase()),
-      );
-    return (
-      <>
-        <PageTitle
-          title={role === "artisan" ? "Mes missions" : "Mes demandes"}
-          subtitle="Retrouvez chaque intervention et son avancement."
-          action={
-            <button className="button primary" onClick={() => newRequest()}>
-              <Icon name="plus" />
-              Nouvelle demande
-            </button>
-          }
-        />
-        <div className="list-tools">
-          <div className="tabs" role="group" aria-label="Filtrer les demandes">
-            {[
-              ["active", "En cours"],
-              ["all", "Toutes"],
-              ["past", "Terminées"],
-              ...(role === "artisan" ? [["available", "Disponibles"]] : []),
-            ].map(([id, label]) => (
-              <button
-                key={id}
-                className={filter === id ? "active" : ""}
-                onClick={() => setFilter(id)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <label className="search-field">
-            <Icon name="search" size={18} />
-            <input
-              aria-label="Rechercher une intervention"
-              placeholder="Rechercher une intervention"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </label>
-        </div>
-        <section className="panel">{requestList(rows)}</section>
-      </>
-    );
-  }
-  function PageTitle({
-    title,
-    subtitle,
-    action: act,
-  }: {
-    title: string;
-    subtitle: string;
-    action?: ReactNode;
-  }) {
-    return (
-      <div className="page-title">
-        <div>
-          <h1>{title}</h1>
-          <p>{subtitle}</p>
-        </div>
-        {act}
-      </div>
-    );
-  }
-  function NewRequest() {
-    return (
-      <RequestForm
-        initialCategory={categoryId}
-        initialValues={pendingDraft}
-        sites={data.sites}
-        mode={mode}
-        busy={busy}
-        onBack={() => go(mode === "public" ? "overview" : "requests")}
-        onSubmit={async (values) => {
-          await run(async () => {
-            if (mode === "public") {
-              setPendingDraft(values);
-              try {
-                sessionStorage.setItem(
-                  "courant-request-draft",
-                  JSON.stringify({ savedAt: Date.now(), values }),
-                );
-              } catch {}
-              setAuthMode("signup");
-              go("auth");
-              setNotice(
-                "Votre brouillon est conservé. Connectez-vous ou créez votre compte pour enregistrer cette demande.",
-              );
-              return;
-            }
-            if (mode === "demo") {
-              const c = category(values.category);
-              const intervention: Intervention = {
-                ...values,
-                id: uid(),
-                status: "requested",
-                client_id: "demo-client",
-                created_at: new Date().toISOString(),
-                estimate_min_cents: c.min,
-                estimate_max_cents: c.max,
-              };
-              saveDemo({
-                ...data,
-                interventions: [intervention, ...data.interventions],
-              });
-              setPendingDraft(null);
-              try {
-                sessionStorage.removeItem("courant-request-draft");
-              } catch {}
-              setSelected(intervention.id);
-              go("detail");
-              setNotice(
-                "Demande enregistrée dans la démonstration, sans envoi à un artisan réel.",
-              );
-            } else {
-              const result = await api<{ intervention: Intervention }>(
-                "/api/interventions",
-                values,
-              );
-              await refresh();
-              setPendingDraft(null);
-              try {
-                sessionStorage.removeItem("courant-request-draft");
-              } catch {}
-              if (result.intervention?.id) {
-                setSelected(result.intervention.id);
-                go("detail");
-              } else go("requests");
-              setNotice("Votre demande a été enregistrée.");
-            }
-          });
-        }}
-        onDemo={() => demo("new")}
-      />
-    );
-  }
-  function Detail() {
-    if (!current)
-      return (
-        <Empty
-          title="Sélectionnez une intervention"
-          action={
-            <button className="button primary" onClick={() => go("requests")}>
-              Voir mes demandes
-            </button>
-          }
-        />
-      );
-    const i = current;
-    const progress: Status[] = [
-      "requested",
-      "assigned",
-      "quoted",
-      "accepted",
-      "in_progress",
-      "completed",
-      "paid",
-    ];
-    const pi = progress.indexOf(i.status);
-    return (
-      <>
-        <button
-          className="back-link"
-          onClick={() => go(role === "artisan" ? "missions" : "requests")}
-        >
-          <Icon name="back" size={17} />
-          Retour aux {role === "artisan" ? "missions" : "demandes"}
-        </button>
-        <PageTitle
-          title={category(i.category).label}
-          subtitle={`${shortId(i.id)} — Créée le ${date(i.created_at)}`}
-          action={<Badge status={i.status} />}
-        />
-        <div className="detail-grid">
-          <div>
-            <section className="panel detail-summary">
-              <div className="section-heading">
-                <h2>Votre demande</h2>
-                {i.urgency === "urgent" && (
-                  <span className="urgency-label">
-                    <Icon name="clock" size={14} />
-                    Urgente
-                  </span>
-                )}
-              </div>
-              <p className="description">
-                {i.description ||
-                  "Le détail et l’adresse seront accessibles après acceptation de la mission."}
-              </p>
-              <div className="detail-facts">
-                <div>
-                  <Icon name="location" />
-                  <span>
-                    <small>Lieu d’intervention</small>
-                    <strong>
-                      {i.address || "Adresse masquée avant attribution"}
-                      <br />
-                      {i.postal_code} {i.city}
-                    </strong>
-                  </span>
-                </div>
-                <div>
-                  <Icon name="euro" />
-                  <span>
-                    <small>Estimation indicative</small>
-                    <strong>
-                      {money(i.estimate_min_cents)} –{" "}
-                      {money(i.estimate_max_cents)}
-                    </strong>
-                  </span>
-                </div>
-              </div>
-              {i.site_id && (
-                <p className="site-tag">
-                  <Icon name="building" size={16} />
-                  {data.sites.find((s) => s.id === i.site_id)?.name ||
-                    "Site professionnel"}
-                </p>
-              )}
-            </section>
-            <section className="panel timeline-panel">
-              <h2>Avancement de l’intervention</h2>
-              {i.status === "cancelled" ? (
-                <p>Cette demande est annulée.</p>
-              ) : (
-                <ol className="timeline">
-                  {progress.map((s, index) => (
-                    <li key={s} className={index <= pi ? "reached" : ""}>
-                      <span>
-                        {index < pi ? (
-                          <Icon name="check" size={13} />
-                        ) : (
-                          index + 1
-                        )}
-                      </span>
-                      <div>
-                        <strong>{STATUS[s]}</strong>
-                        {index === pi && <small>Étape actuelle</small>}
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </section>
-            {currentQuote ? (
-              <section className="panel quote-panel">
-                <div className="section-heading">
-                  <h2>Devis détaillé</h2>
-                  <span className="subtle">
-                    {currentQuote.status === "accepted"
-                      ? "Accepté"
-                      : "À consulter"}
-                  </span>
-                </div>
-                <div className="quote-lines">
-                  {currentQuote.lines.map((l, index) => (
-                    <div key={index}>
-                      <section>
-                        <strong>{l.label}</strong>
-                        <span>
-                          {l.quantity} × {money(l.unit_price_cents)} HT
-                        </span>
-                      </section>
-                      <strong>
-                        {money(Math.round(l.quantity * l.unit_price_cents))}
-                      </strong>
-                    </div>
-                  ))}
-                </div>
-                <div className="quote-totals">
-                  <div>
-                    <span>Sous-total HT</span>
-                    <strong>{money(currentQuote.subtotal_cents)}</strong>
-                  </div>
-                  <div>
-                    <span>TVA ({currentQuote.tax_rate} %)</span>
-                    <strong>{money(currentQuote.tax_cents)}</strong>
-                  </div>
-                  <div className="total">
-                    <span>Total TTC</span>
-                    <strong>{money(currentQuote.total_cents)}</strong>
-                  </div>
-                </div>
-                <p className="form-note">
-                  {mode === "demo"
-                    ? "Montants et taux de TVA de démonstration uniquement."
-                    : "Le devis précise le montant de l’intervention. Vérifiez les prestations avant acceptation."}
-                </p>
-                {["client", "manager"].includes(role) &&
-                  i.status === "quoted" && (
-                    <button
-                      className="button primary full"
-                      disabled={busy}
-                      onClick={() => void action(i.id, "accept_quote")}
-                    >
-                      <Icon name="check" />
-                      {busy ? "Enregistrement…" : "Accepter le devis"}
-                    </button>
-                  )}
-                <button
-                  className="button outline full"
-                  onClick={() =>
-                    download(
-                      `devis-${shortId(i.id)}.txt`,
-                      `${mode === "demo" ? "DÉMONSTRATION — AUCUNE VALEUR CONTRACTUELLE\n" : ""}DEVIS ${shortId(i.id)}\n${category(i.category).label}\n\n${currentQuote.lines.map((l) => `${l.label} : ${l.quantity} x ${money(l.unit_price_cents)} HT`).join("\n")}\n\nSous-total HT : ${money(currentQuote.subtotal_cents)}\nTVA : ${money(currentQuote.tax_cents)}\nTotal TTC : ${money(currentQuote.total_cents)}\nStatut : ${currentQuote.status}\n`,
-                    )
-                  }
-                >
-                  <Icon name="download" />
-                  Télécharger le récapitulatif
-                </button>
-              </section>
-            ) : null}
-            {role === "artisan" && i.status === "assigned" && (
-              <QuoteEditor
-                busy={busy}
-                demo={mode === "demo"}
-                onSubmit={(lines) => void action(i.id, "send_quote", lines)}
-              />
-            )}
-            {i.status === "paid" && (
-              <>
-                <ReviewForm
-                  existing={(data.reviews || []).find(
-                    (r) => r.intervention_id === i.id,
-                  )}
-                  enabled={role === "client" || role === "manager"}
-                  busy={busy}
-                  onSubmit={async (values) => {
-                    await run(async () => {
-                      if (mode === "demo")
-                        saveDemo({
-                          ...data,
-                          reviews: [
-                            ...(data.reviews || []),
-                            { ...values, id: uid(), intervention_id: i.id },
-                          ],
-                        });
-                      else {
-                        await api("/api/reviews", {
-                          ...values,
-                          intervention_id: i.id,
-                        });
-                        await refresh();
-                      }
-                      setNotice(
-                        mode === "demo"
-                          ? "Avis enregistré dans la démonstration."
-                          : "Votre avis a été enregistré.",
-                      );
-                    });
-                  }}
-                />
-                <WarrantyPanel
-                  interventionId={i.id}
-                  demo={mode === "demo"}
-                  role={role}
-                />
-              </>
-            )}
-          </div>
-          <aside>
-            <section className="next-step-panel">
-              <span className="next-step-icon">
-                <Icon
-                  name={
-                    i.status === "paid"
-                      ? "check"
-                      : i.status === "completed"
-                        ? "lock"
-                        : "clock"
-                  }
-                  size={26}
-                />
-              </span>
-              <h2>
-                {i.status === "requested"
-                  ? "La demande est enregistrée"
-                  : i.status === "paid"
-                    ? "Intervention clôturée"
-                    : "La prochaine étape"}
-              </h2>
-              <p>
-                {i.status === "requested"
-                  ? "Votre demande attend qu’un artisan éligible l’accepte. Aucun délai d’affectation n’est garanti."
-                  : i.status === "assigned"
-                    ? "L’artisan prépare le devis détaillé. Vous pourrez le consulter avant de l’accepter."
-                    : i.status === "quoted"
-                      ? "Le devis est disponible. Vérifiez le détail des prestations et le montant proposé."
-                      : i.status === "accepted"
-                        ? "Le devis est accepté. L’artisan peut démarrer l’intervention."
-                        : i.status === "in_progress"
-                          ? "L’artisan réalise l’intervention prévue au devis."
-                          : i.status === "completed"
-                            ? "L’intervention est terminée. Vous pouvez régler le devis accepté via Stripe."
-                            : i.status === "paid"
-                              ? "Le règlement est enregistré. Votre devis reste accessible dans vos documents."
-                              : "La demande a été annulée."}
-              </p>
-              {role === "artisan" && i.status === "requested" && (
-                <button
-                  className="button primary full"
-                  disabled={busy}
-                  onClick={() => void action(i.id, "accept_mission")}
-                >
-                  Accepter la mission
-                </button>
-              )}
-              {role === "artisan" && i.status === "accepted" && (
-                <button
-                  className="button primary full"
-                  disabled={busy}
-                  onClick={() => void action(i.id, "start")}
-                >
-                  Démarrer l’intervention
-                </button>
-              )}
-              {role === "artisan" && i.status === "in_progress" && (
-                <button
-                  className="button primary full"
-                  disabled={busy}
-                  onClick={() => void action(i.id, "complete")}
-                >
-                  Terminer l’intervention
-                </button>
-              )}
-              {["client", "manager"].includes(role) &&
-                i.status === "completed" && (
-                  <button
-                    className="button primary full"
-                    disabled={busy}
-                    onClick={() =>
-                      mode === "demo"
-                        ? void action(i.id, "simulate_payment")
-                        : void checkout()
-                    }
-                  >
-                    <Icon name="lock" />
-                    {mode === "demo"
-                      ? "Simuler le règlement"
-                      : "Régler avec Stripe"}
-                  </button>
-                )}
-              {mode === "demo" && (
-                <p className="form-note">
-                  Dans la démonstration, changez d’espace dans le menu pour
-                  tester la suite du parcours.
-                </p>
-              )}
-            </section>
-            <section className="panel compact-panel">
-              <h3>Besoin d’échanger ?</h3>
-              <p>Retrouvez les messages liés à cette demande.</p>
-              <button
-                className="button outline full"
-                onClick={() => go("messages")}
-              >
-                <Icon name="message" />
-                Ouvrir les messages
-              </button>
-            </section>
-            {["requested", "assigned", "quoted"].includes(i.status) &&
-              ["client", "manager"].includes(role) && (
-                <ConfirmAction
-                  label="Annuler la demande"
-                  message="Annuler cette demande ? Cette action ne peut pas être annulée."
-                  confirmLabel="Confirmer l’annulation"
-                  busy={busy}
-                  danger
-                  onConfirm={() => action(i.id, "cancel")}
-                />
-              )}
-          </aside>
-        </div>
-      </>
-    );
-  }
-  function MessagesView() {
-    return (
-      <>
-        <PageTitle
-          title="Messages"
-          subtitle="Les échanges liés à vos interventions restent regroupés ici."
-        />
-        <MessageCenter
-          interventions={data.interventions}
-          messages={data.messages}
-          role={role}
-          profileId={
-            profile?.id || `demo-${role === "artisan" ? "artisan" : "client"}`
-          }
-          selectedId={selected}
-          busy={busy}
-          onSubmit={async (intervention_id, body) => {
-            return await run(async () => {
-              if (mode === "demo")
-                saveDemo({
-                  ...data,
-                  messages: [
-                    ...data.messages,
-                    {
-                      id: uid(),
-                      intervention_id,
-                      body,
-                      author_id:
-                        role === "artisan" ? "demo-artisan" : "demo-client",
-                      created_at: new Date().toISOString(),
-                    },
-                  ],
-                });
-              else {
-                await api("/api/messages", { intervention_id, body });
-                await refresh();
-              }
-              setNotice(
-                mode === "demo"
-                  ? "Message enregistré dans la démonstration."
-                  : "Message envoyé.",
-              );
-            });
-          }}
-        />
-      </>
-    );
-  }
-  function Documents() {
-    return (
-      <>
-        <PageTitle
-          title="Documents"
-          subtitle="Les devis de vos interventions, réunis dans votre espace."
-        />
-        <section className="panel">
-          {data.quotes.length ? (
-            <div className="document-list">
-              {data.quotes.map((q) => {
-                const i = data.interventions.find(
-                  (x) => x.id === q.intervention_id,
-                );
-                return (
-                  <div key={q.id}>
-                    <span className="service-icon">
-                      <Icon name="document" size={25} />
-                    </span>
-                    <section>
-                      <h3>
-                        Devis —{" "}
-                        {i ? category(i.category).label : "Intervention"}
-                      </h3>
-                      <p>
-                        {date(q.created_at)} · {money(q.total_cents)} TTC ·{" "}
-                        {q.status === "accepted"
-                          ? "Accepté"
-                          : q.status === "rejected"
-                            ? "Remplacé ou refusé"
-                            : "Envoyé"}
-                      </p>
-                    </section>
-                    <button
-                      className="button outline"
-                      onClick={() => detail(q.intervention_id)}
-                    >
-                      Consulter
-                      <Icon name="arrow" size={16} />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <Empty icon="document" title="Aucun document pour le moment">
-              Les devis apparaîtront ici après leur envoi par votre artisan.
-            </Empty>
-          )}
-        </section>
-        <DocumentManager
-          documents={data.documents || []}
-          interventions={data.interventions}
-          demo={mode === "demo"}
-          onRefresh={refresh}
-        />
-        <div className="inline-note">
-          <Icon name="lock" />
-          <p>
-            Les documents d’assurance et justificatifs sont privés. Les liens de
-            téléchargement sont temporaires et accessibles uniquement aux
-            personnes autorisées.
-          </p>
-        </div>
-      </>
-    );
-  }
-  function Sites() {
-    return (
-      <>
-        <PageTitle
-          title="Mes sites"
-          subtitle="Organisez les interventions de votre organisation."
-          action={
-            <button className="button outline" onClick={exportCsv}>
-              <Icon name="download" />
-              Exporter les interventions
-            </button>
-          }
-        />
-        <div
-          className="tabs vertical-tabs"
-          role="group"
-          aria-label="Type d’activité"
-        >
-          {[
-            ["all", "Tous"],
-            ["syndic", "Copropriétés"],
-            ["restaurant", "Restauration"],
-            ["office", "Bureaux"],
-            ["erp", "ERP"],
-          ].map(([id, label]) => (
-            <button
-              key={id}
-              className={verticalFilter === id ? "active" : ""}
-              onClick={() => setVerticalFilter(id)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <div className="list-tools">
-          <label className="select-inline">
-            Site
-            <select
-              value={siteFilter}
-              onChange={(e) => setSiteFilter(e.target.value)}
-            >
-              <option value="all">Tous les sites</option>
-              {data.sites.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <span className="subtle">
-            {data.sites.length} site{data.sites.length > 1 ? "s" : ""} dans
-            votre espace
-          </span>
-        </div>
-        <div className="sites-grid">
-          {data.sites
-            .filter(
-              (s) =>
-                (siteFilter === "all" || s.id === siteFilter) &&
-                (verticalFilter === "all" ||
-                  (s.type || s.vertical) === verticalFilter),
-            )
-            .map((s) => {
-              const requests = data.interventions.filter(
-                (i) => i.site_id === s.id,
-              );
-              const spent = data.quotes
-                .filter(
-                  (q) =>
-                    q.status === "accepted" &&
-                    requests.some((i) => i.id === q.intervention_id),
-                )
-                .reduce((sum, q) => sum + q.total_cents, 0);
-              const pct = s.budget_cents
-                ? Math.min(100, Math.round((spent / s.budget_cents) * 100))
-                : 0;
-              const vertical = s.type || s.vertical || "syndic";
-              return (
-                <section className="panel site-panel" key={s.id}>
-                  <div className="site-top">
-                    <span className="service-icon">
-                      <Icon name="building" size={26} />
-                    </span>
-                    <span className="vertical-tag">
-                      {{
-                        syndic: "Copropriété",
-                        restaurant: "Restauration",
-                        office: "Bureaux",
-                        erp: "ERP",
-                      }[vertical] || vertical}
-                    </span>
-                  </div>
-                  <h2>{s.name}</h2>
-                  <p className="site-address">
-                    <Icon name="location" size={15} />
-                    {s.address}
-                  </p>
-                  <div className="site-budget">
-                    <div>
-                      <span>Devis acceptés affichés</span>
-                      <strong>{money(spent)}</strong>
-                    </div>
-                    <div className="budget-bar">
-                      <span style={{ width: `${pct}%` }} />
-                    </div>
-                    <small>
-                      {s.budget_cents
-                        ? `Budget indicatif : ${money(s.budget_cents)} — ${pct} % engagés`
-                        : "Aucun budget renseigné"}
-                    </small>
-                  </div>
-                  <p className="form-note">
-                    Calcul sur les dossiers chargés. Le rapport fournit la vue
-                    consolidée.
-                  </p>
-                  <div className="site-details">
-                    <span>
-                      {
-                        requests.filter(
-                          (i) => !["paid", "cancelled"].includes(i.status),
-                        ).length
-                      }{" "}
-                      intervention(s) en cours affichée(s)
-                    </span>
-                    <span>
-                      {vertical === "restaurant"
-                        ? "Équipements critiques"
-                        : vertical === "office"
-                          ? "Maintenance et éclairage"
-                          : vertical === "erp"
-                            ? "Audits et sécurité"
-                            : "Parties communes et équipements"}
-                    </span>
-                  </div>
-                  <BudgetEditor
-                    budgetCents={s.budget_cents || 0}
-                    busy={busy}
-                    onSave={async (budget) =>
-                      await run(async () => {
-                        if (mode === "demo")
-                          saveDemo({
-                            ...data,
-                            sites: data.sites.map((site) =>
-                              site.id === s.id
-                                ? { ...site, budget_cents: budget }
-                                : site,
-                            ),
-                          });
-                        else {
-                          await api("/api/professional", {
-                            action: "set_site_budget",
-                            site_id: s.id,
-                            budget_cents: budget,
-                          });
-                          await refresh();
-                        }
-                        setNotice("Budget de référence mis à jour.");
-                      })
-                    }
-                  />
-                  <div className="site-actions">
-                    <button
-                      className="button outline"
-                      onClick={() => {
-                        setSiteFilter(s.id);
-                        setFilter("all");
-                        go("requests");
-                      }}
-                    >
-                      Interventions
-                    </button>
-                    <button
-                      className="button primary"
-                      onClick={() => newRequest()}
-                    >
-                      <Icon name="plus" size={16} />
-                      Demande
-                    </button>
-                  </div>
-                </section>
-              );
-            })}
-        </div>
-        <SiteForm
-          busy={busy}
-          onSubmit={async (values) => {
-            await run(async () => {
-              if (mode === "demo")
-                saveDemo({
-                  ...data,
-                  sites: [...data.sites, { ...values, id: uid() }],
-                });
-              else {
-                await api("/api/sites", values);
-                await refresh();
-              }
-              setNotice("Site enregistré.");
-            });
-          }}
-        />
-        <ProfessionalOperations
-          data={professional}
-          sites={data.sites}
-          organizations={data.organizations}
-          quotes={data.quotes}
-          demo={mode === "demo"}
-          busy={busy}
-          onRefresh={loadProfessional}
-          onSave={async (values) => {
-            return await run(async () => {
-              if (mode === "demo") {
-                const action = values.action;
-                let next = professional;
-                if (action === "set_approval_rule") {
-                  const rule = {
-                    id: uid(),
-                    site_id: String(values.site_id),
-                    threshold_cents: Number(values.threshold_cents),
-                    required_role: String(values.required_role),
-                    enabled: Boolean(values.enabled),
-                  };
-                  next = {
-                    ...professional,
-                    approval_rules: [
-                      ...professional.approval_rules.filter(
-                        (r) => r.site_id !== rule.site_id,
-                      ),
-                      rule,
-                    ],
-                  };
-                }
-                if (action === "decide_approval")
-                  next = {
-                    ...professional,
-                    approvals: professional.approvals.map((a) =>
-                      a.id === values.approval_id
-                        ? {
-                            ...a,
-                            status: String(values.decision),
-                            note: String(values.note || ""),
-                          }
-                        : a,
-                    ),
-                  };
-                if (action === "save_contract")
-                  next = {
-                    ...professional,
-                    contracts: [
-                      ...professional.contracts.filter(
-                        (c) => c.id !== values.id,
-                      ),
-                      {
-                        ...values,
-                        id: values.id || uid(),
-                      } as unknown as Contract,
-                    ],
-                  };
-                if (action === "save_compliance")
-                  next = {
-                    ...professional,
-                    compliance_records: [
-                      ...professional.compliance_records.filter(
-                        (r) => r.id !== values.id,
-                      ),
-                      {
-                        ...values,
-                        id: values.id || uid(),
-                      } as unknown as ComplianceRecord,
-                    ],
-                  };
-                setProfessional(next);
-              } else {
-                await api("/api/professional", values);
-                await loadProfessional();
-              }
-              setNotice(
-                mode === "demo"
-                  ? "Modification enregistrée dans la démonstration."
-                  : "Modification enregistrée.",
-              );
-            });
-          }}
-        />
-        <div className="inline-note">
-          <Icon name="help" />
-          <p>
-            Les budgets sont des repères de gestion. Les SLA contractuels,
-            approbations avancées et obligations réglementaires doivent être
-            configurés avant exploitation.
-          </p>
-        </div>
-      </>
-    );
-  }
-  function ProfileView() {
-    return (
-      <>
-        <PageTitle
-          title="Mon profil"
-          subtitle="Vos informations de compte et votre espace de travail."
-        />
-        <div className="detail-grid">
-          <ProfileForm
-            name={mode === "demo" ? name : profile?.full_name || ""}
-            phone={profile?.phone || ""}
-            role={role}
-            demo={mode === "demo"}
-            busy={busy}
-            onSubmit={async (values) => {
-              await run(async () => {
-                if (mode === "demo") {
-                  saveDemo({
-                    ...data,
-                    profile: {
-                      id: `demo-${role}`,
-                      role,
-                      full_name: values.full_name,
-                      phone: values.phone,
-                    },
-                  });
-                  setNotice(
-                    "Profil de démonstration enregistré dans ce navigateur. Aucune donnée n’est transmise.",
-                  );
-                } else {
-                  await api("/api/profile", values, "PATCH");
-                  await refresh();
-                  setNotice("Profil mis à jour.");
-                }
-              });
-            }}
-          />
-          <aside>
-            <section className="panel compact-panel">
-              <Icon name="shield" size={28} />
-              <h2>Un accès adapté à votre rôle</h2>
-              <p>
-                Votre espace : {ROLE_NAMES[role]}. Les droits sont contrôlés
-                côté serveur.
-              </p>
-              {role === "artisan" && (
-                <p>
-                  {mode === "demo"
-                    ? "Artisan de démonstration."
-                    : profile?.artisan_approved
-                      ? "Candidature approuvée."
-                      : "Candidature en attente de validation. Vous ne pouvez pas encore accepter de mission."}
-                </p>
-              )}
-            </section>
-            {role === "artisan" && (
-              <button
-                className="button primary full"
-                disabled={busy}
-                onClick={() =>
-                  void run(async () => {
-                    if (mode === "demo") {
-                      setNotice(
-                        "Le parcours Stripe Connect nécessite un compte artisan réel approuvé. Aucun compte bancaire n’est créé dans la démonstration.",
-                      );
-                      return;
-                    }
-                    const result = await api<{ url: string }>(
-                      "/api/payments/connect",
-                      {},
-                    );
-                    if (!result.url?.startsWith("https://"))
-                      throw new Error("Le lien Stripe n’est pas disponible.");
-                    window.location.assign(result.url);
-                  })
-                }
-              >
-                <Icon name="euro" />
-                Configurer mes règlements Stripe
-              </button>
-            )}
-            <button
-              className="button outline full"
-              onClick={() => void logout()}
-            >
-              <Icon name="logout" />
-              Se déconnecter
-            </button>
-          </aside>
-        </div>
-      </>
-    );
-  }
-  function Help() {
-    return (
-      <>
-        <PageTitle
-          title="Un dépannage, étape par étape."
-          subtitle="Comprendre votre demande, votre devis et votre paiement."
-        />
-        <div className="help-layout">
-          <section className="panel faq-panel">
-            <h2>Questions fréquentes</h2>
-            {[
-              [
-                "Quelle différence entre estimation et devis ?",
-                "L’estimation donne une fourchette indicative. Le devis est établi par l’artisan à partir de votre besoin et détaille les prestations, les taxes et le montant proposé. Vous le validez avant le début des travaux.",
-              ],
-              [
-                "Quand dois-je régler l’intervention ?",
-                "Le paiement est proposé une fois l’intervention terminée, sur la base du devis accepté. Le règlement est traité avec Stripe. Une redirection de paiement ne suffit pas à confirmer son encaissement.",
-              ],
-              [
-                "Comment suivre ma demande ?",
-                "Dans « Mes demandes », ouvrez une intervention pour consulter son état, son devis et les échanges associés.",
-              ],
-              [
-                "Comment sont attribuées les missions ?",
-                "Un artisan éligible accepte une demande disponible. L’attribution est contrôlée pour qu’une même mission ne soit pas acceptée par plusieurs artisans. Aucun délai n’est garanti à ce stade.",
-              ],
-              [
-                "Que couvre la garantie prévue ?",
-                "Le projet prévoit un suivi de garantie d’un an. Ses conditions commerciales et son périmètre doivent être définis avant le lancement réel. Aucune couverture supplémentaire n’est promise dans cette version.",
-              ],
-              [
-                "Puis-je gérer plusieurs établissements ?",
-                "L’espace professionnel regroupe les sites et leurs interventions. Il distingue copropriétés, restauration, bureaux et établissements recevant du public.",
-              ],
-              [
-                "Puis-je tester sans transmettre mes informations ?",
-                "Oui. La démonstration utilise des exemples et conserve ses modifications dans ce navigateur. Elle n’envoie aucune demande à un artisan et ne réalise aucun débit bancaire.",
-              ],
-            ].map(([q, a]) => (
-              <details key={q}>
-                <summary>
-                  {q}
-                  <span>+</span>
-                </summary>
-                <p>{a}</p>
-              </details>
-            ))}
-          </section>
-          <aside>
-            <section className="help-panel">
-              <Icon name="help" size={30} />
-              <h2>Besoin d’une intervention ?</h2>
-              <p>
-                Commencez par décrire le problème. Vous pourrez préciser le lieu
-                et votre besoin.
-              </p>
-              <button
-                className="button primary full"
-                onClick={() => newRequest()}
-              >
-                Créer une demande
-              </button>
-            </section>
-            <section className="panel compact-panel">
-              <h3>Contact et informations légales</h3>
-              <p>
-                Les coordonnées de l’exploitant, les conditions de service et
-                les mentions légales seront publiées avant l’ouverture
-                commerciale.
-              </p>
-              <p>Cette version ne fournit pas de ligne d’urgence.</p>
-            </section>
-          </aside>
-        </div>
-      </>
-    );
-  }
-  function Auth() {
-    return (
-      <AuthForm
-        mode={authMode}
-        onMode={setAuthMode}
-        busy={busy}
-        onSubmit={async (values) => {
-          await run(async () => {
-            const client = createClient();
-            if (authMode === "signup") {
-              const result = await client.auth.signUp({
-                email: values.email,
-                password: values.password,
-                options: {
-                  data: { full_name: values.full_name, role: values.role },
-                },
-              });
-              if (result.error) throw result.error;
-              if (result.data.session) {
-                await refresh();
-                go(pendingDraft ? "new" : "overview");
-              } else
-                setNotice(
-                  "Votre compte a été créé. Consultez votre email pour confirmer votre inscription avant de vous connecter.",
-                );
-            } else if (authMode === "reset") {
-              const result = await client.auth.resetPasswordForEmail(
-                values.email,
-                { redirectTo: window.location.origin + "/auth/reset-password" },
-              );
-              if (result.error) throw result.error;
-              setNotice(
-                "Si un compte existe pour cette adresse, un lien de réinitialisation vous sera envoyé.",
-              );
-            } else {
-              const result = await client.auth.signInWithPassword({
-                email: values.email,
-                password: values.password,
-              });
-              if (result.error)
-                throw new Error(
-                  "Connexion impossible. Vérifiez votre email, votre mot de passe et la confirmation de votre compte.",
-                );
-              await refresh();
-              go(pendingDraft ? "new" : "overview");
-            }
-          });
-        }}
-        onDemo={() => demo()}
-      />
-    );
-  }
-  function Admin() {
-    return (
-      <>
-        <PageTitle
-          title="Administration"
-          subtitle="Vérifiez les candidatures avant l’accès aux missions."
-        />
-        <ArtisanAdministration demo={mode === "demo"} />
-        <WarrantyPanel demo={mode === "demo"} role={role} />
-      </>
-    );
-  }
-  if (mode === "public")
-    return (
-      <>
-        <div className="public-alerts">
-          <Alerts />
-        </div>
-        {renderPublic()}
-      </>
-    );
-  return (
-    <div className="application">
-      <aside className={`sidebar ${mobile ? "open" : ""}`}>
-        <button className="brand-button" onClick={() => go("overview")}>
-          <Brand />
-        </button>
-        <button
-          className="sidebar-close"
-          aria-label="Fermer le menu"
-          onClick={() => setMobile(false)}
-        >
-          <Icon name="close" />
-        </button>
-        <div className="workspace-selector">
-          <span className="workspace-avatar">
-            <Icon
-              name={
-                role === "manager"
-                  ? "building"
-                  : role === "artisan"
-                    ? "wrench"
-                    : "person"
-              }
-              size={20}
-            />
-          </span>
-          <div>
-            <strong>{ROLE_NAMES[role]}</strong>
-            <span>
-              {mode === "demo"
-                ? "Espace de démonstration"
-                : "Mon espace personnel"}
-            </span>
-          </div>
-        </div>
-        <span className="nav-caption">Mon espace</span>
-        <nav aria-label="Navigation de l’espace">
-          {nav.map((n) => (
-            <button
-              key={n.id}
-              className={
-                view === n.id || (view === "detail" && n.id === "requests")
-                  ? "active"
-                  : ""
-              }
-              onClick={() => go(n.id)}
-            >
-              <Icon name={n.icon} />
-              <span>{n.label}</span>
-              {n.count ? <small>{n.count}</small> : null}
-            </button>
-          ))}
-        </nav>
-        {mode === "demo" && (
-          <div className="demo-role">
-            <label htmlFor="demo-role">Explorer un autre espace</label>
-            <select
-              id="demo-role"
-              value={role}
-              onChange={(e) => {
-                setRole(e.target.value as Role);
-                setSiteFilter("all");
-                go("overview");
-              }}
-            >
-              <option value="client">Particulier</option>
-              <option value="artisan">Artisan électricien</option>
-              <option value="manager">Professionnel / syndic</option>
-              <option value="admin">Administration (démo uniquement)</option>
-            </select>
-            <small>Exemples fictifs, conservés dans ce navigateur.</small>
-          </div>
-        )}
-        <div className="sidebar-bottom">
-          <button
-            className={view === "help" ? "active" : ""}
-            onClick={() => go("help")}
-          >
-            <Icon name="help" />
-            Aide et informations
-          </button>
-          <button
-            className={view === "profile" ? "active" : ""}
-            onClick={() => go("profile")}
-          >
-            <Icon name="person" />
-            Mon profil
-          </button>
-          <button onClick={() => void logout()}>
-            <Icon name="logout" />
-            {mode === "demo" ? "Quitter la démonstration" : "Se déconnecter"}
-          </button>
-          <div className="sidebar-footnote">
-            <span className="tiny-mark">C.</span>
-            <span>
-              Chaque intervention,
-              <br />
-              en toute clarté.
-            </span>
-          </div>
-        </div>
-      </aside>
-      {mobile && (
-        <button
-          className="sidebar-overlay"
-          aria-label="Fermer le menu"
-          onClick={() => setMobile(false)}
-        />
-      )}
-      <div className="workspace-main">
-        <header className="app-header">
-          <div>
-            <button
-              className="mobile-menu"
-              aria-label="Ouvrir le menu"
-              onClick={() => setMobile(true)}
-            >
-              <Icon name="menu" />
-            </button>
-            <span className="breadcrumb">
-              Mon espace
-              <Icon name="arrow" size={13} />
-              <strong>{VIEW_NAMES[view]}</strong>
-            </span>
-          </div>
-          <div className="header-user">
-            {mode === "live" && (
-              <button
-                className={`connection-state ${connection === "SUBSCRIBED" ? "connected" : ""}`}
-                onClick={() => void refresh()}
-                title="Actualiser les données"
-              >
-                <span />
-                {connection === "SUBSCRIBED" ? "En direct" : "Actualiser"}
-              </button>
-            )}
-            <button
-              className="notification-button"
-              aria-label="Voir les messages"
-              onClick={() => go("messages")}
-            >
-              <Icon name="bell" size={20} />
-              {data.messages.length > 0 && <span />}
-            </button>
-            <button className="user-button" onClick={() => go("profile")}>
-              <span className="avatar">
-                {name
-                  .split(" ")
-                  .map((n) => n[0])
-                  .slice(0, 2)
-                  .join("")}
-              </span>
-              <span>
-                <strong>{name}</strong>
-                <small>{ROLE_NAMES[role]}</small>
-              </span>
-            </button>
-          </div>
-        </header>
-        {mode === "demo" && (
-          <div className="demo-banner">
-            <span>
-              <Icon name="help" size={16} />
-              <strong>Démonstration</strong> — données fictives. Aucun artisan
-              contacté, aucun débit bancaire.
-            </span>
-            <ConfirmAction
-              label="Réinitialiser"
-              message="Réinitialiser toutes les données de démonstration ? Les modifications locales seront effacées."
-              confirmLabel="Confirmer la réinitialisation"
-              onConfirm={async () => {
-                saveDemo(seed());
-                setProfessional(proSeed());
-                try {
-                  localStorage.removeItem("courant-warranty-demo-v1");
-                  localStorage.removeItem("courant-admin-demo-v1");
-                } catch {}
-                setNotice("Démonstration réinitialisée.");
-              }}
-            />
-          </div>
-        )}
-        <main id="main" className="workspace-content">
-          <Alerts />
-          {loading ? (
-            <div className="page-loader">
-              <span className="spinner" />
-              Chargement de votre espace…
-            </div>
-          ) : view === "overview" ? (
-            Overview()
-          ) : view === "requests" || view === "missions" ? (
-            Requests()
-          ) : view === "new" ? (
-            NewRequest()
-          ) : view === "detail" ? (
-            Detail()
-          ) : view === "messages" ? (
-            MessagesView()
-          ) : view === "documents" ? (
-            Documents()
-          ) : view === "sites" ? (
-            Sites()
-          ) : view === "profile" ? (
-            ProfileView()
-          ) : view === "admin" ? (
-            Admin()
-          ) : view === "auth" ? (
-            Auth()
-          ) : (
-            Help()
-          )}
-          {mode === "live" && error && (
-            <button
-              className="button outline retry-button"
-              onClick={() => void refresh()}
-            >
-              <Icon name="refresh" />
-              Recharger les données
-            </button>
-          )}
-        </main>
-        <footer className="app-footer">
-          <span>Courant — nom de travail</span>
-          <button onClick={() => go("help")}>
-            Aide et informations légales
-          </button>
-        </footer>
-      </div>
-    </div>
-  );
-}
 
-type RequestValues = {
-  category: Category;
-  description: string;
-  address: string;
-  postal_code: string;
-  city: string;
-  urgency: "urgent" | "scheduled";
-  site_id?: string;
-};
-function RequestForm({
-  initialCategory,
-  initialValues,
-  sites,
-  mode,
-  busy,
-  onBack,
-  onSubmit,
-  onDemo,
-}: {
-  initialCategory: Category;
-  initialValues: RequestValues | null;
-  sites: Site[];
-  mode: string;
-  busy: boolean;
-  onBack: () => void;
-  onSubmit: (values: RequestValues) => Promise<void>;
-  onDemo: () => void;
-}) {
-  const [step, setStep] = useState(1);
-  const [values, setValues] = useState<RequestValues>(
-    initialValues || {
-      category: initialCategory,
-      description: "",
-      address: "",
-      postal_code: "",
-      city: "",
-      urgency: "scheduled",
-    },
-  );
-  const [validation, setValidation] = useState("");
-  const c = category(values.category);
-  function next(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setValidation("");
-    if (step === 1 && values.description.trim().length < 15) {
-      setValidation("Décrivez le problème en au moins 15 caractères.");
+  async function loadAdminOverview(): Promise<AdminOverview | null> {
+    if (modeRef.current === "demo")
+      return adminOverviewFromDemo(data, readDemo(DEMO_KEYS.admin, adminSeed(), Array.isArray));
+    const my = seq.current;
+    try {
+      const result = await api<AdminOverview>("/api/admin/overview");
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, adminOverview: "available" }));
+      return result;
+    } catch (e) {
+      if (my !== seq.current) return null;
+      if (e instanceof ApiRequestError && e.status === 403) {
+        void refresh(); // the server role is authoritative; re-derive the space
+        setError("Vos droits d’administration ne sont plus reconnus. Vos données ont été rechargées.");
+        return null;
+      }
+      setCapabilities((c) => ({ ...c, adminOverview: contractStateFromError(e) }));
+      return null;
+    }
+  }
+
+  // Uploads the queue items one by one; each result is recorded, failures stay retryable.
+  const processUploads = (ctx: RunContext, queue: UploadQueue, resendUncertain = false) =>
+    processUploadQueue(
+      queue,
+      (file, interventionId) => uploadDocument(file, interventionId),
+      () => ctx.alive(),
+      ctx.when((q: UploadQueue) => setUploads((all) => upsertQueue(all, q))),
+      { resendUncertain },
+    );
+  // Service booking (docs/GUEST_CHECKOUT_CONTRACT.md + ROOT POST /api/bookings): the booking
+  // context NEVER posts the legacy /api/interventions (no silent fallback). One idempotent key,
+  // proven stored before the POST; the draft and booking are consumed only on 201 « confirmed ».
+  async function confirmBooking() {
+    return run(async (ctx) => {
+      const demo = modeRef.current === "demo";
+      const draft = demo ? demoBooking?.draft ?? null : pendingDraft;
+      const current = demo ? demoBooking?.booking ?? null : liveBooking;
+      if (!draft || !current) throw new Error("Aucune demande en attente de confirmation dans cet onglet.");
+      if (!current.payment) throw new Error("Choisissez un mode de paiement avant d’envoyer votre demande ; rien n’a été envoyé.");
+      if (demo) {
+        // Demo: same step, local creation only (no POST, no bank, no stored key).
+        const photos = bookingPhotos.current.length;
+        bookingPhotos.current = [];
+        demoCreate(ctx, draft, photos, ` Règlement choisi : ${PAYMENT_LABEL[current.payment]} (démonstration, rien n’est payé).`);
+        ctx.when(setDemoBooking)(null);
+        return;
+      }
+      // PUB-02 (ROOT final contract): review + version stored in the booking draft + same key on retry
+      // (components/features/indicative-prices/review-submit.ts).
+      let result: BookingReceipt | { status: "authorization_required"; url: string } | undefined;
+      try {
+        result = await sendReviewedBooking({
+          current,
+          category: draft.category,
+          storage: getDraftStorage(),
+          alive: () => ctx.alive(),
+          onKeyed: (b) => ctx.when(setBooking)(b),
+          buildBody: (request_id) => {
+            const c = current.contact;
+            return {
+              request_id,
+              service_slug: current.slug,
+              category: draft.category,
+              description: draft.description,
+              address: draft.address,
+              postal_code: draft.postal_code,
+              city: draft.city,
+              urgency: draft.urgency,
+              contact: { first_name: c.first_name.trim(), last_name: c.last_name.trim(), email: c.email.trim(), phone: c.phone.trim() },
+              payment_choice: current.payment,
+              ...(current.location ? { location: current.location } : {}),
+            };
+          },
+          post: (body) => api<BookingReceipt | { status: "authorization_required"; url: string }>("/api/bookings", body),
+        });
+      } catch (e) {
+        if (e instanceof ApiRequestError && e.status === 409)
+          throw new Error(
+            "Cette demande a peut-être déjà été enregistrée avec un contenu différent. Vérifiez « Mes demandes » avant toute nouvelle demande.",
+          );
+        throw e; // draft, booking, key and version kept: the next attempt replays the SAME key
+      }
+      if (result === undefined) return; // identity changed during the review: nothing sent
+      if (result?.status === "authorization_required") {
+        // Card hold: the draft, booking and key stay in this tab; the provider page records an
+        // authorisation (not a charge) and the return is verified by the server (finalize).
+        const url = safeCheckoutUrl(result.url);
+        if (!url) throw new ApiRequestError(502, "Le lien de paiement reçu n’est pas sûr ; rien n’a été débité. Réessayez ou choisissez le paiement après intervention sur la plateforme.");
+        ctx.notice("Redirection vers la page sécurisée de votre banque… Aucun débit n’est effectué.");
+        window.location.assign(url);
+        return;
+      }
+      if (result?.status !== "confirmed" || !result.intervention?.id)
+        throw new ApiRequestError(502, "Le service a répondu sans confirmation exploitable. Votre demande a pu être enregistrée : vérifiez « Mes demandes » avant de réessayer.");
+      if (ctx.alive()) await refresh();
+      ctx.when(setPendingDraft)(null);
+      ctx.when(setBooking)(null);
+      ctx.when(() => {
+        clearBooking(getDraftStorage());
+        try {
+          sessionStorage.removeItem(DRAFT_KEY);
+        } catch {}
+      })();
+      ctx.when(setSelectedId)(result.intervention.id);
+      ctx.when(navigate)("detail", result.intervention.id);
+      const confirmedText =
+        result.payment?.method === "on_site"
+          ? "Demande confirmée. Paiement après l’intervention, sur la plateforme : rien n’est payé maintenant."
+          : "Demande confirmée.";
+      await uploadBookingPhotos(ctx, result.intervention.id, confirmedText, current);
+    });
+  }
+  /** After a CONFIRMED creation only: the photos kept in memory are uploaded through the existing
+   *  queue; if they were lost (reload, bank return), say so — never a silent or fake upload. */
+  async function uploadBookingPhotos(ctx: RunContext, interventionId: string, confirmedText: string, current?: BookingDraft) {
+    if (!ctx.alive()) return;
+    const stagedPhoto = publicBookingPhoto(current?.request_id, true);
+    const files = bookingPhotos.current.length ? bookingPhotos.current : stagedPhoto ? [stagedPhoto] : [];
+    const announced = readPhotoCount(getDraftStorage()) || (current?.photo_selected ? 1 : 0);
+    bookingPhotos.current = [];
+    writePhotoCount(getDraftStorage(), 0);
+    if (!files.length) {
+      ctx.notice(
+        announced > 0
+          ? `${confirmedText} ${announced} photo${announced > 1 ? "s" : ""} choisie${announced > 1 ? "s" : ""} avant le rechargement n’${announced > 1 ? "ont" : "a"} pas pu être conservée${announced > 1 ? "s" : ""} : ajoutez-${announced > 1 ? "les" : "la"} depuis le dossier.`
+          : confirmedText,
+      );
       return;
     }
-    if (step < 3) setStep(step + 1);
-    else void onSubmit(values);
+    const queue: UploadQueue = {
+      interventionId,
+      startedAt: new Date().toISOString(),
+      items: files.map((file, index) => ({ key: `${index}-${file.name}-${file.size}`, file, status: "pending" })),
+    };
+    ctx.when((q: UploadQueue) => setUploads((all) => upsertQueue(all, q)))(queue);
+    const finished = await processUploads(ctx, queue);
+    if (!ctx.alive()) return;
+    await refresh();
+    if (allUploaded(finished)) ctx.when(() => setUploads((all) => removeQueue(all, interventionId)))();
+    ctx.notice(`${confirmedText} ${uploadSummary(finished)}`);
   }
-  return (
-    <div className="form-page">
-      <button className="back-link" onClick={onBack}>
-        <Icon name="back" size={17} />
-        Retour
-      </button>
-      <div className="form-heading">
-        <h1>Créons votre demande.</h1>
-        <p>Le bon point de départ pour résoudre votre problème électrique.</p>
-      </div>
-      <ol className="stepper">
-        {["Le problème", "Le lieu et le besoin", "Le récapitulatif"].map(
-          (s, i) => (
-            <li key={s} className={step >= i + 1 ? "current" : ""}>
-              <span>
-                {step > i + 1 ? <Icon name="check" size={15} /> : i + 1}
-              </span>
-              <strong>{s}</strong>
-            </li>
-          ),
-        )}
-      </ol>
-      <form className="panel request-form" onSubmit={next}>
-        {validation && (
-          <div className="alert error" role="alert">
-            {validation}
-          </div>
-        )}
-        {step === 1 ? (
-          <>
-            <h2>Que se passe-t-il ?</h2>
-            <div className="category-grid">
-              {CATEGORIES.map((cat) => (
-                <button
-                  type="button"
-                  className={values.category === cat.id ? "selected" : ""}
-                  key={cat.id}
-                  onClick={() => setValues({ ...values, category: cat.id })}
-                >
-                  <Icon name={cat.icon} size={25} />
-                  <span>
-                    <strong>{cat.label}</strong>
-                    <small>{cat.description}</small>
-                  </span>
-                  <span className="radio-dot" />
-                </button>
-              ))}
-            </div>
-            <Field
-              label="Décrivez le problème"
-              hint="Ce que vous constatez, les pièces concernées et depuis quand. 15 caractères minimum."
-            >
-              <textarea
-                value={values.description}
-                required
-                minLength={15}
-                maxLength={2000}
-                rows={4}
-                placeholder="Par exemple : le disjoncteur se déclenche depuis ce matin lorsque j’allume le four…"
-                onChange={(e) =>
-                  setValues({ ...values, description: e.target.value })
-                }
-              />
-            </Field>
-            <div className="inline-note">
-              <Icon name="shield" />
-              <p>
-                Ne manipulez pas une installation qui présente un danger. Cette
-                application ne fournit pas de diagnostic d’urgence.
-              </p>
-            </div>
-          </>
-        ) : step === 2 ? (
-          <>
-            <h2>Où faut-il intervenir ?</h2>
-            {sites.length > 0 && (
-              <Field label="Site professionnel (facultatif)">
-                <select
-                  value={values.site_id || ""}
-                  onChange={(e) =>
-                    setValues({
-                      ...values,
-                      site_id: e.target.value || undefined,
-                    })
-                  }
-                >
-                  <option value="">Adresse personnelle ou autre lieu</option>
-                  {sites.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            )}
-            <Field label="Adresse d’intervention">
-              <input
-                required
-                minLength={5}
-                maxLength={250}
-                autoComplete="street-address"
-                value={values.address}
-                onChange={(e) =>
-                  setValues({ ...values, address: e.target.value })
-                }
-                placeholder="Numéro et nom de rue"
-              />
-            </Field>
-            <div className="form-columns">
-              <Field label="Code postal">
-                <input
-                  required
-                  inputMode="numeric"
-                  pattern="[0-9]{5}"
-                  maxLength={5}
-                  autoComplete="postal-code"
-                  value={values.postal_code}
-                  onChange={(e) =>
-                    setValues({ ...values, postal_code: e.target.value })
-                  }
-                />
-              </Field>
-              <Field label="Ville">
-                <input
-                  required
-                  minLength={2}
-                  maxLength={100}
-                  autoComplete="address-level2"
-                  value={values.city}
-                  onChange={(e) =>
-                    setValues({ ...values, city: e.target.value })
-                  }
-                />
-              </Field>
-            </div>
-            <fieldset className="urgency-options">
-              <legend>Quel est votre besoin ?</legend>
-              {[
-                [
-                  "scheduled",
-                  "Intervention à planifier",
-                  "Le problème peut attendre un rendez-vous.",
-                ],
-                [
-                  "urgent",
-                  "Demande urgente",
-                  "Le problème nécessite une prise en charge prioritaire.",
-                ],
-              ].map(([id, label, desc]) => (
-                <label
-                  key={id}
-                  className={values.urgency === id ? "selected" : ""}
-                >
-                  <input
-                    type="radio"
-                    name="urgency"
-                    value={id}
-                    checked={values.urgency === id}
-                    onChange={() =>
-                      setValues({
-                        ...values,
-                        urgency: id as "urgent" | "scheduled",
-                      })
-                    }
-                  />
-                  <span>
-                    <strong>{label}</strong>
-                    <small>{desc}</small>
-                  </span>
-                </label>
-              ))}
-            </fieldset>
-            <p className="form-note">
-              La disponibilité et les délais seront précisés après prise en
-              charge. Aucune affectation immédiate n’est garantie.
-            </p>
-          </>
-        ) : (
-          <>
-            <h2>Votre demande, en clair.</h2>
-            <div className="recap-service">
-              <span className="service-icon">
-                <Icon name={c.icon} size={27} />
-              </span>
-              <div>
-                <strong>{c.label}</strong>
-                <span>
-                  {values.urgency === "urgent"
-                    ? "Demande urgente"
-                    : "Intervention à planifier"}
-                </span>
-              </div>
-            </div>
-            <p>{values.description}</p>
-            <div className="recap-address">
-              <Icon name="location" />
-              <span>
-                {values.address}
-                <br />
-                {values.postal_code} {values.city}
-              </span>
-            </div>
-            <div className="estimate-box">
-              <span>Estimation indicative</span>
-              <strong>
-                {money(c.min)} – {money(c.max)}
-              </strong>
-              <p>
-                Ces montants sont des exemples de préparation du service. Le
-                prix final et les taxes applicables seront précisés dans un
-                devis à accepter avant intervention.
-              </p>
-            </div>
-            {mode === "public" && (
-              <div className="alert warning">
-                <Icon name="lock" />
-                <span>
-                  Un compte est nécessaire pour enregistrer et suivre votre
-                  demande. Vous pourrez aussi explorer une démonstration sans
-                  envoyer de demande réelle.
-                </span>
-              </div>
-            )}
-            {mode === "demo" && (
-              <div className="alert warning">
-                <Icon name="help" />
-                <span>
-                  Cette demande restera dans la démonstration. Ne saisissez pas
-                  de données personnelles réelles.
-                </span>
-              </div>
-            )}
-          </>
-        )}
-        <div className="form-actions">
-          {step > 1 ? (
-            <button
-              type="button"
-              className="button outline"
-              onClick={() => setStep(step - 1)}
-            >
-              <Icon name="back" size={16} />
-              Précédent
-            </button>
-          ) : (
-            <span />
-          )}
-          <button type="submit" className="button primary" disabled={busy}>
-            {busy
-              ? "Enregistrement…"
-              : step < 3
-                ? "Continuer"
-                : mode === "public"
-                  ? "Créer mon compte et continuer"
-                  : "Enregistrer la demande"}
-            {!busy && <Icon name="arrow" size={16} />}
-          </button>
-        </div>
-        {mode === "public" && step === 3 && (
-          <button type="button" className="text-button full" onClick={onDemo}>
-            Essayer d’abord la démonstration
-          </button>
-        )}
-      </form>
-    </div>
-  );
-}
-function QuoteEditor({
-  busy,
-  demo,
-  onSubmit,
-}: {
-  busy: boolean;
-  demo: boolean;
-  onSubmit: (values: Record<string, unknown>) => void;
-}) {
-  const [lines, setLines] = useState<Line[]>([
-    { label: "Déplacement", quantity: 1, unit_price_cents: 0 },
-    { label: "Main-d’œuvre", quantity: 1, unit_price_cents: 0 },
-  ]);
-  const [tax, setTax] = useState(20);
-  const [err, setErr] = useState("");
-  const subtotal = lines.reduce(
-    (n, l) => n + Math.round(l.quantity * l.unit_price_cents),
-    0,
-  );
-  return (
-    <form
-      className="panel quote-editor"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (
-          lines.some(
-            (l) =>
-              !l.label.trim() ||
-              !Number.isInteger(l.quantity) ||
-              l.quantity <= 0 ||
-              l.unit_price_cents < 0,
-          ) ||
-          subtotal <= 0
-        ) {
-          setErr(
-            "Renseignez les prestations, les quantités et un montant total supérieur à zéro.",
+  /** Signed-in client « Nouvelle demande » (ROOT decision): the request becomes a booking draft
+   *  confirmed on BookingConfirm (payment choice) and sent by confirmBooking (POST /api/bookings).
+   *  Nothing is sent here; storage must work or nothing is kept. */
+  function startBooking(values: RequestValues, photos: File[] = []): boolean {
+    if (roleRef.current !== "client") return false;
+    if (modeRef.current === "demo") {
+      bookingPhotos.current = photos;
+      // Demo has no server profile: the demo cast name (never a made-up phone or last name).
+      setDemoBooking({ draft: values, booking: bookingFromSignedRequest(values, data.profile ?? { full_name: DEMO_NAMES.client, phone: "" }) });
+      return true;
+    }
+    if (modeRef.current !== "live") return false;
+    const next = bookingFromSignedRequest(values, data.profile, accountEmail);
+    const storage = getDraftStorage();
+    if (!saveBooking(storage, next) || !savePublicDraft(storage, values).ok) {
+      setError("Votre demande n’a pas été préparée : ce navigateur ne permet pas de la conserver en sécurité. Rien n’a été envoyé ; réessayez ou rechargez la page.");
+      return false;
+    }
+    bookingPhotos.current = photos;
+    writePhotoCount(storage, photos.length);
+    setPendingDraft(values);
+    setBooking(next);
+    setError("");
+    return true;
+  }
+  // Card hold verification (return, « Vérifier mon empreinte », retry): the URL proves nothing;
+  // the server finalize decides. The dedicated return state is cleared ONLY on « confirmed ».
+  async function verifyCardHoldReturn(requestId: string) {
+    return cardAction(cardFlight, cardContext, async (still, me) => {
+      setCardReturn((c) => (sameReturn(c, requestId, me) ? { ...c, phase: "checking", message: CARD_RETURN_COPY.checking } : c));
+      const result = await verifyCardReturn((p, b) => api(p, b), requestId);
+      if (!still()) return false; // identity/session changed meanwhile: never apply
+      if (!result.ok) {
+        setCardReturn((c) => (sameReturn(c, requestId, me) ? { ...c, phase: "needs_action", message: result.message } : c));
+        return false;
+      }
+      setCardReturn((c) => (c?.requestId === requestId ? null : c));
+      await refresh();
+      if (!still()) return false; // re-checked AFTER the refresh: never clear another identity's draft
+      const returnedBooking = bookingRef.current?.request_id === requestId ? bookingRef.current : null;
+      if (returnedBooking) {
+        setPendingDraft(null);
+        setBooking(null);
+        clearBooking(getDraftStorage());
+        try {
+          sessionStorage.removeItem(DRAFT_KEY);
+        } catch {}
+      }
+      setSelectedId(result.interventionId);
+      navigate("detail", result.interventionId);
+      setNotice("Demande confirmée. Empreinte bancaire enregistrée : aucun débit ; seul le montant du devis accepté pourra être prélevé." +
+        (returnedBooking?.photo_selected || readPhotoCount(getDraftStorage()) ? " Vous pouvez ajouter la photo depuis le dossier." : ""));
+      writePhotoCount(getDraftStorage(), 0);
+      return true;
+    });
+  }
+  async function checkPendingCardHold() {
+    const me = userId.current;
+    if (!me || modeRef.current !== "live") return;
+    const generation = guard.generation();
+    pendingCheckedFor.current = me;
+    setPendingLookup("idle");
+    const r = await lookupPending((p) => api(p));
+    if (userId.current !== me) return; // late reply for another identity
+    // E47 counter-review: another generation (sign-out/sign-in of the same UID) or outside live
+    // mode ⇒ nothing applied, nothing posted.
+    if (guard.generation() !== generation || modeRef.current !== "live") return;
+    if (!r.ok) {
+      setPendingLookup("error");
+      return;
+    }
+    const inherited = inheritedReturn.current;
+    inheritedReturn.current = null; // one decision per sign-in
+    if (r.pending && inherited && r.pending.request_id === inherited && !cardReturnRef.current) {
+      // E47: the same account came back from a successful card return: one automatic verification.
+      setCardReturn({ requestId: inherited, userId: me, phase: "checking", message: CARD_RETURN_COPY.checking });
+      void verifyCardHoldReturn(inherited);
+      return;
+    }
+    if (r.pending && !cardReturnRef.current)
+      setCardReturn({ requestId: r.pending.request_id, userId: me, phase: "needs_action", message: PENDING_COPY.found });
+  }
+  async function finalizeBooking(requestId: string) {
+    if (!cardReturnRef.current || cardReturnRef.current.requestId !== requestId) {
+      const me = userId.current;
+      if (!me) return false;
+      setCardReturn({ requestId, userId: me, phase: "checking", message: CARD_RETURN_COPY.checking });
+    }
+    return Boolean(await verifyCardHoldReturn(requestId));
+  }
+  // Server cancel of a card-hold attempt (from the return or from the confirmation). The key and
+  // the return are dropped only after the server answers « cancelled »; the draft stays.
+  async function cancelBooking(explicitId?: string) {
+    const requestId = explicitId ?? cardReturnRef.current?.requestId ?? bookingRef.current?.request_id;
+    if (!requestId) return false;
+    return cardAction(cardFlight, cardContext, async (still, me) => {
+      setCardReturn((c) => (sameReturn(c, requestId, me) ? { ...c, phase: "cancelling" } : c));
+      const result = await cancelCardReturn((p, b) => api(p, b), requestId);
+      if (!still()) return false;
+      if (!result.ok) {
+        setCardReturn((c) => (sameReturn(c, requestId, me) ? { ...c, phase: "needs_action", message: result.message } : c));
+        if (!cardReturnRef.current) setError(result.message);
+        return false;
+      }
+      setCardReturn((c) => (c?.requestId === requestId ? null : c));
+      const current = bookingRef.current;
+      if (current?.request_id === requestId) {
+        const {
+          request_id: _requestId,
+          reviewed_estimate_version: _version,
+          reviewed_estimate_range: _range,
+          estimate_review_required: _review,
+          ...rest
+        } = current;
+        setBooking(rest);
+        saveBooking(getDraftStorage(), rest);
+      }
+      setNotice("Réservation annulée par le service de paiement. Votre saisie est conservée.");
+      return true;
+    });
+  }
+  /** Demo creation (local, labelled; never a POST). */
+  function demoCreate(ctx: RunContext, values: RequestValues, photoCount: number, extra: string) {
+    const c = category(values.category);
+    const intervention: Intervention = {
+      ...values,
+      id: uid(),
+      status: "requested",
+      client_id: roleRef.current === "manager" ? DEMO_IDS.manager : DEMO_IDS.client,
+      created_at: new Date().toISOString(),
+      estimate_min_cents: c.min,
+      estimate_max_cents: c.max,
+      travel_stage: "planned",
+    };
+    ctx.when(setData)({ ...data, interventions: [intervention, ...data.interventions] });
+    ctx.when(setPendingDraft)(null);
+    ctx.when(setBooking)(null);
+    clearBooking(getDraftStorage());
+    try {
+      sessionStorage.removeItem(DRAFT_KEY);
+    } catch {}
+    ctx.when(setSelectedId)(intervention.id);
+    ctx.when(navigate)("detail", intervention.id);
+    ctx.notice(
+      (photoCount
+        ? "Demande enregistrée dans la démonstration ; les photos ne sont pas envoyées en démonstration."
+        : "Demande enregistrée dans la démonstration, sans envoi à un artisan réel.") + extra,
+    );
+  }
+  async function createIntervention(values: RequestValues, photos: File[] = []) {
+    return run(async (ctx) => {
+      if (modeRef.current === "demo") {
+        demoCreate(ctx, values, photos.length, "");
+        return;
+      }
+      // 1. Create the dossier exactly once. A service booking carries its idempotency key: the
+      //    server returns the SAME dossier for a replay of that key (lost reply, retry, reload).
+      //    The canonical RequestValues / offline draft format is unchanged; only the API payload
+      //    gains request_id. A legacy booking without a key gets one PROVEN stored first.
+      // Key + frozen payload PROVEN stored before the POST (create_intervention_once). An
+      // uncertain earlier attempt is replayed exactly (same key, original payload).
+      // PUB-02 (ROOT final contract): a NEW request is reviewed against the version RENDERED by the
+      // RequestForm review step (forced re-read just before). An uncertain earlier attempt replays its
+      // frozen payload unchanged — except after a 409 estimate_review_required and an explicit new click,
+      // where ONLY its frozen version is updated (same request_id).
+      const storageNow = getDraftStorage();
+      let stored: ReturnType<typeof readRequestKey> = null;
+      try {
+        stored = storageNow ? readRequestKey(storageNow.getItem(REQUEST_KEY_STORAGE)) : null;
+      } catch {}
+      const { contact_phone: _contactPhone, ...interventionValues } = values;
+      let reviewed: RequestValues = interventionValues;
+      if (!stored || stored.estimate_review_required) {
+        const rendered = shownVersion(REVIEW_SCOPES.requestForm);
+        await loadPrices(undefined, true);
+        if (!ctx.alive()) return; // identity changed during the read: no persist, no POST
+        const decision = reviewDecision(rendered, getPricesState());
+        if (decision.kind === "block") throw new Error(decision.message);
+        if (stored) {
+          if (decision.kind === "omit") throw new Error(REVIEW_COPY.blocked);
+          if (!updateFrozenVersion(storageNow, stored.request_id, decision.version))
+            throw new Error("Votre demande n’a pas été envoyée : ce navigateur n’a pas pu enregistrer votre confirmation. Réessayez.");
+        } else if (decision.kind === "send") reviewed = { ...interventionValues, reviewed_estimate_version: decision.version } as RequestValues;
+      }
+      if (stored) {
+        // Replay: compare the content only (the frozen version is not « content »).
+        const frozen = (readRequestKey(storageNow?.getItem(REQUEST_KEY_STORAGE) ?? null)?.payload ?? stored.payload) as { reviewed_estimate_version?: number };
+        if (frozen.reviewed_estimate_version !== undefined) reviewed = { ...interventionValues, reviewed_estimate_version: frozen.reviewed_estimate_version } as RequestValues;
+      }
+      if (!ctx.alive()) return;
+      const prepared = prepareRequestKey(getDraftStorage(), reviewed);
+      if (!prepared)
+        throw new Error(
+          "Votre demande n’a pas été envoyée : ce navigateur n’a pas pu préparer son envoi en toute sécurité. Réessayez ; si cela persiste, rechargez la page.",
+        );
+      const payload: RequestValues & { request_id: string } = { ...prepared.payload, request_id: prepared.request_id };
+      let result: { intervention: Intervention };
+      try {
+        result = await api<{ intervention: Intervention }>("/api/interventions", payload);
+      } catch (e) {
+        if (!ctx.alive()) return;
+        if (e instanceof ApiRequestError && DEFINITIVE_REFUSAL.has(e.status)) settleRequestKey(getDraftStorage(), prepared.request_id);
+        if (e instanceof ApiRequestError && e.status === 409 && e.code === ESTIMATE_REVIEW_CODE) {
+          // Same key and frozen payload kept; new range re-read for display; an explicit new click updates
+          // ONLY the frozen version. The decision comes from the response code, never from a later GET.
+          markRequestEstimateReview(storageNow, prepared.request_id);
+          void loadPrices(undefined, true);
+          throw new Error(e.message);
+        }
+        if (e instanceof ApiRequestError && e.status === 409) {
+          throw new Error(
+            "Cette demande a peut-être déjà été enregistrée avec un contenu différent. Vérifiez « Mes demandes » avant toute nouvelle demande.",
           );
-          return;
         }
-        setErr("");
-        onSubmit({ lines, tax_rate: tax });
-      }}
-    >
-      <h2>Établir le devis</h2>
-      <p>Détaillez les prestations et vérifiez les taxes applicables.</p>
-      {err && (
-        <div className="alert error" role="alert">
-          {err}
-        </div>
-      )}
-      {lines.map((l, index) => (
-        <div className="quote-editor-row" key={index}>
-          <Field label={`Prestation ${index + 1}`}>
-            <input
-              required
-              maxLength={150}
-              value={l.label}
-              onChange={(e) =>
-                setLines(
-                  lines.map((x, j) =>
-                    j === index ? { ...x, label: e.target.value } : x,
-                  ),
-                )
-              }
-            />
-          </Field>
-          <Field label="Quantité">
-            <input
-              required
-              type="number"
-              min="1"
-              max="1000"
-              step="1"
-              value={l.quantity}
-              onChange={(e) =>
-                setLines(
-                  lines.map((x, j) =>
-                    j === index
-                      ? { ...x, quantity: Number(e.target.value) }
-                      : x,
-                  ),
-                )
-              }
-            />
-          </Field>
-          <Field label="Prix unitaire HT (€)">
-            <input
-              required
-              type="number"
-              min="0"
-              max="100000"
-              step="0.01"
-              value={l.unit_price_cents / 100}
-              onChange={(e) =>
-                setLines(
-                  lines.map((x, j) =>
-                    j === index
-                      ? {
-                          ...x,
-                          unit_price_cents: Math.round(
-                            Number(e.target.value) * 100,
-                          ),
-                        }
-                      : x,
-                  ),
-                )
-              }
-            />
-          </Field>
-          <button
-            className="icon-button"
-            type="button"
-            disabled={lines.length === 1}
-            aria-label={`Supprimer la prestation ${index + 1}`}
-            onClick={() => setLines(lines.filter((_, j) => j !== index))}
-          >
-            <Icon name="close" size={17} />
-          </button>
-        </div>
-      ))}
-      <button
-        type="button"
-        className="text-button"
-        onClick={() =>
-          setLines([...lines, { label: "", quantity: 1, unit_price_cents: 0 }])
-        }
-      >
-        <Icon name="plus" size={17} />
-        Ajouter une ligne
-      </button>
-      <Field
-        label="Taux de TVA (%)"
-        hint={
-          demo
-            ? "Taux de démonstration, sans validation fiscale."
-            : "Renseignez le taux applicable à votre prestation."
-        }
-      >
-        <select value={tax} onChange={(e) => setTax(Number(e.target.value))}>
-          <option value="0">0 %</option>
-          <option value="5.5">5,5 %</option>
-          <option value="10">10 %</option>
-          <option value="20">20 %</option>
-        </select>
-      </Field>
-      <div className="quote-totals">
-        <div>
-          <span>Total HT</span>
-          <strong>{money(subtotal)}</strong>
-        </div>
-        <div className="total">
-          <span>Total TTC</span>
-          <strong>
-            {money(subtotal + Math.round((subtotal * tax) / 100))}
-          </strong>
-        </div>
-      </div>
-      <button type="submit" className="button primary full" disabled={busy}>
-        <Icon name="send" />
-        {busy ? "Envoi…" : "Envoyer le devis"}
-      </button>
-    </form>
-  );
-}
-function MessageCenter({
-  interventions,
-  messages,
-  role,
-  profileId,
-  selectedId,
-  busy,
-  onSubmit,
-}: {
-  interventions: Intervention[];
-  messages: Message[];
-  role: Role;
-  profileId: string;
-  selectedId: string;
-  busy: boolean;
-  onSubmit: (id: string, body: string) => Promise<boolean | undefined>;
-}) {
-  const [id, setId] = useState(selectedId || interventions[0]?.id || "");
-  const [body, setBody] = useState("");
-  const rows = messages.filter((m) => m.intervention_id === id);
-  return (
-    <section className="panel messages-layout">
-      <div className="message-threads">
-        <h2>Interventions</h2>
-        {interventions.map((i) => (
-          <button
-            key={i.id}
-            className={id === i.id ? "selected" : ""}
-            onClick={() => setId(i.id)}
-          >
-            <Icon name={category(i.category).icon} />
-            <span>
-              <strong>{category(i.category).label}</strong>
-              <small>{shortId(i.id)}</small>
-            </span>
-            <Icon name="arrow" size={15} />
-          </button>
-        ))}
-      </div>
-      <div className="message-conversation">
-        {!id ? (
-          <Empty icon="message" title="Aucune conversation">
-            Vos échanges seront disponibles une fois une demande créée.
-          </Empty>
-        ) : (
-          <>
-            <div className="conversation-header">
-              <h2>
-                {
-                  category(
-                    interventions.find((i) => i.id === id)?.category || "",
-                  ).label
-                }
-              </h2>
-              <span>Conversation liée à l’intervention</span>
-            </div>
-            <div className="message-history" aria-live="polite">
-              {rows.length ? (
-                rows.map((m) => (
-                  <div
-                    className={`message-bubble ${m.author_id === profileId ? "mine" : ""}`}
-                    key={m.id}
-                  >
-                    <span>
-                      {m.author_id === profileId
-                        ? "Vous"
-                        : role === "artisan"
-                          ? "Client"
-                          : "Artisan"}
-                    </span>
-                    <p>{m.body}</p>
-                    <small>{date(m.created_at)}</small>
-                  </div>
-                ))
-              ) : (
-                <Empty icon="message" title="Commencez l’échange">
-                  Posez une question sur cette intervention.
-                </Empty>
-              )}
-            </div>
-            <form
-              className="message-compose"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (body.trim()) {
-                  void onSubmit(id, body.trim()).then((saved) => {
-                    if (saved) setBody("");
-                  });
-                }
-              }}
-            >
-              <label className="sr-only" htmlFor="message-body">
-                Votre message
-              </label>
-              <textarea
-                id="message-body"
-                required
-                maxLength={2000}
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                placeholder="Écrivez votre message…"
-                rows={2}
-              />
-              <button
-                className="button primary"
-                disabled={busy || !body.trim()}
-                type="submit"
-                aria-label="Envoyer le message"
-              >
-                <Icon name="send" />
-              </button>
-            </form>
-          </>
-        )}
-      </div>
-    </section>
-  );
-}
-function SiteForm({
-  busy,
-  onSubmit,
-}: {
-  busy: boolean;
-  onSubmit: (values: {
+        throw e; // uncertain: key and frozen payload kept, the next attempt replays the SAME key
+      }
+      settleRequestKey(getDraftStorage(), prepared.request_id);
+      const replayNote = prepared.replayed
+        ? " Il s’agit de votre demande précédente, dont l’envoi n’avait pas été confirmé, enregistrée telle qu’envoyée : vos dernières modifications n’ont pas été transmises."
+        : "";
+      if (ctx.alive()) await refresh();
+      ctx.when(setPendingDraft)(null);
+      ctx.when(setBooking)(null);
+      ctx.when(() => {
+        clearBooking(getDraftStorage());
+        try {
+          sessionStorage.removeItem(DRAFT_KEY);
+        } catch {}
+      })();
+      const id = result.intervention?.id;
+      if (id) {
+        ctx.when(setSelectedId)(id);
+        ctx.when(navigate)("detail", id);
+      } else ctx.when(navigate)("requests");
+      if (!id || !photos.length) {
+        ctx.notice(`Votre demande a été enregistrée.${replayNote}`);
+        return;
+      }
+      // 2. Then upload the photos; a failure never recreates the dossier.
+      const queue: UploadQueue = {
+        interventionId: id,
+        startedAt: new Date().toISOString(),
+        items: photos.map((file, index) => ({ key: `${index}-${file.name}-${file.size}`, file, status: "pending" })),
+      };
+      ctx.when((q: UploadQueue) => setUploads((all) => upsertQueue(all, q)))(queue);
+      const finished = await processUploads(ctx, queue);
+      if (!ctx.alive()) return;
+      await refresh();
+      if (allUploaded(finished)) ctx.when(() => setUploads((all) => removeQueue(all, id)))();
+      ctx.notice(`Votre demande a été enregistrée.${replayNote} ${uploadSummary(finished)}`);
+    });
+  }
+  async function retryUploads(interventionId: string, options: { resendUncertain?: boolean } = {}) {
+    return run(async (ctx) => {
+      if (modeRef.current !== "live") return;
+      const queue = uploads.find((q) => q.interventionId === interventionId);
+      if (!queue) return;
+      // Uncertain items: the dossier's documents decide before anything is re-sent.
+      await refresh();
+      if (!ctx.alive()) return;
+      let fresh: StoredDocument[] = [];
+      try {
+        const docs = await api<{ documents: StoredDocument[] }>("/api/documents");
+        fresh = docs.documents ?? [];
+      } catch {
+        /* reconciliation falls back to the workspace documents already loaded */
+        fresh = data.documents;
+      }
+      if (!ctx.alive()) return;
+      const reconciled = reconcileUncertain(queue, fresh);
+      ctx.when((q: UploadQueue) => setUploads((all) => upsertQueue(all, q)))(reconciled);
+      const finished = await processUploads(ctx, reconciled, options.resendUncertain === true);
+      if (!ctx.alive()) return;
+      await refresh();
+      if (allUploaded(finished)) {
+        ctx.when(() => setUploads((all) => removeQueue(all, interventionId)))();
+        ctx.notice("Toutes les photos sont enregistrées dans le dossier.");
+      } else if (finished.items.some((i) => i.status === "uncertain") && !options.resendUncertain)
+        ctx.notice(
+          "Vérification effectuée : les documents du dossier portant le même nom sont proposés comme candidats. Ces photos restent incertaines tant que vous n’avez pas confirmé un candidat ou renvoyé le fichier.",
+        );
+      else ctx.error(uploadSummary(finished));
+    });
+  }
+  async function sendMessage(interventionId: string, body: string, commandId?: string) {
+    return run(async (ctx) => {
+      if (modeRef.current === "demo") {
+        ctx.when(setData)({
+          ...data,
+          messages: [
+            ...data.messages,
+            {
+              id: uid(),
+              intervention_id: interventionId,
+              body,
+              author_id: `demo-${roleRef.current}`,
+              created_at: new Date().toISOString(),
+            },
+          ],
+        });
+        ctx.notice("Message enregistré dans la démonstration.");
+        return;
+      }
+      // Contract A (E41): command_id is mandatory and stable per intention; the caller owns it.
+      const command_id = commandId ?? (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : "");
+      if (!command_id) throw new Error("Ce navigateur ne permet pas de créer un identifiant sécurisé : envoi impossible ici.");
+      await api("/api/messages", { intervention_id: interventionId, body, command_id });
+      if (ctx.alive()) await refresh();
+      ctx.notice("Message envoyé.");
+    });
+  }
+  async function submitReview(interventionId: string, values: { rating: number; body: string }) {
+    return run(async (ctx) => {
+      if (modeRef.current === "demo") {
+        ctx.when(setData)({
+          ...data,
+          reviews: [
+            ...data.reviews,
+            {
+              ...values,
+              id: uid(),
+              intervention_id: interventionId,
+              author_id: `demo-${roleRef.current}`,
+              created_at: new Date().toISOString(),
+            },
+          ],
+        });
+        ctx.notice("Avis enregistré dans la démonstration.");
+        return;
+      }
+      await api("/api/reviews", { ...values, intervention_id: interventionId });
+      if (ctx.alive()) await refresh();
+      ctx.notice("Votre avis a été enregistré.");
+    });
+  }
+  async function createSite(values: {
     name: string;
     type: string;
     address: string;
     budget_cents: number;
-  }) => Promise<void>;
-}) {
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [address, setAddress] = useState("");
-  const [type, setType] = useState("syndic");
-  const [budget, setBudget] = useState("");
-  return (
-    <section className="panel site-form">
-      <div className="section-heading">
-        <div>
-          <h2>Ajouter un site</h2>
-          <p>Un lieu et un budget de référence pour vos interventions.</p>
-        </div>
-        <button className="button outline" onClick={() => setOpen(!open)}>
-          <Icon name={open ? "close" : "plus"} />
-          {open ? "Fermer" : "Nouveau site"}
-        </button>
-      </div>
-      {open && (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void onSubmit({
-              name,
-              address,
-              type,
-              budget_cents: Math.round(Number(budget || 0) * 100),
-            });
-          }}
-        >
-          <div className="form-columns">
-            <Field label="Nom du site">
-              <input
-                required
-                minLength={2}
-                maxLength={100}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </Field>
-            <Field label="Type de site">
-              <select value={type} onChange={(e) => setType(e.target.value)}>
-                <option value="syndic">Syndic / copropriété</option>
-                <option value="restaurant">Restauration</option>
-                <option value="office">Bureaux</option>
-                <option value="erp">ERP</option>
-              </select>
-            </Field>
-          </div>
-          <Field label="Adresse">
-            <input
-              required
-              minLength={5}
-              maxLength={250}
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-            />
-          </Field>
-          <Field label="Budget de référence (€)">
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              max="1000000"
-              value={budget}
-              onChange={(e) => setBudget(e.target.value)}
-            />
-          </Field>
-          <button className="button primary" type="submit" disabled={busy}>
-            {busy ? "Enregistrement…" : "Enregistrer le site"}
-          </button>
-        </form>
-      )}
-    </section>
-  );
-}
-function ProfileForm({
-  name,
-  phone,
-  role,
-  demo,
-  busy,
-  onSubmit,
-}: {
-  name: string;
-  phone: string;
-  role: Role;
-  demo: boolean;
-  busy: boolean;
-  onSubmit: (values: { full_name: string; phone: string }) => Promise<void>;
-}) {
-  const [fullName, setFullName] = useState(name);
-  const [number, setNumber] = useState(phone);
-  return (
-    <form
-      className="panel profile-form"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void onSubmit({ full_name: fullName, phone: number });
-      }}
-    >
-      <div className="profile-intro">
-        <span className="avatar large-avatar">
-          {fullName
-            .split(" ")
-            .map((n) => n[0])
-            .slice(0, 2)
-            .join("")}
-        </span>
-        <div>
-          <h2>{name}</h2>
-          <p>
-            {ROLE_NAMES[role]}
-            {demo ? " — démonstration" : ""}
-          </p>
-        </div>
-      </div>
-      <Field label="Nom complet">
-        <input
-          required
-          minLength={2}
-          maxLength={100}
-          autoComplete="name"
-          value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
-        />
-      </Field>
-      <Field label="Téléphone (facultatif)">
-        <input
-          type="tel"
-          maxLength={30}
-          autoComplete="tel"
-          value={number}
-          onChange={(e) => setNumber(e.target.value)}
-          placeholder="Votre numéro de téléphone"
-        />
-      </Field>
-      <p className="form-note">
-        Votre rôle et l’approbation d’une candidature artisan ne peuvent pas
-        être modifiés depuis ce formulaire.
-      </p>
-      <button className="button primary" disabled={busy} type="submit">
-        {busy ? "Enregistrement…" : "Enregistrer les informations"}
-      </button>
-    </form>
-  );
-}
-function AuthForm({
-  mode,
-  onMode,
-  busy,
-  onSubmit,
-  onDemo,
-}: {
-  mode: "login" | "signup" | "reset";
-  onMode: (mode: "login" | "signup" | "reset") => void;
-  busy: boolean;
-  onSubmit: (values: {
-    email: string;
-    password: string;
-    full_name: string;
-    role: Role;
-  }) => Promise<void>;
-  onDemo: () => void;
-}) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  const [role, setRole] = useState<Role>("client");
-  return (
-    <div className="auth-layout">
-      <section className="auth-copy">
-        <span className="auth-mark">
-          <Icon name="bolt" size={52} />
-        </span>
-        <h1>
-          Votre intervention,
-          <br />
-          en toute clarté.
-        </h1>
-        <p>
-          Retrouvez vos demandes, vos devis et vos échanges dans un même espace.
-        </p>
-        <button className="text-button" onClick={onDemo}>
-          Explorer sans créer de compte
-          <Icon name="arrow" size={16} />
-        </button>
-      </section>
-      <form
-        className="panel auth-form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void onSubmit({ email, password, full_name: name, role });
-        }}
-      >
-        <h2>
-          {mode === "login"
-            ? "Connexion"
-            : mode === "signup"
-              ? "Créer un compte"
-              : "Réinitialiser mon mot de passe"}
-        </h2>
-        <p>
-          {mode === "login"
-            ? "Ravi de vous retrouver."
-            : mode === "signup"
-              ? "Choisissez l’espace qui correspond à votre besoin."
-              : "Recevez un lien pour choisir un nouveau mot de passe."}
-        </p>
-        {mode === "signup" && (
-          <>
-            <Field label="Votre espace">
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value as Role)}
-              >
-                <option value="client">Particulier</option>
-                <option value="artisan">Artisan électricien</option>
-                <option value="manager">Professionnel / syndic</option>
-              </select>
-            </Field>
-            <Field label="Nom complet">
-              <input
-                required
-                autoComplete="name"
-                minLength={2}
-                maxLength={100}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </Field>
-            {role === "artisan" && (
-              <div className="inline-note">
-                <Icon name="shield" />
-                <p>
-                  Votre candidature devra être approuvée avant que vous puissiez
-                  accepter des missions.
-                </p>
-              </div>
-            )}
-          </>
-        )}
-        <Field label="Adresse email">
-          <input
-            required
-            type="email"
-            autoComplete="email"
-            maxLength={254}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </Field>
-        {mode !== "reset" && (
-          <Field
-            label="Mot de passe"
-            hint={mode === "signup" ? "Au moins 10 caractères." : undefined}
-          >
-            <input
-              required
-              type="password"
-              autoComplete={
-                mode === "signup" ? "new-password" : "current-password"
-              }
-              minLength={mode === "signup" ? 10 : 1}
-              maxLength={128}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </Field>
-        )}
-        {mode === "login" && (
-          <button
-            type="button"
-            className="forgot-link"
-            onClick={() => onMode("reset")}
-          >
-            Mot de passe oublié ?
-          </button>
-        )}
-        <button className="button primary full" type="submit" disabled={busy}>
-          {busy
-            ? "Veuillez patienter…"
-            : mode === "login"
-              ? "Se connecter"
-              : mode === "signup"
-                ? "Créer mon compte"
-                : "Envoyer le lien"}
-        </button>
-        <p className="auth-switch">
-          {mode === "login"
-            ? "Pas encore de compte ?"
-            : mode === "signup"
-              ? "Déjà un compte ?"
-              : "Vous vous souvenez du mot de passe ?"}{" "}
-          <button
-            type="button"
-            onClick={() => onMode(mode === "login" ? "signup" : "login")}
-          >
-            {mode === "login" ? "Créer un compte" : "Se connecter"}
-          </button>
-        </p>
-        <p className="form-note">
-          Aucun paiement n’est demandé à l’inscription.
-        </p>
-      </form>
-    </div>
-  );
-}
-
-function ReviewForm({
-  existing,
-  enabled,
-  busy,
-  onSubmit,
-}: {
-  existing?: Review;
-  enabled: boolean;
-  busy: boolean;
-  onSubmit: (values: { rating: number; body: string }) => Promise<void>;
-}) {
-  const [rating, setRating] = useState(5);
-  const [body, setBody] = useState("");
-  if (existing)
-    return (
-      <section className="panel review-panel">
-        <h2>Votre avis</h2>
-        <p className="review-stars" aria-label={`${existing.rating} sur 5`}>
-          {"★".repeat(existing.rating)}
-          {"☆".repeat(5 - existing.rating)}
-        </p>
-        <p>{existing.body || "Merci pour votre évaluation."}</p>
-      </section>
-    );
-  if (!enabled) return null;
-  return (
-    <form
-      className="panel review-panel"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void onSubmit({ rating, body });
-      }}
-    >
-      <h2>Comment s’est passée l’intervention ?</h2>
-      <p>Votre retour porte sur cette intervention terminée et réglée.</p>
-      <fieldset className="rating-options">
-        <legend>Votre note sur cinq</legend>
-        {[1, 2, 3, 4, 5].map((n) => (
-          <label key={n}>
-            <input
-              type="radio"
-              name="rating"
-              value={n}
-              checked={rating === n}
-              onChange={() => setRating(n)}
-            />
-            <span>
-              {n}
-              <Icon name="star" size={15} />
-            </span>
-          </label>
-        ))}
-      </fieldset>
-      <Field label="Votre commentaire (facultatif)">
-        <textarea
-          maxLength={2000}
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          placeholder="Ce qui vous a été utile, ce qui pourrait être amélioré…"
-        />
-      </Field>
-      <button className="button primary" type="submit" disabled={busy}>
-        Enregistrer mon avis
-      </button>
-    </form>
-  );
-}
-function DocumentManager({
-  documents,
-  interventions,
-  demo,
-  onRefresh,
-}: {
-  documents: StoredDocument[];
-  interventions: Intervention[];
-  demo: boolean;
-  onRefresh: () => Promise<void>;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const [selected, setSelected] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  async function upload(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!file || demo) return;
-    setBusy(true);
-    setError("");
-    setNotice("");
-    try {
-      if (file.size > 4194304)
-        throw new Error("Choisissez un document de moins de 4 Mo.");
-      if (
-        !["application/pdf", "image/jpeg", "image/png", "image/webp"].includes(
-          file.type,
-        )
-      )
-        throw new Error("Formats autorisés : PDF, JPEG, PNG et WebP.");
-      const form = new FormData();
-      form.append("file", file);
-      if (selected) form.append("intervention_id", selected);
-      const response = await fetch("/api/documents", {
-        method: "POST",
-        body: form,
-      });
-      const result = await response.json();
-      if (!response.ok)
+    organization_id?: string;
+  }) {
+    return run(async (ctx) => {
+      if (modeRef.current === "demo") {
+        ctx.when(setData)({
+          ...data,
+          sites: [
+            ...data.sites,
+            { ...values, id: uid(), organization_id: values.organization_id || "org-demo" },
+          ],
+        });
+        ctx.notice("Site enregistré dans la démonstration.");
+        return;
+      }
+      await api("/api/sites", values);
+      if (ctx.alive()) await refresh();
+      ctx.notice("Site enregistré.");
+    });
+  }
+  async function updateProfile(values: Parameters<Session["updateProfile"]>[0]) {
+    return run(async (ctx) => {
+      if (modeRef.current === "demo") {
+        ctx.when(setData)({
+          ...data,
+          profile: {
+            id: `demo-${roleRef.current}`,
+            role: roleRef.current,
+            full_name: values.full_name,
+            first_name: values.first_name,
+            last_name: values.last_name,
+            phone: values.phone,
+          },
+        });
+        ctx.notice("Profil de démonstration enregistré dans ce navigateur. Aucune donnée n’est transmise.");
+        return;
+      }
+      await api("/api/profile", values, "PATCH");
+      if (ctx.alive()) await refresh();
+      ctx.notice("Profil mis à jour.");
+    });
+  }
+  async function professionalCommand(values: Record<string, unknown>) {
+    return run(async (ctx) => {
+      if (modeRef.current === "demo") {
+        const act = values.action;
+        let next = professional;
+        if (act === "set_approval_rule")
+          next = {
+            ...professional,
+            approval_rules: [
+              ...professional.approval_rules.filter((r) => r.site_id !== values.site_id),
+              {
+                id: uid(),
+                site_id: String(values.site_id),
+                threshold_cents: Number(values.threshold_cents),
+                required_role: String(values.required_role),
+                enabled: Boolean(values.enabled),
+              },
+            ],
+          };
+        if (act === "decide_approval")
+          next = {
+            ...professional,
+            approvals: professional.approvals.map((a) =>
+              a.id === values.approval_id
+                ? {
+                    ...a,
+                    status: String(values.decision),
+                    note: String(values.note || ""),
+                    decided_by: DEMO_IDS.manager,
+                    decided_at: new Date().toISOString(),
+                  }
+                : a,
+            ),
+          };
+        if (act === "save_contract")
+          next = {
+            ...professional,
+            contracts: [
+              ...professional.contracts.filter((c) => c.id !== values.id),
+              { ...(values as object), id: (values.id as string) || uid() } as never,
+            ],
+          };
+        if (act === "save_compliance")
+          next = {
+            ...professional,
+            compliance_records: [
+              ...professional.compliance_records.filter((r) => r.id !== values.id),
+              { ...(values as object), id: (values.id as string) || uid() } as never,
+            ],
+          };
+        if (act === "set_site_budget")
+          ctx.when(setData)({
+            ...data,
+            sites: data.sites.map((s) =>
+              s.id === values.site_id ? { ...s, budget_cents: Number(values.budget_cents) } : s,
+            ),
+          });
+        ctx.when(setProfessional)(next);
+        ctx.notice("Modification enregistrée dans la démonstration.");
+        return;
+      }
+      await api("/api/professional", values);
+      if (ctx.alive()) await Promise.all([loadProfessional(), refresh()]);
+      ctx.notice("Modification enregistrée.");
+    });
+  }
+  async function checkout(quoteId: string) {
+    await run(async (ctx) => {
+      if (modeRef.current !== "live")
+        throw new Error("Le règlement Stripe nécessite un compte réel. Utilisez la simulation de la démonstration.");
+      const result = await api<{ url: string }>("/api/payments/checkout", { quote_id: quoteId });
+      const url = safeCheckoutUrl(result.url);
+      if (!url)
+        throw new Error("La session de paiement n’est pas disponible.");
+      if (ctx.alive()) window.location.assign(url);
+    });
+  }
+  async function connectStripe() {
+    await run(async (ctx) => {
+      if (modeRef.current !== "live")
         throw new Error(
-          result.error || "Le document n’a pas pu être enregistré.",
+          "Le parcours Stripe Connect nécessite un compte artisan réel approuvé. Aucun compte bancaire n’est créé dans la démonstration.",
         );
-      await onRefresh();
-      setNotice("Document enregistré dans votre espace privé.");
-      setFile(null);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+      const result = await api<{ url: string }>("/api/payments/connect", {});
+      if (!result.url?.startsWith("https://")) throw new Error("Le lien Stripe n’est pas disponible.");
+      if (ctx.alive()) window.location.assign(result.url);
+    });
   }
-  return (
-    <section className="panel document-manager">
-      <div className="section-heading">
-        <h2>Pièces et justificatifs</h2>
-        <Icon name="lock" />
-      </div>
-      {error && (
-        <div className="alert error" role="alert">
-          {error}
-        </div>
-      )}
-      {notice && (
-        <div className="alert success" role="status">
-          {notice}
-        </div>
-      )}
-      {documents.length ? (
-        <div className="document-list">
-          {documents.map((d) => (
-            <div key={d.id}>
-              <Icon name="document" />
-              <section>
-                <h3>{d.name}</h3>
-                <p>{date(d.created_at)}</p>
-              </section>
-              <button
-                className="button outline"
-                disabled={busy}
-                onClick={async () => {
-                  setBusy(true);
-                  setError("");
-                  try {
-                    const result = await api<{ url: string }>(
-                      `/api/documents?id=${encodeURIComponent(d.id)}`,
-                    );
-                    if (!result.url?.startsWith("https://"))
-                      throw new Error(
-                        "Le lien de téléchargement est indisponible.",
-                      );
-                    window.open(result.url, "_blank", "noopener,noreferrer");
-                  } catch (e) {
-                    setError((e as Error).message);
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              >
-                <Icon name="download" />
-                Télécharger
-              </button>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="document-empty">Aucune pièce jointe pour le moment.</p>
-      )}
-      {demo ? (
-        <div className="inline-note">
-          <Icon name="help" />
-          <p>
-            Le dépôt de documents réels est désactivé dans la démonstration.
-            Connectez-vous à un compte réel pour déposer une pièce dans le
-            stockage privé.
-          </p>
-        </div>
-      ) : (
-        <form onSubmit={upload}>
-          <Field label="Dossier associé (facultatif)">
-            <select
-              value={selected}
-              onChange={(e) => setSelected(e.target.value)}
-            >
-              <option value="">Justificatif personnel</option>
-              {interventions.map((i) => (
-                <option value={i.id} key={i.id}>
-                  {shortId(i.id)} — {category(i.category).label}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field
-            label="Document privé"
-            hint="PDF, JPEG, PNG ou WebP, jusqu’à 4 Mo."
-          >
-            <input
-              type="file"
-              required
-              accept="application/pdf,image/jpeg,image/png,image/webp"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
-            />
-          </Field>
-          <button
-            className="button primary"
-            type="submit"
-            disabled={busy || !file}
-          >
-            <Icon name="plus" />
-            {busy ? "Enregistrement…" : "Ajouter le document"}
-          </button>
-        </form>
-      )}
-    </section>
-  );
-}
-function ArtisanAdministration({ demo }: { demo: boolean }) {
-  const [rows, setRows] = useState<(Profile & { created_at: string })[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState("");
-  async function load() {
-    setLoading(true);
-    setError("");
-    try {
-      if (demo) {
-        const stored = localStorage.getItem("courant-admin-demo-v1");
-        setRows(
-          stored
-            ? JSON.parse(stored)
-            : [
-                {
-                  id: "demo-artisan",
-                  full_name: "Alex Martin",
-                  role: "artisan",
-                  artisan_approved: true,
-                  created_at: "2026-10-30T09:00:00Z",
-                },
-                {
-                  id: "demo-artisan-2",
-                  full_name: "Sam Laurent",
-                  role: "artisan",
-                  artisan_approved: false,
-                  created_at: "2026-10-30T10:00:00Z",
-                },
-              ],
-        );
-        return;
-      }
-      const result = await api<{
-        artisans: (Profile & { created_at: string })[];
-      }>("/api/admin/artisans");
-      setRows(result.artisans);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }
-  useEffect(() => {
-    void load();
-  }, []);
-  return (
-    <section className="panel">
-      <div className="section-heading">
-        <h2>Candidatures artisans</h2>
-        <button
-          className="button outline"
-          onClick={() => void load()}
-          disabled={loading}
-        >
-          <Icon name="refresh" />
-          Actualiser
-        </button>
-      </div>
-      {error && (
-        <div className="alert error" role="alert">
-          {error}
-        </div>
-      )}
-      {loading ? (
-        <div className="page-loader">
-          <span className="spinner" />
-          Chargement des candidatures…
-        </div>
-      ) : rows.length ? (
-        <div className="document-list">
-          {rows.map((p) => (
-            <div key={p.id}>
-              <span className="avatar">
-                {p.full_name.slice(0, 2).toUpperCase()}
-              </span>
-              <section>
-                <h3>{p.full_name}</h3>
-                <p>
-                  {p.artisan_approved
-                    ? "Candidature approuvée"
-                    : "En attente de vérification"}{" "}
-                  — {date(p.created_at)}
-                </p>
-              </section>
-              <ConfirmAction
-                label={p.artisan_approved ? "Suspendre" : "Approuver"}
-                message={
-                  p.artisan_approved
-                    ? "Suspendre l’accès aux nouvelles missions de cet artisan ?"
-                    : "Confirmez-vous avoir vérifié la candidature et ses justificatifs ?"
-                }
-                confirmLabel={
-                  p.artisan_approved
-                    ? "Confirmer la suspension"
-                    : "Confirmer l’approbation"
-                }
-                busy={Boolean(busy)}
-                onConfirm={async () => {
-                  setBusy(p.id);
-                  setError("");
-                  try {
-                    if (demo) {
-                      const next = rows.map((row) =>
-                        row.id === p.id
-                          ? { ...row, artisan_approved: !row.artisan_approved }
-                          : row,
-                      );
-                      localStorage.setItem(
-                        "courant-admin-demo-v1",
-                        JSON.stringify(next),
-                      );
-                      setRows(next);
-                    } else {
-                      await api("/api/admin/artisans", {
-                        user_id: p.id,
-                        approved: !p.artisan_approved,
-                      });
-                      await load();
-                    }
-                  } catch (e) {
-                    setError((e as Error).message);
-                  } finally {
-                    setBusy("");
-                  }
-                }}
-              />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <Empty icon="shield" title="Aucune candidature à vérifier">
-          Les inscriptions artisans apparaîtront ici.
-        </Empty>
-      )}
-    </section>
-  );
-}
 
-function ProfessionalOperations({
-  data,
-  sites,
-  organizations,
-  quotes,
-  demo,
-  busy,
-  onRefresh,
-  onSave,
-}: {
-  data: ProfessionalData;
-  sites: Site[];
-  organizations: { id: string; name: string }[];
-  quotes: Quote[];
-  demo: boolean;
-  busy: boolean;
-  onRefresh: () => Promise<void>;
-  onSave: (values: Record<string, unknown>) => Promise<boolean | undefined>;
-}) {
-  const [tab, setTab] = useState("approvals");
-  const [site, setSite] = useState("");
-  const [threshold, setThreshold] = useState("200");
-  const [requiredRole, setRequiredRole] = useState("manager");
-  const [enabled, setEnabled] = useState(true);
-  const [title, setTitle] = useState("");
-  const [reference, setReference] = useState("");
-  const [starts, setStarts] = useState("");
-  const [ends, setEnds] = useState("");
-  const [terms, setTerms] = useState("");
-  const [contractStatus, setContractStatus] = useState("draft");
-  const [kind, setKind] = useState("maintenance");
-  const [due, setDue] = useState("");
-  const [recordStatus, setRecordStatus] = useState("pending");
-  const [notes, setNotes] = useState("");
-  const [error, setError] = useState("");
-  const selectedSite = site || sites[0]?.id || "";
-  function siteField() {
-    return (
-      <Field label="Site concerné">
-        <select
-          required
-          value={selectedSite}
-          onChange={(e) => setSite(e.target.value)}
-        >
-          <option value="" disabled>
-            Choisir un site
-          </option>
-          {sites.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-      </Field>
-    );
-  }
-  async function report() {
-    setError("");
+  async function loadAdminInterventions(
+    params: AdminListFilters & { limit?: number; cursor?: string | null },
+  ): Promise<AdminInterventionsPage | null> {
+    const limit = Math.min(100, Math.max(1, params.limit ?? 25));
+    if (modeRef.current === "demo") {
+      const rows = data.interventions
+        .filter(
+          (i) =>
+            (!params.status || i.status === params.status) &&
+            (!params.category || i.category === params.category) &&
+            (!params.urgency || i.urgency === params.urgency) &&
+            (!params.site_id || i.site_id === params.site_id) &&
+            (!params.artisan_id || i.artisan_id === params.artisan_id) &&
+            (!params.client_id || i.client_id === params.client_id) &&
+            (!params.q ||
+              `${i.description} ${i.city} ${i.postal_code}`.toLowerCase().includes(params.q.toLowerCase())),
+        )
+        .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || b.id.localeCompare(a.id));
+      const start = params.cursor ? Number(params.cursor) || 0 : 0;
+      const slice = rows.slice(start, start + limit);
+      return {
+        interventions: slice.map((i) => ({
+          id: i.id,
+          client_id: i.client_id || "",
+          artisan_id: i.artisan_id ?? null,
+          site_id: i.site_id ?? null,
+          category: i.category,
+          city: i.city,
+          postal_code: i.postal_code,
+          urgency: i.urgency,
+          status: i.status,
+          created_at: i.created_at,
+          updated_at: i.updated_at || i.created_at,
+        })),
+        page: {
+          limit,
+          has_more: start + limit < rows.length,
+          next_cursor: start + limit < rows.length ? String(start + limit) : null,
+          total: rows.length,
+        },
+        filters: params,
+      };
+    }
+    const my = seq.current;
     try {
-      if (demo) {
-        const rows = [
-          ["Type", "Site", "Échéance", "Statut"],
-          ...data.compliance_records.map((r) => [
-            r.kind,
-            sites.find((s) => s.id === r.site_id)?.name || "",
-            r.due_on,
-            r.status,
-          ]),
-        ];
-        download(
-          "courant-suivi-demo.csv",
-          "\uFEFF" +
-            rows
-              .map((row) =>
-                row
-                  .map(
-                    (v) =>
-                      `"${v.replace(/^[=+@-]/, "'$&").replaceAll('"', '""')}"`,
-                  )
-                  .join(";"),
-              )
-              .join("\r\n"),
-          "text/csv;charset=utf-8",
-        );
-        return;
+      const q = new URLSearchParams();
+      q.set("limit", String(limit));
+      if (params.cursor) q.set("cursor", params.cursor);
+      for (const key of ["status", "category", "urgency", "site_id", "artisan_id", "client_id", "created_from", "created_to", "q"] as const) {
+        const value = params[key];
+        if (value) q.set(key, String(value));
       }
-      const response = await fetch("/api/reports?format=csv", {
-        cache: "no-store",
-      });
-      if (!response.ok) {
-        const result = await response.json();
-        throw new Error(result.error || "Le rapport n’est pas disponible.");
+      const result = await api<AdminInterventionsPage>(`/api/admin/interventions?${q}`);
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, adminLists: "available" }));
+      return result;
+    } catch (e) {
+      if (my !== seq.current) return null;
+      if (e instanceof ApiRequestError && e.status === 422) {
+        setError(e.message);
+        return null;
       }
-      download(
-        "courant-rapport.csv",
-        await response.text(),
-        "text/csv;charset=utf-8",
+      if (e instanceof ApiRequestError && e.status === 403) {
+        void refresh();
+        setError("Vos droits d’administration ne sont plus reconnus. Vos données ont été rechargées.");
+        return null;
+      }
+      setCapabilities((c) => ({ ...c, adminLists: contractStateFromError(e) }));
+      return null;
+    }
+  }
+  function demoDirectoryRows<K extends DirectoryKind>(kind: K): DirectoryItem<K>[] {
+    const artisans = readDemo(DEMO_KEYS.admin, adminSeed(), Array.isArray);
+    const dossier = readDemo(DEMO_KEYS.artisan, artisanSeed()).artisan_profile;
+    if (kind === "artisans")
+      return artisans.map((a) => ({
+        id: a.id,
+        full_name: a.full_name,
+        phone: a.phone || "",
+        artisan_approved: !!a.artisan_approved,
+        created_at: a.created_at,
+        company_name: a.id === DEMO_IDS.artisan ? dossier?.company_name ?? null : null,
+        application_status: a.id === DEMO_IDS.artisan ? dossier?.application_status ?? null : a.artisan_approved ? "approved" : "submitted",
+      })) as DirectoryItem<K>[];
+    if (kind === "clients")
+      return [
+        { id: DEMO_IDS.client, full_name: DEMO_NAMES.client, phone: "", role: "client" as const, created_at: "2026-10-01T09:00:00Z" },
+        { id: DEMO_IDS.manager, full_name: DEMO_NAMES.manager, phone: "", role: "manager" as const, created_at: "2026-10-02T09:00:00Z" },
+      ] as DirectoryItem<K>[];
+    return data.organizations.map((o) => ({
+      id: o.id,
+      name: o.name,
+      owner_id: o.owner_id || DEMO_IDS.manager,
+      created_at: "2026-10-02T09:00:00Z",
+    })) as DirectoryItem<K>[];
+  }
+  async function loadAdminDirectory<K extends DirectoryKind>(
+    kind: K,
+    params: DirectoryFilters & { limit?: number; cursor?: string | null },
+  ): Promise<DirectoryPage<K> | null> {
+    const limit = Math.min(100, Math.max(1, params.limit ?? 25));
+    if (modeRef.current === "demo") {
+      const q = params.q?.trim().toLowerCase();
+      const rows = demoDirectoryRows(kind)
+        .filter((row) => {
+          const r = row as unknown as Record<string, unknown>;
+          if (q && !String(r.full_name ?? r.name ?? "").toLowerCase().includes(q) && r.id !== q) return false;
+          if (params.approved !== undefined && r.artisan_approved !== params.approved) return false;
+          if (params.role && r.role !== params.role) return false;
+          if (params.owner_id && r.owner_id !== params.owner_id) return false;
+          return true;
+        })
+        .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || b.id.localeCompare(a.id));
+      const start = params.cursor ? Number(params.cursor) || 0 : 0;
+      return {
+        kind,
+        items: rows.slice(start, start + limit),
+        page: {
+          limit,
+          has_more: start + limit < rows.length,
+          next_cursor: start + limit < rows.length ? String(start + limit) : null,
+          total: rows.length,
+        },
+        filters: { q: params.q ?? null, approved: params.approved ?? null, role: params.role ?? null, owner_id: params.owner_id ?? null },
+      };
+    }
+    const my = seq.current;
+    try {
+      const search = new URLSearchParams({ kind, limit: String(limit) });
+      if (params.cursor) search.set("cursor", params.cursor);
+      if (params.q) search.set("q", params.q);
+      if (params.approved !== undefined) search.set("approved", String(params.approved));
+      if (params.role) search.set("role", params.role);
+      if (params.owner_id) search.set("owner_id", params.owner_id);
+      const result = await api<DirectoryPage<K>>(`/api/admin/directory?${search}`);
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, adminDirectory: "available" }));
+      return result;
+    } catch (e) {
+      if (my !== seq.current) return null;
+      if (e instanceof ApiRequestError && e.status === 422) {
+        setError(e.message);
+        return null;
+      }
+      if (e instanceof ApiRequestError && e.status === 403) {
+        void refresh();
+        setError("Vos droits d’administration ne sont plus reconnus. Vos données ont été rechargées.");
+        return null;
+      }
+      setCapabilities((c) => ({ ...c, adminDirectory: contractStateFromError(e) }));
+      return null;
+    }
+  }
+  async function loadAdminDirectoryItem<K extends DirectoryKind>(kind: K, id: string): Promise<DirectoryItem<K> | null> {
+    if (modeRef.current === "demo") return demoDirectoryRows(kind).find((r) => r.id === id) ?? null;
+    const my = seq.current;
+    try {
+      const result = await api<{ kind: K; item: DirectoryItem<K> }>(
+        `/api/admin/directory?kind=${kind}&id=${encodeURIComponent(id)}`,
       );
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, adminDirectory: "available" }));
+      return result.item;
     } catch (e) {
-      setError((e as Error).message);
+      if (my !== seq.current) return null;
+      if (e instanceof ApiRequestError && e.status === 404) return null;
+      setCapabilities((c) => ({ ...c, adminDirectory: contractStateFromError(e) }));
+      return null;
     }
   }
-  return (
-    <section className="panel professional-operations">
-      <div className="section-heading">
-        <div>
-          <h2>Pilotage professionnel</h2>
-          <p>Approbations, contrats et échéances de vos sites.</p>
-        </div>
-        <button className="button outline" onClick={() => void report()}>
-          <Icon name="download" />
-          Rapport
-        </button>
-      </div>
-      <div
-        className="tabs operations-tabs"
-        role="group"
-        aria-label="Pilotage professionnel"
-      >
-        {[
-          ["approvals", "Approbations"],
-          ["contracts", "Contrats cadres"],
-          ["compliance", "Audits et maintenance"],
-        ].map(([id, label]) => (
-          <button
-            key={id}
-            className={tab === id ? "active" : ""}
-            onClick={() => {
-              setTab(id);
-              setError("");
-            }}
-          >
-            {label}
-          </button>
-        ))}
-        {!demo && (
-          <button
-            className="refresh-operations"
-            aria-label="Actualiser le pilotage professionnel"
-            onClick={() => void onRefresh()}
-          >
-            <Icon name="refresh" size={17} />
-          </button>
-        )}
-      </div>
-      {error && (
-        <div className="alert error" role="alert">
-          {error}
-        </div>
-      )}
-      {tab === "approvals" ? (
-        <div className="operations-grid">
-          <div>
-            <h3>Décisions en attente</h3>
-            {data.approvals.length ? (
-              <div className="approval-list">
-                {data.approvals.map((a) => {
-                  const q = quotes.find((q) => q.id === a.quote_id);
-                  return (
-                    <div key={a.id}>
-                      <section>
-                        <strong>
-                          {q ? money(q.total_cents) : "Devis à approuver"}
-                        </strong>
-                        <p>
-                          {a.site_id
-                            ? sites.find((s) => s.id === a.site_id)?.name
-                            : "Site de l’intervention"}
-                        </p>
-                        <span
-                          className={`badge ${a.status === "approved" ? "status-paid" : a.status === "rejected" ? "status-cancelled" : "status-quoted"}`}
-                        >
-                          {a.status === "approved"
-                            ? "Approuvé"
-                            : a.status === "rejected"
-                              ? "Refusé"
-                              : "En attente"}
-                        </span>
-                        {a.note && <p>{a.note}</p>}
-                      </section>
-                      {a.status === "pending" && (
-                        <ApprovalDecision
-                          busy={busy}
-                          onDecision={(decision, note) =>
-                            onSave({
-                              action: "decide_approval",
-                              approval_id: a.id,
-                              decision,
-                              note,
-                            })
-                          }
-                        />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="operation-empty">
-                <Icon name="check" />
-                <p>Aucun devis ne nécessite d’approbation pour le moment.</p>
-              </div>
-            )}
-            <h3>Règles enregistrées</h3>
-            {data.approval_rules.map((r) => (
-              <div className="rule-row" key={r.site_id}>
-                <Icon name="shield" />
-                <span>
-                  <strong>
-                    {sites.find((s) => s.id === r.site_id)?.name || "Site"}
-                  </strong>
-                  <small>
-                    Au-delà de {money(r.threshold_cents)} —{" "}
-                    {r.required_role === "owner"
-                      ? "propriétaire"
-                      : "gestionnaire"}{" "}
-                    — {r.enabled ? "active" : "désactivée"}
-                  </small>
-                </span>
-              </div>
-            ))}
-          </div>
-          <form
-            className="operations-form"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!selectedSite) return;
-              void onSave({
-                action: "set_approval_rule",
-                site_id: selectedSite,
-                threshold_cents: Math.round(Number(threshold) * 100),
-                required_role: requiredRole,
-                enabled,
-              });
-            }}
-          >
-            <h3>Configurer une approbation</h3>
-            <p>
-              Les nouveaux devis dépassant le seuil nécessiteront une décision
-              avant acceptation.
-            </p>
-            {siteField()}
-            <Field label="Seuil de validation TTC (€)">
-              <input
-                required
-                type="number"
-                min="0"
-                max="1000000"
-                step="0.01"
-                value={threshold}
-                onChange={(e) => setThreshold(e.target.value)}
-              />
-            </Field>
-            <Field label="Responsable de validation">
-              <select
-                value={requiredRole}
-                onChange={(e) => setRequiredRole(e.target.value)}
-              >
-                <option value="manager">Gestionnaire de l’organisation</option>
-                <option value="owner">Propriétaire de l’organisation</option>
-              </select>
-            </Field>
-            <label className="checkbox-field">
-              <input
-                type="checkbox"
-                checked={enabled}
-                onChange={(e) => setEnabled(e.target.checked)}
-              />
-              Règle active
-            </label>
-            <button
-              className="button primary full"
-              type="submit"
-              disabled={busy || !selectedSite}
-            >
-              Enregistrer la règle
-            </button>
-          </form>
-        </div>
-      ) : tab === "contracts" ? (
-        <div className="operations-grid">
-          <div>
-            <h3>Contrats de l’organisation</h3>
-            {data.contracts.length ? (
-              <div className="contract-list">
-                {data.contracts.map((c) => (
-                  <details key={c.id}>
-                    <summary>
-                      <span>
-                        <strong>{c.title}</strong>
-                        <small>
-                          Réf. {c.reference} —{" "}
-                          {c.status === "active"
-                            ? "Actif"
-                            : c.status === "archived"
-                              ? "Archivé"
-                              : "Brouillon"}
-                        </small>
-                      </span>
-                      <Icon name="arrow" size={17} />
-                    </summary>
-                    <p>
-                      Du {date(c.starts_on)}
-                      {c.ends_on ? ` au ${date(c.ends_on)}` : ""}
-                    </p>
-                    <p>{c.terms}</p>
-                    <button
-                      className="button outline"
-                      disabled={busy}
-                      onClick={() =>
-                        void onSave({
-                          action: "save_contract",
-                          id: c.id,
-                          organization_id: c.organization_id,
-                          title: c.title,
-                          reference: c.reference,
-                          starts_on: c.starts_on,
-                          ends_on: c.ends_on || undefined,
-                          terms: c.terms,
-                          status:
-                            c.status === "archived" ? "active" : "archived",
-                        })
-                      }
-                    >
-                      {c.status === "archived" ? "Réactiver" : "Archiver"}
-                    </button>
-                  </details>
-                ))}
-              </div>
-            ) : (
-              <div className="operation-empty">
-                <Icon name="document" />
-                <p>Aucun contrat cadre enregistré.</p>
-              </div>
-            )}
-          </div>
-          <form
-            className="operations-form"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!organizations[0]?.id) return;
-              void onSave({
-                action: "save_contract",
-                organization_id: organizations[0].id,
-                title,
-                reference,
-                starts_on: starts,
-                ends_on: ends || undefined,
-                terms,
-                status: contractStatus,
-              });
-            }}
-          >
-            <h3>Enregistrer un contrat cadre</h3>
-            <p>
-              Archivage d’un accord existant. Ce formulaire ne constitue pas une
-              signature électronique.
-            </p>
-            <Field label="Intitulé">
-              <input
-                required
-                minLength={2}
-                maxLength={160}
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-            </Field>
-            <Field label="Référence">
-              <input
-                required
-                minLength={2}
-                maxLength={100}
-                value={reference}
-                onChange={(e) => setReference(e.target.value)}
-              />
-            </Field>
-            <div className="form-columns">
-              <Field label="Début">
-                <input
-                  required
-                  type="date"
-                  value={starts}
-                  onChange={(e) => setStarts(e.target.value)}
-                />
-              </Field>
-              <Field label="Fin (facultative)">
-                <input
-                  type="date"
-                  min={starts || undefined}
-                  value={ends}
-                  onChange={(e) => setEnds(e.target.value)}
-                />
-              </Field>
-            </div>
-            <Field label="Conditions et grille tarifaire">
-              <textarea
-                required
-                minLength={5}
-                maxLength={8000}
-                value={terms}
-                onChange={(e) => setTerms(e.target.value)}
-                placeholder="Périmètre, prestations, conditions et tarifs convenus…"
-              />
-            </Field>
-            <Field label="État du document">
-              <select
-                value={contractStatus}
-                onChange={(e) => setContractStatus(e.target.value)}
-              >
-                <option value="draft">Brouillon</option>
-                <option value="active">Actif</option>
-                <option value="archived">Archivé</option>
-              </select>
-            </Field>
-            {!organizations.length && (
-              <p className="form-note">
-                Ajoutez un premier site pour créer votre organisation.
-              </p>
-            )}
-            <button
-              className="button primary full"
-              type="submit"
-              disabled={busy || !organizations.length}
-            >
-              Enregistrer le contrat
-            </button>
-          </form>
-        </div>
-      ) : (
-        <div className="operations-grid">
-          <div>
-            <h3>Échéances et signalements</h3>
-            {data.compliance_records.length ? (
-              <div className="compliance-list">
-                {data.compliance_records.map((r) => (
-                  <div key={r.id}>
-                    <span className="record-icon">
-                      <Icon
-                        name={
-                          r.kind === "safety"
-                            ? "warning"
-                            : r.kind === "audit"
-                              ? "shield"
-                              : "wrench"
-                        }
-                      />
-                    </span>
-                    <section>
-                      <strong>{r.title}</strong>
-                      <p>
-                        {sites.find((s) => s.id === r.site_id)?.name || "Site"}{" "}
-                        — {date(r.due_on)}
-                      </p>
-                      <span
-                        className={`badge ${r.status === "completed" ? "status-paid" : "status-quoted"}`}
-                      >
-                        {r.status === "completed"
-                          ? "Terminé"
-                          : r.status === "scheduled"
-                            ? "Planifié"
-                            : "À traiter"}
-                      </span>
-                      {r.notes && <p>{r.notes}</p>}
-                      {r.status !== "completed" && (
-                        <button
-                          className="button outline"
-                          disabled={busy}
-                          onClick={() =>
-                            void onSave({
-                              action: "save_compliance",
-                              id: r.id,
-                              site_id: r.site_id,
-                              title: r.title,
-                              kind: r.kind,
-                              due_on: r.due_on,
-                              status: "completed",
-                              notes: r.notes,
-                            })
-                          }
-                        >
-                          Marquer terminé
-                        </button>
-                      )}
-                    </section>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="operation-empty">
-                <Icon name="calendar" />
-                <p>Aucune échéance de maintenance ou d’audit enregistrée.</p>
-              </div>
-            )}
-            <div className="inline-note">
-              <Icon name="shield" />
-              <p>
-                Ces enregistrements organisent le suivi. Ils ne certifient pas
-                la conformité d’une installation ou d’un ERP.
-              </p>
-            </div>
-          </div>
-          <form
-            className="operations-form"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!selectedSite) return;
-              void onSave({
-                action: "save_compliance",
-                site_id: selectedSite,
-                title,
-                kind,
-                due_on: due,
-                status: recordStatus,
-                notes,
-              });
-            }}
-          >
-            <h3>Ajouter une échéance</h3>
-            <p>
-              Audit électrique, maintenance préventive ou signalement de
-              sécurité.
-            </p>
-            {siteField()}
-            <Field label="Intitulé">
-              <input
-                required
-                minLength={2}
-                maxLength={160}
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-            </Field>
-            <Field label="Type de suivi">
-              <select value={kind} onChange={(e) => setKind(e.target.value)}>
-                <option value="maintenance">Maintenance préventive</option>
-                <option value="audit">Audit électrique</option>
-                <option value="safety">Signalement de sécurité</option>
-              </select>
-            </Field>
-            <Field label="Échéance">
-              <input
-                required
-                type="date"
-                value={due}
-                onChange={(e) => setDue(e.target.value)}
-              />
-            </Field>
-            <Field label="État">
-              <select
-                value={recordStatus}
-                onChange={(e) => setRecordStatus(e.target.value)}
-              >
-                <option value="pending">À traiter</option>
-                <option value="scheduled">Planifié</option>
-                <option value="completed">Terminé</option>
-              </select>
-            </Field>
-            <Field label="Notes et équipements concernés">
-              <textarea
-                maxLength={4000}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Par exemple : armoire froide, circuit de cuisine, éclairage de sécurité…"
-              />
-            </Field>
-            <button
-              className="button primary full"
-              type="submit"
-              disabled={busy || !selectedSite}
-            >
-              Enregistrer l’échéance
-            </button>
-          </form>
-        </div>
-      )}
-    </section>
-  );
-}
-
-type WarrantyCase = {
-  id: string;
-  intervention_id: string;
-  description: string;
-  status: "submitted" | "reviewing" | "resolved" | "declined";
-  resolution?: string;
-  created_at: string;
-};
-function WarrantyPanel({
-  interventionId,
-  demo,
-  role,
-}: {
-  interventionId?: string;
-  demo: boolean;
-  role: Role;
-}) {
-  const [cases, setCases] = useState<WarrantyCase[]>([]);
-  const [description, setDescription] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  async function load() {
-    setLoading(true);
+  async function loadAdminIntervention(id: string): Promise<AdminInterventionDetail | null> {
+    if (modeRef.current === "demo") {
+      const intervention = data.interventions.find((i) => i.id === id);
+      if (!intervention) return null;
+      const quotes = data.quotes
+        .filter((q) => q.intervention_id === id)
+        .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+      return { intervention, quotes: quotes.slice(0, 50), quotes_limit: 50, quotes_limited: quotes.length > 50 };
+    }
+    const my = seq.current;
     try {
-      if (demo) {
-        setCases(
-          JSON.parse(localStorage.getItem("courant-warranty-demo-v1") || "[]"),
-        );
+      const result = await api<AdminInterventionDetail>(
+        `/api/admin/interventions?id=${encodeURIComponent(id)}`,
+      );
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, adminLists: "available" }));
+      return result;
+    } catch (e) {
+      if (my !== seq.current) return null;
+      if (e instanceof ApiRequestError && e.status === 404) {
+        setError("Ce dossier est introuvable.");
+        return null;
+      }
+      setCapabilities((c) => ({ ...c, adminLists: contractStateFromError(e) }));
+      return null;
+    }
+  }
+  // ---- Quote draft (contract QUOTE-DRAFT-001). Demo: one private draft per dossier in the
+  // browser; live: dedicated route, unavailable until the backend checkpoint is integrated.
+  const demoDrafts = () =>
+    readDemo<Record<string, { draft: QuoteDraft | null; version: number }>>(
+      DEMO_KEYS.quoteDrafts,
+      {},
+      (v) => !!v && typeof v === "object",
+    );
+  function demoDraftEnvelope(interventionId: string): QuoteDraftEnvelope {
+    const entry = demoDrafts()[interventionId] || { draft: null, version: 0 };
+    const current = data.quotes.find(
+      (q) => q.intervention_id === interventionId && q.status === "sent",
+    );
+    return {
+      draft: entry.draft,
+      version: entry.version,
+      assignment_token: `demo-assignment-${interventionId}`,
+      current_quote_id: current?.id ?? null,
+    };
+  }
+  async function loadQuoteDraft(interventionId: string): Promise<QuoteDraftEnvelope | null> {
+    if (modeRef.current === "demo") return demoDraftEnvelope(interventionId);
+    const my = seq.current;
+    try {
+      const result = await api<QuoteDraftEnvelope>(`/api/interventions/${interventionId}/quote-draft`);
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, quoteDraft: "available" }));
+      return result;
+    } catch (e) {
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, quoteDraft: contractStateFromError(e) }));
+      return null;
+    }
+  }
+  async function quoteDraftCommand(
+    interventionId: string,
+    body: QuoteDraftCommand,
+  ): Promise<QuoteDraftResult> {
+    let outcome: QuoteDraftResult = { ok: false, conflict: false, message: "Action interrompue." };
+    const completed = await run(async (ctx) => {
+      if (modeRef.current === "demo") {
+        const all = demoDrafts();
+        const envelope = demoDraftEnvelope(interventionId);
+        if (body.expected_version !== envelope.version || body.assignment_token !== envelope.assignment_token) {
+          outcome = {
+            ok: false,
+            conflict: true,
+            message: "Le brouillon a changé depuis votre dernière lecture. Rechargez-le ; votre saisie est conservée.",
+          };
+          return;
+        }
+        if (body.action === "save") {
+          if (body.base_quote_id !== envelope.current_quote_id) {
+            outcome = {
+              ok: false,
+              conflict: true,
+              message: "Un devis a été publié entre-temps sur ce dossier. Rechargez avant d’enregistrer.",
+            };
+            return;
+          }
+          const draft: QuoteDraft = {
+            intervention_id: interventionId,
+            artisan_id: DEMO_IDS.artisan,
+            version: envelope.version + 1,
+            assignment_token: envelope.assignment_token,
+            base_quote_id: body.base_quote_id,
+            lines: body.lines,
+            tax_rate: body.tax_rate,
+            updated_at: new Date().toISOString(),
+          };
+          all[interventionId] = { draft, version: draft.version };
+          writeDemo(DEMO_KEYS.quoteDrafts, all);
+          outcome = { ok: true, envelope: { ...envelope, draft, version: draft.version } };
+          ctx.notice("Brouillon enregistré dans la démonstration (non envoyé au client).");
+          return;
+        }
+        if (!envelope.draft) {
+          outcome = { ok: false, conflict: true, message: "Aucun brouillon actif à traiter. Rechargez le dossier." };
+          return;
+        }
+        if (body.action === "discard") {
+          all[interventionId] = { draft: null, version: envelope.version + 1 };
+          writeDemo(DEMO_KEYS.quoteDrafts, all);
+          outcome = { ok: true, envelope: { ...envelope, draft: null, version: envelope.version + 1 } };
+          ctx.notice("Brouillon abandonné.");
+          return;
+        }
+        // send: publish through the existing demo action; the draft is consumed only on success.
+        const draft = envelope.draft;
+        if (draft.tax_rate === null || !draft.lines.length || draft.lines.some((l) => !l.label.trim()))
+          throw new Error("Le brouillon n’est pas publiable : lignes nommées et taux de TVA requis.");
+        const newQuoteId = uid();
+        // Same chain as this command (calling action() here re-entered run() and was refused as busy).
+        try {
+          demoTransition(ctx, interventionId, "send_quote", {
+            lines: draft.lines,
+            tax_rate: draft.tax_rate,
+            quote_id: newQuoteId,
+          });
+        } catch (e) {
+          outcome = {
+            ok: false,
+            conflict: false,
+            message: `Le devis n’a pas pu être publié ; le brouillon est conservé. ${(e as Error).message}`.trim(),
+          };
+          return;
+        }
+        ctx.notice("Devis publié dans la démonstration (aucun envoi réel au client).");
+        all[interventionId] = { draft: null, version: envelope.version + 1 };
+        writeDemo(DEMO_KEYS.quoteDrafts, all);
+        outcome = {
+          ok: true,
+          envelope: {
+            ...envelope,
+            draft: null,
+            version: envelope.version + 1,
+            quote_id: newQuoteId,
+          },
+        };
         return;
       }
-      const result = await api<{ cases: WarrantyCase[] }>("/api/warranty");
-      setCases(result.cases);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }
-  useEffect(() => {
-    void load();
-  }, [demo, interventionId]);
-  const visible = cases.filter(
-    (c) => !interventionId || c.intervention_id === interventionId,
-  );
-  async function save(values: Record<string, unknown>) {
-    setBusy(true);
-    setError("");
-    setNotice("");
-    try {
-      if (demo) {
-        const next =
-          values.action === "request"
-            ? [
-                ...cases,
-                {
-                  id: uid(),
-                  intervention_id: interventionId!,
-                  description,
-                  status: "submitted" as const,
-                  created_at: new Date().toISOString(),
-                },
-              ]
-            : cases.map((c) =>
-                c.id === values.case_id
-                  ? {
-                      ...c,
-                      status: values.status as WarrantyCase["status"],
-                      resolution: String(values.resolution),
-                    }
-                  : c,
-              );
-        localStorage.setItem("courant-warranty-demo-v1", JSON.stringify(next));
-        setCases(next);
-        setNotice(
-          "Suivi enregistré dans la démonstration. Aucune demande réelle n’est transmise.",
-        );
-      } else {
-        await api("/api/warranty", values);
-        await load();
-        setNotice("Votre dossier a été enregistré.");
+      try {
+        const result = await api<QuoteDraftEnvelope>(`/api/interventions/${interventionId}/quote-draft`, body);
+        if (!ctx.alive()) return;
+        ctx.when(setCapabilities)((c) => ({ ...c, quoteDraft: "available" }));
+        outcome = { ok: true, envelope: result };
+        if (body.action === "send") {
+          if (ctx.alive()) await refresh();
+          ctx.notice("Devis envoyé au client.");
+        } else
+          ctx.notice(
+            body.action === "save"
+              ? "Brouillon enregistré. Il n’est pas envoyé au client tant que vous ne publiez pas."
+              : "Brouillon abandonné.",
+          );
+      } catch (e) {
+        if (e instanceof ApiRequestError && e.status === 409) {
+          outcome = { ok: false, conflict: true, message: e.message };
+          return; // not an error banner: the editor shows the conflict and keeps the input
+        }
+        if (contractStateFromError(e) === "missing")
+          ctx.when(setCapabilities)((c) => ({ ...c, quoteDraft: "missing" }));
+        // Reported inline by the editor; no duplicate banner.
+        outcome = { ok: false, conflict: false, message: (e as Error).message };
       }
-      setDescription("");
+    });
+    // A chain that did not complete as the current identity reports neither success nor conflict.
+    if (!completed) return { ok: false, conflict: false, message: "Action interrompue." };
+    return outcome;
+  }
+  // ---- Assistance tickets (contract SUPPORT-001). Demo: browser-only tickets; live: dedicated
+  // routes, honest unavailable state until the backend checkpoint is integrated.
+  type DemoSupportStore = Record<string, { ticket: SupportTicket; messages: SupportMessage[]; events: SupportEvent[]; request_id?: string }>;
+  const demoSupport = () =>
+    readDemo<DemoSupportStore>(DEMO_KEYS.support, {}, (v) => !!v && typeof v === "object");
+  const demoActor = () => `demo-${roleRef.current}`;
+  async function loadSupportTickets(filters: SupportListFilters): Promise<SupportListPage | null> {
+    const limit = Math.min(100, Math.max(1, filters.limit ?? 25));
+    if (modeRef.current === "demo") {
+      const me = demoActor();
+      const all = Object.values(demoSupport())
+        .map((e) => e.ticket)
+        .filter((t) => (roleRef.current === "admin" && filters.scope !== "mine") || t.creator_id === me)
+        .filter((t) => !filters.status || t.status === filters.status)
+        .filter((t) => !filters.intervention_id || t.intervention_id === filters.intervention_id)
+        .filter((t) => !filters.q || t.subject.toLowerCase().includes(filters.q.toLowerCase()))
+        .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || b.id.localeCompare(a.id));
+      const start = filters.cursor ? Number(filters.cursor) || 0 : 0;
+      return {
+        tickets: all.slice(start, start + limit),
+        page: { limit, total: all.length, has_more: start + limit < all.length, next_cursor: start + limit < all.length ? String(start + limit) : null },
+        filters: { scope: filters.scope ?? (roleRef.current === "admin" ? "all" : "mine"), status: filters.status ?? null, intervention_id: filters.intervention_id ?? null, q: filters.q ?? null },
+      };
+    }
+    const my = seq.current;
+    try {
+      const q = new URLSearchParams({ limit: String(limit) });
+      if (filters.cursor) q.set("cursor", filters.cursor);
+      if (filters.scope) q.set("scope", filters.scope);
+      if (filters.status) q.set("status", filters.status);
+      if (filters.intervention_id) q.set("intervention_id", filters.intervention_id);
+      if (filters.q) q.set("q", filters.q);
+      const result = await api<SupportListPage>(`/api/support?${q}`);
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, support: "available" }));
+      return result;
     } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
+      if (my !== seq.current) return null;
+      if (e instanceof ApiRequestError && e.status === 422) {
+        setError(e.message);
+        return null;
+      }
+      setCapabilities((c) => ({ ...c, support: contractStateFromError(e) }));
+      return null;
     }
   }
-  return (
-    <section className="panel warranty-panel">
-      <div className="section-heading">
-        <h2>Suivi après intervention</h2>
-        <Icon name="shield" />
-      </div>
-      <p className="warranty-intro">
-        Le projet prévoit une garantie d’un an. Le dépôt réel des demandes
-        nécessite l’activation des conditions commerciales par l’exploitant.
-        Aucun droit contractuel n’est attesté par cette démonstration.
-      </p>
-      {error && (
-        <div className="alert error" role="alert">
-          {error}
-        </div>
-      )}
-      {notice && (
-        <div className="alert success" role="status">
-          {notice}
-        </div>
-      )}
-      {loading ? (
-        <p className="document-empty">Chargement du suivi…</p>
-      ) : visible.length ? (
-        <div className="warranty-list">
-          {visible.map((c) => (
-            <div key={c.id}>
-              <div>
-                <span
-                  className={`badge ${c.status === "resolved" ? "status-paid" : c.status === "declined" ? "status-cancelled" : "status-quoted"}`}
-                >
-                  {
-                    {
-                      submitted: "Demande enregistrée",
-                      reviewing: "En cours d’examen",
-                      resolved: "Résolue",
-                      declined: "Refusée",
-                    }[c.status]
-                  }
-                </span>
-                <small>{date(c.created_at)}</small>
-              </div>
-              <p>{c.description}</p>
-              {c.resolution && (
-                <p>
-                  <strong>Réponse : </strong>
-                  {c.resolution}
-                </p>
-              )}
-              {role === "admin" &&
-                ["submitted", "reviewing"].includes(c.status) && (
-                  <WarrantyResolution
-                    busy={busy}
-                    initialNote={c.resolution || ""}
-                    onSave={(status, resolution) =>
-                      save({
-                        action: "resolve",
-                        case_id: c.id,
-                        status,
-                        resolution,
-                      })
-                    }
-                  />
-                )}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="document-empty">Aucune demande de suivi enregistrée.</p>
-      )}
-      {interventionId &&
-        ["client", "manager"].includes(role) &&
-        !visible.some((c) => ["submitted", "reviewing"].includes(c.status)) && (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void save({
-                action: "request",
-                intervention_id: interventionId,
-                description,
-              });
-            }}
-          >
-            <Field
-              label="Signaler un problème après intervention"
-              hint="Décrivez le problème et son lien avec l’intervention terminée."
-            >
-              <textarea
-                required
-                minLength={10}
-                maxLength={4000}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={3}
-              />
-            </Field>
-            <button
-              className="button outline full"
-              type="submit"
-              disabled={busy}
-            >
-              {busy
-                ? "Enregistrement…"
-                : demo
-                  ? "Enregistrer un signalement de démonstration"
-                  : "Déposer une demande de suivi"}
-            </button>
-          </form>
-        )}
-    </section>
-  );
-}
+  async function loadSupportTicket(id: string, page: { limit?: number; after_version?: number } = {}): Promise<SupportDetail | null> {
+    const limit = Math.min(100, Math.max(1, page.limit ?? 50));
+    const after = Math.max(0, page.after_version ?? 0);
+    if (modeRef.current === "demo") {
+      const entry = demoSupport()[id];
+      if (!entry) return null;
+      const me = demoActor();
+      if (roleRef.current !== "admin" && entry.ticket.creator_id !== me) return null;
+      const events = entry.events.filter((e) => e.version > after).sort((a, b) => a.version - b.version).slice(0, limit);
+      const versions = new Set(events.map((e) => e.version));
+      return {
+        ticket: entry.ticket,
+        messages: entry.messages.filter((m) => versions.has(m.version)),
+        events,
+        // Same rule as the server for an administrator (018): no reply on a resolved ticket.
+        permissions: demoTicketPermissions(
+          { can_reply_all: roleRef.current === "admin", can_set_status_all: roleRef.current === "admin" },
+          me,
+          entry.ticket,
+        ),
+        page: {
+          limit,
+          after_version: after,
+          next_after_version: events.length === limit ? events[events.length - 1].version : null,
+          has_more: entry.events.some((e) => e.version > (events[events.length - 1]?.version ?? after)),
+          total_events: entry.events.length,
+          total_messages: entry.messages.length,
+        },
+      };
+    }
+    const my = seq.current;
+    try {
+      const result = await api<SupportDetail>(
+        `/api/support/${encodeURIComponent(id)}?limit=${limit}&after_version=${after}`,
+      );
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, support: "available" }));
+      return result;
+    } catch (e) {
+      if (my !== seq.current) return null;
+      if (e instanceof ApiRequestError && (e.status === 404 || e.status === 403)) {
+        setError("Cette demande d’assistance n’est pas accessible depuis votre compte.");
+        return null;
+      }
+      setCapabilities((c) => ({ ...c, support: contractStateFromError(e) }));
+      return null;
+    }
+  }
+  async function createSupportTicket(values: { request_id: string; subject: string; body: string; intervention_id: string | null }): Promise<SupportCreateResult | null> {
+    return runForResult<SupportCreateResult>(runner, async (ctx) => {
+      if (modeRef.current === "demo") {
+        const store = demoSupport();
+        const existing = Object.values(store).find((e) => e.request_id === values.request_id);
+        if (existing) return { ticket: existing.ticket, initial_message: existing.messages[0], replayed: true };
+        const now = new Date().toISOString();
+        const id = uid();
+        const message: SupportMessage = { id: uid(), ticket_id: id, author_id: demoActor(), author_kind: "user", version: 1, body: values.body.trim(), created_at: now };
+        const ticket: SupportTicket = { id, creator_id: demoActor(), intervention_id: values.intervention_id, subject: values.subject.trim(), status: "open", version: 1, created_at: now, updated_at: now, last_message_at: now };
+        const event: SupportEvent = { id: uid(), ticket_id: id, actor_id: demoActor(), kind: "ticket_created", from_status: null, to_status: "open", version: 1, message_id: message.id, created_at: now };
+        store[id] = { ticket, messages: [message], events: [event], request_id: values.request_id };
+        writeDemo(DEMO_KEYS.support, store);
+        ctx.notice("Demande d’assistance enregistrée dans la démonstration ; aucun opérateur réel n’est prévenu.");
+        return { ticket, initial_message: message, replayed: false };
+      }
+      try {
+        const result = await api<SupportCreateResult>("/api/support", values);
+        if (!ctx.alive()) return undefined; // stale chain: runForResult yields null to the caller
+        // A 200 is a success only if the receipt is exactly this command (else: uncertain, no notice).
+        if (!validSupportReceipt(result, values, userId.current)) throw new Error(UNVERIFIED_RECEIPT);
+        ctx.when(setCapabilities)((c) => ({ ...c, support: "available" }));
+        ctx.notice(
+          result.replayed
+            ? "Votre demande avait déjà été enregistrée ; aucun doublon créé."
+            : "Demande d’assistance enregistrée. Les réponses s’afficheront ici à l’actualisation.",
+        );
+        return result;
+      } catch (e) {
+        if (contractStateFromError(e) === "missing") ctx.when(setCapabilities)((c) => ({ ...c, support: "missing" }));
+        throw e;
+      }
+    });
+  }
+  async function supportCommand(id: string, body: SupportCommand): Promise<SupportCommandResult> {
+    let outcome: SupportCommandResult = { ok: false, conflict: false, message: "Action interrompue." };
+    const completed = await run(async (ctx) => {
+      if (modeRef.current === "demo") {
+        const store = demoSupport();
+        const entry = store[id];
+        if (!entry) throw new Error("Demande d’assistance introuvable.");
+        if (entry.ticket.version !== body.expected_version) {
+          outcome = { ok: false, conflict: true, message: "La demande a évolué depuis votre lecture. Relisez-la ; votre texte est conservé." };
+          return;
+        }
+        const isAdmin = roleRef.current === "admin";
+        const now = new Date().toISOString();
+        const version = entry.ticket.version + 1;
+        let status = entry.ticket.status;
+        let message: SupportMessage | null = null;
+        if (body.action === "set_status") {
+          if (!isAdmin) throw new Error("Seule l’administration peut changer l’état d’une demande.");
+          const allowed: Record<string, string[]> = { open: ["in_progress", "awaiting_user", "resolved"], in_progress: ["awaiting_user", "resolved"], awaiting_user: ["in_progress", "resolved"], resolved: ["in_progress"] };
+          if (!allowed[status]?.includes(body.status)) {
+            outcome = { ok: false, conflict: true, message: "Ce changement d’état n’est pas possible depuis l’état actuel." };
+            return;
+          }
+          status = body.status;
+        } else {
+          if (isAdmin && status === "resolved") {
+            outcome = { ok: false, conflict: true, message: "Réouvrez la demande avant d’y répondre." };
+            return;
+          }
+          if (!isAdmin && (status === "awaiting_user" || status === "resolved")) status = "open";
+          message = { id: uid(), ticket_id: id, author_id: demoActor(), author_kind: isAdmin ? "admin" : "user", version, body: body.body.trim(), created_at: now };
+        }
+        const event: SupportEvent = { id: uid(), ticket_id: id, actor_id: demoActor(), kind: body.action === "reply" ? "replied" : "status_changed", from_status: entry.ticket.status, to_status: status, version, message_id: message?.id ?? null, created_at: now };
+        entry.ticket = { ...entry.ticket, status, version, updated_at: now, last_message_at: message ? now : entry.ticket.last_message_at };
+        if (message) entry.messages.push(message);
+        entry.events.push(event);
+        writeDemo(DEMO_KEYS.support, store);
+        outcome = { ok: true, ticket: entry.ticket, message, event };
+        ctx.notice("Enregistré dans la démonstration.");
+        return;
+      }
+      try {
+        const result = await api<{ ticket: SupportTicket; message: SupportMessage | null; event: SupportEvent }>(
+          `/api/support/${encodeURIComponent(id)}`,
+          body,
+        );
+        if (!ctx.alive()) return;
+        ctx.when(setCapabilities)((c) => ({ ...c, support: "available" }));
+        outcome = { ok: true, ...result };
+        ctx.notice(body.action === "reply" ? "Réponse enregistrée." : "État de la demande mis à jour.");
+      } catch (e) {
+        if (e instanceof ApiRequestError && e.status === 409) {
+          outcome = { ok: false, conflict: true, message: e.message };
+          return;
+        }
+        if (contractStateFromError(e) === "missing") ctx.when(setCapabilities)((c) => ({ ...c, support: "missing" }));
+        outcome = { ok: false, conflict: false, message: (e as Error).message };
+      }
+    });
+    if (!completed) return { ok: false, conflict: false, message: "Action interrompue." };
+    return outcome;
+  }
+  // Membership lost or never held: drop every cached view of the organisation.
+  function dropOrganizationContext() {
+    setActiveOrganizationId("");
+    setActiveSiteId("");
+    setProfessional(EMPTY_PROFESSIONAL);
+    void refresh();
+    setError("Vous ne faites plus partie de cette organisation. Les données ont été rechargées.");
+  }
+  async function loadOrganization(organizationId: string): Promise<OrganizationOverview | null> {
+    if (modeRef.current === "demo") {
+      const org = data.organizations.find((o) => o.id === organizationId);
+      if (!org) return null;
+      const members = data.organization_members.filter((m) => m.organization_id === organizationId);
+      const me = members.find((m) => m.user_id === `demo-${roleRef.current}`);
+      return {
+        organization: org,
+        current_role: (me?.role as "owner" | "manager" | "viewer" | undefined) ?? null,
+        members: members.map((m) => ({
+          user_id: m.user_id,
+          role: m.role,
+          full_name: m.user_id === DEMO_IDS.manager ? DEMO_NAMES.manager : "Membre (démo)",
+        })),
+        invitations: readDemo(DEMO_KEYS.invitations, [], Array.isArray),
+        events: [],
+        limits: {
+          members: 200,
+          invitations: 100,
+          events: 100,
+          members_limited: false,
+          invitations_limited: false,
+          events_limited: false,
+        },
+        permissions: {
+          can_manage: me?.role === "owner",
+          site_scoped_roles: false,
+          automated_invitation_email: false,
+        },
+      };
+    }
+    const my = seq.current;
+    try {
+      const result = await api<OrganizationOverview>(
+        `/api/organizations?organization_id=${encodeURIComponent(organizationId)}`,
+      );
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, organizations: "available" }));
+      return result;
+    } catch (e) {
+      if (my !== seq.current) return null;
+      if (e instanceof ApiRequestError && (e.status === 403 || e.status === 404)) {
+        dropOrganizationContext();
+        return null;
+      }
+      setCapabilities((c) => ({ ...c, organizations: contractStateFromError(e) }));
+      return null;
+    }
+  }
+  async function organizationCommand(body: OrganizationCommand): Promise<InvitationCreated | boolean> {
+    let created: InvitationCreated | null = null;
+    const ok = await run(async (ctx) => {
+      if (modeRef.current === "demo") {
+        const invitations = readDemo<OrganizationOverview["invitations"]>(
+          DEMO_KEYS.invitations,
+          [],
+          Array.isArray,
+        );
+        if (body.action === "create_invitation") {
+          const code = Array.from({ length: 64 }, () => "0123456789abcdef"[Math.floor(Math.random() * 16)]).join("");
+          const invitation = {
+            id: uid(),
+            organization_id: body.organization_id,
+            email: body.email,
+            role: body.role,
+            status: "pending",
+            created_at: new Date().toISOString(),
+            expires_at: new Date(Date.now() + body.expires_in_days * 86400000).toISOString(),
+          };
+          writeDemo(DEMO_KEYS.invitations, [
+            invitation,
+            ...invitations.filter((i) => i.email !== body.email || i.status !== "pending"),
+          ]);
+          if (!ctx.alive()) return;
+          created = {
+            invitation,
+            invitation_code: code,
+            invite_url: `${window.location.origin}/#join-organization/${code}`,
+            delivery: "manual_share",
+          };
+          ctx.notice("Invitation de démonstration créée. Le code ne fonctionne que dans cette démonstration.");
+          return;
+        }
+        if (body.action === "revoke_invitation") {
+          writeDemo(
+            DEMO_KEYS.invitations,
+            invitations.map((i) =>
+              i.id === body.invitation_id ? { ...i, status: "revoked", revoked_at: new Date().toISOString() } : i,
+            ),
+          );
+        } else if (body.action === "remove_member") {
+          ctx.when(setData)({
+            ...data,
+            organization_members: data.organization_members.filter(
+              (m) => !(m.organization_id === body.organization_id && m.user_id === body.user_id),
+            ),
+          });
+        } else if (body.action === "change_member_role") {
+          ctx.when(setData)({
+            ...data,
+            organization_members: data.organization_members.map((m) =>
+              m.organization_id === body.organization_id && m.user_id === body.user_id
+                ? { ...m, role: body.role }
+                : m,
+            ),
+          });
+        } else if (body.action === "transfer_ownership") {
+          ctx.when(setData)({
+            ...data,
+            organization_members: data.organization_members.map((m) =>
+              m.organization_id !== body.organization_id
+                ? m
+                : m.user_id === body.user_id
+                  ? { ...m, role: "owner" }
+                  : m.role === "owner"
+                    ? { ...m, role: "manager" }
+                    : m,
+            ),
+            organizations: data.organizations.map((o) =>
+              o.id === body.organization_id ? { ...o, owner_id: body.user_id } : o,
+            ),
+          });
+        }
+        ctx.notice("Modification enregistrée dans la démonstration.");
+        return;
+      }
+      try {
+        const result = await api<InvitationCreated | { ok: true }>("/api/organizations", body);
+        ctx.when(setCapabilities)((c) => ({ ...c, organizations: "available" }));
+        if ("invitation_code" in result) created = result;
+      } catch (e) {
+        const state = contractStateFromError(e);
+        if (state === "missing") ctx.when(setCapabilities)((c) => ({ ...c, organizations: "missing" }));
+        throw e;
+      }
+      if (ctx.alive()) await refresh();
+      ctx.notice(
+        body.action === "create_invitation"
+          ? "Invitation créée. Transmettez le code vous-même : aucun email n’est envoyé automatiquement."
+          : "Modification enregistrée.",
+      );
+    });
+    if (!ok) return false; // failed or stale: no one-time code may leak into another session
+    return created ?? true;
+  }
+  async function acceptInvitation(token: string) {
+    return run(async (ctx) => {
+      if (!INVITE_TOKEN.test(token)) throw new Error("Ce code d’invitation n’a pas un format valide.");
+      if (modeRef.current === "demo")
+        throw new Error("Les invitations réelles s’acceptent avec un compte connecté, pas dans la démonstration.");
+      try {
+        await api("/api/organizations/invitations/accept", { token });
+      } catch (e) {
+        const state = contractStateFromError(e);
+        if (state === "missing") ctx.when(setCapabilities)((c) => ({ ...c, organizations: "missing" }));
+        throw e;
+      }
+      ctx.when(setPendingInvitation)(null);
+      try {
+        sessionStorage.removeItem(INVITE_KEY);
+      } catch {}
+      if (ctx.alive()) await refresh();
+      ctx.notice("Invitation acceptée. L’organisation est maintenant disponible dans votre espace.");
+      ctx.when(navigate)(homeFor(roleRef.current, "live"));
+    });
+  }
+  async function loadSiteAccess(organizationId: string): Promise<SiteAccessOverview | null> {
+    if (modeRef.current === "demo") {
+      const scopes = readDemo<Record<string, { scope: "all" | "selected"; grants: { site_id: string; can_write: boolean }[] }>>(
+        DEMO_KEYS.siteAccess,
+        {},
+        (v) => !!v && typeof v === "object",
+      );
+      const members = data.organization_members
+        .filter((m) => m.organization_id === organizationId)
+        .map((m) => ({
+          user_id: m.user_id,
+          role: m.role,
+          full_name: m.user_id === DEMO_IDS.manager ? DEMO_NAMES.manager : "Membre (démo)",
+          scope: m.role === "owner" ? ("all" as const) : scopes[m.user_id]?.scope || ("all" as const),
+          grants: m.role === "owner" ? [] : scopes[m.user_id]?.grants || [],
+        }));
+      const me = `demo-${roleRef.current}`;
+      const isOwner = members.some((m) => m.user_id === me && m.role === "owner");
+      return {
+        organization_id: organizationId,
+        can_manage: isOwner,
+        members: isOwner ? members : members.filter((m) => m.user_id === me),
+      };
+    }
+    const my = seq.current;
+    try {
+      const result = await api<SiteAccessOverview>(
+        `/api/organizations/site-access?organization_id=${encodeURIComponent(organizationId)}`,
+      );
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, siteAccess: "available" }));
+      return result;
+    } catch (e) {
+      if (my !== seq.current) return null;
+      if (e instanceof ApiRequestError && (e.status === 403 || e.status === 404)) {
+        dropOrganizationContext();
+        return null;
+      }
+      setCapabilities((c) => ({ ...c, siteAccess: contractStateFromError(e) }));
+      return null;
+    }
+  }
+  async function setSiteAccess(body: SiteAccessCommand) {
+    return run(async (ctx) => {
+      if (body.scope === "all" && body.grants.length)
+        throw new Error("Une portée « tous les sites » ne comporte pas de sites sélectionnés.");
+      if (body.scope === "selected" && !body.grants.length)
+        throw new Error("Sélectionnez au moins un site, ou choisissez « tous les sites ».");
+      if (modeRef.current === "demo") {
+        const scopes = readDemo<Record<string, unknown>>(DEMO_KEYS.siteAccess, {}, (v) => !!v && typeof v === "object");
+        scopes[body.user_id] = { scope: body.scope, grants: body.grants };
+        writeDemo(DEMO_KEYS.siteAccess, scopes);
+        ctx.notice("Portée des sites enregistrée dans la démonstration.");
+        return;
+      }
+      try {
+        await api("/api/organizations/site-access", body);
+        ctx.when(setCapabilities)((c) => ({ ...c, siteAccess: "available" }));
+      } catch (e) {
+        if (contractStateFromError(e) === "missing")
+          ctx.when(setCapabilities)((c) => ({ ...c, siteAccess: "missing" }));
+        throw e;
+      }
+      if (ctx.alive()) await refresh();
+      ctx.notice("Portée des sites enregistrée.");
+    });
+  }
+  async function loadArtisanPerformance(): Promise<ArtisanPerformanceReport | null> {
+    const periods = monthPeriods(new Date());
+    if (modeRef.current === "demo") {
+      const paidIds = new Set(
+        data.quotes
+          .filter((q) => q.artisan_id === DEMO_IDS.artisan)
+          .map((q) => q.id),
+      );
+      const inRange = (iso: string | null | undefined, start: string, end: string) =>
+        !!iso && iso >= start && iso < end;
+      const sum = (start: string, end: string) =>
+        data.payments
+          .filter((p) => p.status === "paid" && paidIds.has(p.quote_id) && inRange(p.paid_at, start, end))
+          .reduce((n, p) => n + p.total_cents, 0);
+      const count = (start: string, end: string) =>
+        data.payments.filter(
+          (p) => p.status === "paid" && paidIds.has(p.quote_id) && inRange(p.paid_at, start, end),
+        ).length;
+      const mine = new Set(
+        data.interventions.filter((i) => i.artisan_id === DEMO_IDS.artisan).map((i) => i.id),
+      );
+      const reviews = data.reviews.filter((r) => mine.has(r.intervention_id));
+      const cur = sum(periods.current_start, periods.current_end);
+      const prev = sum(periods.previous_start, periods.previous_end);
+      return {
+        period: { ...periods, boundary: "inclusive_start_exclusive_end" },
+        current: {
+          paid_service_cents: cur,
+          paid_count: count(periods.current_start, periods.current_end),
+          completed_missions_count: data.interventions.filter(
+            (i) => mine.has(i.id) && ["completed", "paid"].includes(i.status) && inRange(i.completed_at, periods.current_start, periods.current_end),
+          ).length,
+        },
+        previous: {
+          paid_service_cents: prev,
+          paid_count: count(periods.previous_start, periods.previous_end),
+          completed_missions_count: 0,
+        },
+        rating: {
+          average: reviews.length
+            ? Math.round((reviews.reduce((n, r) => n + r.rating, 0) / reviews.length) * 10) / 10
+            : null,
+          count: reviews.length,
+          period: "all_time",
+        },
+        growth_percent: prev > 0 ? Math.round(((cur - prev) / prev) * 1000) / 10 : null,
+        punctuality_rate: null,
+        currency: "eur",
+        scope: "demo_records",
+        limited: false,
+        basis: {
+          revenue: "Prestations payées TTC de la démonstration, pas un revenu net.",
+          completed: "Missions terminées ou réglées sur la période.",
+          rating: "Avis déposés sur vos interventions (toutes périodes).",
+          growth: "Variation du montant payé par rapport au mois précédent ; absente si ce mois était à zéro.",
+          punctuality: "Aucune définition mesurée de la ponctualité.",
+        },
+      };
+    }
+    const my = seq.current;
+    try {
+      const q = new URLSearchParams({
+        current_start: periods.current_start,
+        current_end: periods.current_end,
+        previous_start: periods.previous_start,
+        previous_end: periods.previous_end,
+      });
+      const result = await api<ArtisanPerformanceReport>(`/api/artisan/performance?${q}`);
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, performance: "available" }));
+      return result;
+    } catch (e) {
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, performance: contractStateFromError(e) }));
+      return null;
+    }
+  }
 
-function ConfirmAction({
-  label,
-  message,
-  confirmLabel,
-  busy = false,
-  danger = false,
-  onConfirm,
-}: {
-  label: string;
-  message: string;
-  confirmLabel: string;
-  busy?: boolean;
-  danger?: boolean;
-  onConfirm: () => Promise<unknown>;
-}) {
-  const [open, setOpen] = useState(false);
-  const [pending, setPending] = useState(false);
-  return (
-    <div className={`inline-confirmation ${danger ? "destructive" : ""}`}>
-      {!open ? (
-        <button
-          type="button"
-          className={danger ? "text-button danger" : "button outline"}
-          disabled={busy}
-          onClick={() => setOpen(true)}
-        >
-          {label}
-        </button>
-      ) : (
-        <div className="confirmation-review">
-          <p>{message}</p>
-          <div>
-            <button
-              type="button"
-              className={
-                danger ? "button destructive-button" : "button primary"
-              }
-              disabled={busy || pending}
-              onClick={async () => {
-                setPending(true);
-                try {
-                  await onConfirm();
-                  setOpen(false);
-                } finally {
-                  setPending(false);
-                }
-              }}
-            >
-              {pending ? "Enregistrement…" : confirmLabel}
-            </button>
-            <button
-              type="button"
-              className="button outline"
-              disabled={busy || pending}
-              onClick={() => setOpen(false)}
-            >
-              Annuler
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+  async function loadPaymentStatus(quoteId: string): Promise<PaymentStatusReport | null> {
+    if (modeRef.current === "demo") {
+      const payment = data.payments.find((p) => p.quote_id === quoteId) || null;
+      return {
+        payment,
+        attempts: payment ? [payment] : [],
+        attempts_limit: 50,
+        history_limited: false,
+      };
+    }
+    const my = seq.current;
+    try {
+      const result = await api<PaymentStatusReport>(
+        `/api/payments/status?quote_id=${encodeURIComponent(quoteId)}`,
+      );
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, payments: "available" }));
+      return result;
+    } catch (e) {
+      if (my !== seq.current) return null;
+      setCapabilities((c) => ({ ...c, payments: contractStateFromError(e) }));
+      return null;
+    }
+  }
+
+  // Dependencies of the identity adoption sequence (login / signup with session).
+  const identityDeps = {
+    async currentUserId() {
+      try {
+        const { data } = await createClient().auth.getUser();
+        return data.user?.id ?? null;
+      } catch {
+        return null;
+      }
+    },
+    loadedUserId: () => userId.current,
+    clearSessionState,
+    setUserId(id: string | null) {
+      userId.current = id;
+    },
+    async refresh() {
+      if (!userId.current) return;
+      const outcome = await initialWorkspace(userId.current);
+      if (outcome.kind === "failed" && outcome.status === 503)
+        throw new Error("Votre espace est momentanément indisponible. Réessayez dans quelques instants.");
+    },
+    navigate,
+    // Restored by the login chain of THIS identity: the cleared storage is written back so a reload
+    // before sending keeps the draft and the booking (never deleted before POST 201).
+    setPendingDraft(draft: RequestValues | null) {
+      setPendingDraft(draft);
+      if (!draft) return;
+      savePublicDraft(getDraftStorage(), draft);
+      bookingPhotos.current = anonymousPhotos.current;
+      anonymousPhotos.current = [];
+      const carried = bookingCarry.current;
+      bookingCarry.current = null;
+      if (carried) {
+        setBooking(carried);
+        saveBooking(getDraftStorage(), carried);
+      }
+    },
+    homeView: () => homeFor(roleRef.current, "live"),
+    landing() {
+      const link = loginLanding(window.location.hash, pendingLink.current, roleRef.current);
+      pendingLink.current = null;
+      return link;
+    },
+  };
+
+  // ---- Public (unauthenticated) session -------------------------------------------------
+  const publicSession: PublicSession = {
+    view,
+    param,
+    busy,
+    error,
+    notice,
+    authMode,
+    categoryId,
+    pendingDraft,
+    booking: pendingDraft ? booking : null,
+    pendingInvitation,
+    keepInvitation(token) {
+      if (!INVITE_TOKEN.test(token)) {
+        setError("Ce lien d’invitation est incomplet ou invalide. Demandez un nouveau code au propriétaire de l’organisation.");
+        navigate("home");
+        return;
+      }
+      setPendingInvitation(token);
+      try {
+        sessionStorage.setItem(INVITE_KEY, token);
+      } catch {}
+      setAuthMode("login");
+      navigate("auth");
+      setNotice(
+        "Connectez-vous avec l’adresse email qui a reçu l’invitation ; elle sera acceptée juste après la connexion.",
+      );
+    },
+    go: navigate,
+    setAuthMode,
+    setCategory: setCategoryId,
+    setError,
+    setNotice,
+    startDemo,
+    saveDraft(values, photos = []) {
+      anonymousPhotos.current = photos;
+      setPendingDraft(values);
+      // Same canonical format as /offline-request.html; storage refusal keeps the in-memory draft.
+      const saved = savePublicDraft(getDraftStorage(), values);
+      setAuthMode("signup");
+      navigate("auth");
+      setNotice(draftNotice(saved)); // quota/refusal: the input stays in memory, never a false « saved »
+    },
+    async signIn(email, password) {
+      return run(async (ctx) => {
+        const client = createClient();
+        const result = await client.auth.signInWithPassword({ email, password });
+        if (result.error)
+          throw new Error(
+            "Connexion impossible. Vérifiez votre email, votre mot de passe et la confirmation de votre compte.",
+          );
+        bookingCarry.current = pendingDraft ? booking : null;
+        const outcome = await adoptIdentity(ctx, result.data.user?.id ?? null, pendingDraft, identityDeps);
+        if (outcome === "superseded")
+          throw new Error(
+            "Une autre connexion a été établie entre-temps dans ce navigateur. Rechargez la page pour continuer avec le compte actif.",
+          );
+      });
+    },
+    async signUp(values) {
+      return run(async (ctx) => {
+        // The server requires and checks every field (name, e-mail, +596/+590/+33 phone, password)
+        // and sends the confirmation link; nothing is created from the browser directly.
+        const result = await api<{ status: "signed_in"; user_id: string } | { status: "confirmation_required" }>("/api/auth/signup", {
+          first_name: values.first_name ?? "",
+          last_name: values.last_name ?? "",
+          email: values.email,
+          phone: values.phone ?? "",
+          password: values.password,
+          role: values.role,
+        });
+        if (result.status === "signed_in") {
+          // Only where e-mail confirmation is switched off (local development): session cookies are
+          // already set by the server.
+          bookingCarry.current = pendingDraft ? booking : null;
+          const outcome = await adoptIdentity(ctx, result.user_id, pendingDraft, identityDeps);
+          if (outcome === "superseded")
+            throw new Error(
+              "Une autre connexion a été établie entre-temps dans ce navigateur. Rechargez la page pour continuer avec le compte actif.",
+            );
+          return;
+        }
+        if (result.status !== "confirmation_required")
+          throw new Error("La création de compte n’a pas pu être confirmée. Réessayez.");
+        ctx.when(setAuthMode)("login");
+        ctx.notice(
+          pendingDraft
+            ? "Votre compte est créé. Ouvrez le lien de confirmation reçu par e-mail, puis revenez dans CET onglet et connectez-vous : votre demande y est gardée 30 minutes. Rien n’a encore été envoyé."
+            : "Votre compte est créé. Ouvrez le lien de confirmation reçu par e-mail, puis connectez-vous.",
+        );
+      });
+    },
+    async resetPassword(email) {
+      return run(async (ctx) => {
+        const client = createClient();
+        const result = await client.auth.resetPasswordForEmail(email, {
+          redirectTo: window.location.origin + "/auth/reset-password",
+        });
+        if (result.error) throw result.error;
+        ctx.notice("Si un compte existe pour cette adresse, un lien de réinitialisation vous sera envoyé.");
+      });
+    },
+  };
+
+  const profile: Profile | null = data.profile;
+  const { displayName, firstName } = resolveDisplayName(mode === "demo" ? "demo" : "live", role, profile, DEMO_NAMES);
+  // Advanced lots (WEB-SHARED-001): one client bundle per identity. Live clients are bound to the
+  // identity generation (a reply after logout/login/demo switch is dropped); demonstration clients
+  // operate on seeds only and never touch the network.
+  const features = useMemo(
+    () =>
+      mode === "demo"
+        ? createDemoFeatureClients(role)
+        : createFeatureClients({
+            generation: () => guard.generation(),
+            setState: (key, state) => setCapabilities((c) => (c[key] === state ? c : { ...c, [key]: state })),
+          }),
+    [mode, role, guard, identityEpoch, profile?.id],
   );
-}
-function BudgetEditor({
-  budgetCents,
-  busy,
-  onSave,
-}: {
-  budgetCents: number;
-  busy: boolean;
-  onSave: (cents: number) => Promise<boolean | undefined>;
-}) {
-  const [open, setOpen] = useState(false);
-  const [amount, setAmount] = useState(String(budgetCents / 100));
-  const [error, setError] = useState("");
-  return (
-    <div className="budget-editor">
-      {!open ? (
-        <button
-          type="button"
-          className="text-button budget-edit"
-          disabled={busy}
-          onClick={() => {
-            setAmount(String(budgetCents / 100));
-            setError("");
-            setOpen(true);
-          }}
-        >
-          Modifier le budget
-        </button>
-      ) : (
-        <form
-          className="inline-editor"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const cents = Math.round(Number(amount.replace(",", ".")) * 100);
-            if (
-              !amount.trim() ||
-              !Number.isSafeInteger(cents) ||
-              cents < 0 ||
-              cents > 100000000
-            ) {
-              setError("Renseignez un budget compris entre 0 et 1 000 000 €.");
-              return;
-            }
-            setError("");
-            void onSave(cents).then((saved) => {
-              if (saved) setOpen(false);
-            });
-          }}
-        >
-          <Field label="Budget de référence du site (€)">
-            <input
-              required
-              inputMode="decimal"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              maxLength={15}
-            />
-          </Field>
-          {error && (
-            <p className="inline-validation" role="alert">
-              {error}
-            </p>
-          )}
-          <div className="inline-editor-actions">
-            <button type="submit" className="button primary" disabled={busy}>
-              Enregistrer le budget
-            </button>
-            <button
-              type="button"
-              className="button outline"
-              disabled={busy}
-              onClick={() => setOpen(false)}
-            >
-              Annuler
-            </button>
-          </div>
-        </form>
-      )}
-    </div>
+  // Capability probes after each successful workspace load: cheap reads whose reply alone decides
+  // availability (404 missing, 503 unavailable, 403 present). Nothing here grants anything: the
+  // back-office reply is kept as data for a fail-closed gate, the unread count for the bell.
+  useEffect(() => {
+    if (mode !== "live" || !refreshedAt) return;
+    let active = true;
+    const ignore = () => undefined;
+    void features.notifications
+      .summary()
+      .then((summary) => active && setUnreadNotifications(summary ? summary.unread_count : null))
+      .catch(() => active && setUnreadNotifications(null));
+    void features.platform.load
+      .me()
+      .then((access) => active && setPlatformAccess(access))
+      .catch(() => active && setPlatformAccess(null));
+    if (role === "artisan") void features.planning.load(planningProbeRange()).catch(ignore);
+    if (role === "manager" && activeSiteId) void features.siteOperations.load(activeSiteId).catch(ignore);
+    return () => {
+      active = false;
+    };
+  }, [mode, role, refreshedAt, activeSiteId, features]);
+  useEffect(() => {
+    if (mode !== "demo") return;
+    setPlatformAccess(role === "admin" ? PLATFORM_DEMO.access : null);
+    setUnreadNotifications(demoNotificationPage({}).unread_count);
+  }, [mode, role]);
+  // SHARED-REV-006: explicit recovery action after a transient 503/network failure. Re-probes the
+  // one contract with the bound client (same identity generation, same rights); the reply alone
+  // sets the capability again. Errors are swallowed here: the capability already reflects them.
+  const featuresRef = useRef(features);
+  featuresRef.current = features;
+  const reprobeFeature = useCallback(
+    async (key: FeatureKey, hint?: ReprobeHint) => {
+      const bundle = features;
+      // Alive = the bundle's OWNER generation (captured when the bundle was built, never at
+      // invocation) is still the current one, mode still live, and the bundle handed to the leaves
+      // is still this one. A guard bump before the next render already makes it false.
+      const alive = () => modeRef.current === "live" && bundle.owner === guard.generation() && featuresRef.current === bundle;
+      await reprobe(key, hint, {
+        bundle,
+        alive,
+        setState: (k, state) => setCapabilities((c) => (c[k] === state ? c : { ...c, [k]: state })),
+        setUnread: setUnreadNotifications,
+        setAccess: setPlatformAccess,
+        activeSiteId: activeSiteRef.current,
+      });
+    },
+    [features, guard],
   );
-}
-function ApprovalDecision({
-  busy,
-  onDecision,
-}: {
-  busy: boolean;
-  onDecision: (
-    decision: "approved" | "rejected",
-    note: string,
-  ) => Promise<boolean | undefined>;
-}) {
-  const [note, setNote] = useState("");
-  const [error, setError] = useState("");
-  return (
-    <div className="approval-decision">
-      <Field label="Note de décision (obligatoire en cas de refus)">
-        <textarea
-          rows={2}
-          maxLength={2000}
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="Votre note de validation ou le motif du refus…"
-        />
-      </Field>
-      {error && (
-        <p className="inline-validation" role="alert">
-          {error}
-        </p>
-      )}
-      <div className="approval-actions">
-        <button
-          type="button"
-          className="button primary"
-          disabled={busy}
-          onClick={() => {
-            setError("");
-            void onDecision("approved", note.trim());
-          }}
-        >
-          Approuver
-        </button>
-        <button
-          type="button"
-          className="button outline"
-          disabled={busy}
-          onClick={() => {
-            if (!note.trim()) {
-              setError(
-                "Renseignez le motif du refus avant de confirmer votre décision.",
-              );
-              return;
-            }
-            setError("");
-            void onDecision("rejected", note.trim());
-          }}
-        >
-          Refuser
-        </button>
-      </div>
-    </div>
-  );
-}
-function WarrantyResolution({
-  busy,
-  initialNote,
-  onSave,
-}: {
-  busy: boolean;
-  initialNote: string;
-  onSave: (status: string, note: string) => Promise<void>;
-}) {
-  const [note, setNote] = useState(initialNote);
-  const [status, setStatus] = useState("reviewing");
-  return (
-    <form
-      className="warranty-resolution inline-editor"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void onSave(status, note.trim());
-      }}
-    >
-      <Field label="État du traitement">
-        <select value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="reviewing">En cours d’examen</option>
-          <option value="resolved">Résolue</option>
-          <option value="declined">Refusée</option>
-        </select>
-      </Field>
-      <Field
-        label="Note de traitement"
-        hint="Au moins 10 caractères. Cette note sera visible dans le dossier."
-      >
-        <textarea
-          required
-          minLength={10}
-          maxLength={4000}
-          rows={3}
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-        />
-      </Field>
-      <button
-        type="submit"
-        className="button primary"
-        disabled={busy || note.trim().length < 10}
-      >
-        Enregistrer la décision
-      </button>
-    </form>
-  );
+
+  const session: Session = {
+    mode: mode === "live" ? "live" : "demo",
+    role,
+    profile,
+    profileId: mode === "live" ? profile?.id || "" : `demo-${role}`,
+    displayName,
+    firstName,
+    accountEmail: mode === "live" ? accountEmail : "",
+    // Live: only the draft adopted by THIS identity chain (clearSessionState drops it on any
+    // identity change); demo never inherits a public draft.
+    pendingDraft: mode === "live" ? pendingDraft : demoBooking?.draft ?? null,
+    // « Modifier » on the booking confirmation: the edited request replaces the kept draft (same
+    // tab storage), nothing is sent; the confirmation then shows it again.
+    updatePendingDraft(values: RequestValues, photos: File[]) {
+      publicBookingPhoto(booking?.request_id, true);
+      bookingPhotos.current = photos.slice(0, 6);
+      if (modeRef.current === "live") writePhotoCount(getDraftStorage(), bookingPhotos.current.length);
+      if (modeRef.current === "demo") {
+        setDemoBooking((d) => (d ? { draft: values, booking: bookingForEditedRequest(d.booking, d.draft.category, values) } : d));
+        return;
+      }
+      if (modeRef.current !== "live") return;
+      setPendingDraft(values);
+      const storage = getDraftStorage();
+      savePublicDraft(storage, values);
+      if (booking && pendingDraft) {
+        const { photo_selected: _photoSelected, ...current } = booking;
+        const updated = bookingForEditedRequest(current, pendingDraft.category, values);
+        setBooking(updated);
+        saveBooking(storage, updated);
+      }
+    },
+    updateBookingPayment(payment: NonNullable<BookingDraft["payment"]>) {
+      if (modeRef.current === "demo") {
+        setDemoBooking((d) => (d ? { ...d, booking: { ...d.booking, payment } } : d));
+        return;
+      }
+      if (modeRef.current !== "live" || !booking) return;
+      const next = { ...booking, payment };
+      setBooking(next);
+      saveBooking(getDraftStorage(), next);
+    },
+    updateBookingContact(contact: BookingDraft["contact"]) {
+      if (modeRef.current === "demo") {
+        setDemoBooking((d) => (d ? { ...d, booking: { ...d.booking, contact } } : d));
+        return;
+      }
+      if (modeRef.current !== "live" || !booking) return;
+      const next = { ...booking, contact };
+      setBooking(next);
+      saveBooking(getDraftStorage(), next);
+    },
+    booking: mode === "live" ? (pendingDraft ? liveBooking : null) : demoBooking?.booking ?? null,
+    cardReturn: mode === "live" ? cardReturn : null,
+    mutationContext: cardContext,
+    pendingLookupFailed: mode === "live" && pendingLookup === "error",
+    retryPendingLookup: () => void checkPendingCardHold(),
+    data,
+    professional,
+    capabilities,
+    returnContext,
+    view,
+    param,
+    selectedId: param && view === "detail" ? param : selectedId,
+    selectedQuoteId,
+    busy,
+    loading,
+    connection,
+    error,
+    notice,
+    activeOrganizationId,
+    activeSiteId,
+    refreshedAt,
+    // Same rule as the enterprise space: a sole organisation is the implicit context, several
+    // organisations require an explicit choice (never organizations[0]).
+    membershipRole: membershipRole(
+      data.organization_members,
+      enterpriseContext(data.organizations, data.sites, [], activeOrganizationId, activeSiteId)
+        .organizationId,
+      mode === "live" ? profile?.id || "" : `demo-${role}`,
+    ),
+    go: navigate,
+    openIntervention(id, quoteId) {
+      setSelectedId(id);
+      setSelectedQuoteId(quoteId || "");
+      navigate("detail", id);
+    },
+    setNotice,
+    setError,
+    setActiveOrganization(id) {
+      setActiveOrganizationId(id);
+      setActiveSiteId("");
+    },
+    setActiveSite: setActiveSiteId,
+    run,
+    refresh,
+    ensureFresh,
+    refreshContext: refreshContextKey(guard.generation(), role, activeOrganizationId, activeSiteId),
+    loadProfessional,
+    action,
+    operate,
+    loadOperations,
+    loadArtisanDossier,
+    artisanCommand,
+    loadAdminOverview,
+    loadAdminInterventions,
+    loadAdminDirectory,
+    loadAdminDirectoryItem,
+    loadAdminIntervention,
+    loadQuoteDraft,
+    quoteDraftCommand,
+    loadSupportTickets,
+    loadSupportTicket,
+    createSupportTicket,
+    supportCommand,
+    loadOrganization,
+    organizationCommand,
+    acceptInvitation,
+    loadSiteAccess,
+    setSiteAccess,
+    loadArtisanPerformance,
+    loadPaymentStatus,
+    createIntervention,
+    startBooking,
+    bookingPhotos: () => {
+      const stagedPhoto = publicBookingPhoto(booking?.request_id);
+      return bookingPhotos.current.length ? bookingPhotos.current : stagedPhoto ? [stagedPhoto] : [];
+    },
+    confirmBooking,
+    cancelBooking,
+    finalizeBooking,
+    uploads,
+    retryUploads,
+    acknowledgeUpload(interventionId, key, documentId) {
+      setUploads((all) =>
+        all.map((q) => (q.interventionId === interventionId ? acknowledgeUpload(q, key, documentId) : q)),
+      );
+      setNotice("Photo confirmée comme enregistrée dans le dossier.");
+    },
+    dismissUploads(interventionId) {
+      setUploads((all) => removeQueue(all, interventionId));
+    },
+    sendMessage,
+    submitReview,
+    createSite,
+    updateProfile,
+    professionalCommand,
+    checkout,
+    connectStripe,
+    logout,
+    setDemoRole(next) {
+      if (modeRef.current !== "demo") return;
+      guard.bump();
+    setIdentityEpoch((e) => e + 1);
+      runner.reset();
+      setRole(next);
+      setSelectedId("");
+      setSelectedQuoteId("");
+      setActiveOrganizationId("");
+      setActiveSiteId("");
+      setSessionKey((k) => k + 1);
+      navigate(homeFor(next, "demo"));
+    },
+    resetDemo() {
+      if (modeRef.current !== "demo") return;
+      clearDemo();
+      setData(seed());
+      setProfessional(proSeed());
+      setNotice("Démonstration réinitialisée.");
+    },
+    saveDemo(next) {
+      if (modeRef.current === "demo") setData(next);
+    },
+    setProfessional,
+    features,
+    platformAccess,
+    unreadNotifications,
+    reprobeFeature,
+  };
+
+  if (booting) return <SpaceLoader />;
+  const space = mode === "public" ? <PublicSite key="public" session={publicSession} supportWhatsAppPhone={supportWhatsAppPhone} showSupportPreview={showSupportPreview} /> :
+    role === "artisan" ? <ArtisanSpace key={sessionKey} session={session} /> :
+    role === "manager" ? <EnterpriseSpace key={sessionKey} session={session} /> :
+    role === "admin" ? <AdminSpace key={sessionKey} session={session} /> : <ClientSpace key={sessionKey} session={session} />;
+  return <>
+    {mobileReturnId && <div className="notice" role="region" aria-label="Retour du paiement">
+      <a href={`depannageelectrique://dossier/${mobileReturnId}?retourPaiement=1`}>Revenir à mon dossier dans l’application mobile</a>
+    </div>}
+    {space}
+  </>;
 }

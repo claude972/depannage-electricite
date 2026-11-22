@@ -1,0 +1,9 @@
+# Réservation invitée — faits fournisseur et référence
+
+Ordre propriétaire du1novembre : adresse puis empreinte/paiement surplace, compte optionnel, suivi téléphone/nom/prénom. Réponsesource : FAQetCGU MesDépanneurs décrivent préblocage maximum non débité puis devis accepté/travaux avant encaissement, ou paiement surplace. Références : https://www.mesdepanneurs.fr/faq et https://www.mesdepanneurs.fr/conditions-g%C3%A9n%C3%A9rales-dutilisation-du-service . Ne pas copier leurs obligations/promesses.
+
+ROOT a observé en navigateur public réel fiche→urgence→coordonnées et écran Suivi decommande : numéro decommande+téléphone+codepostal chez la référence (ce n’est pas exactement la recherche par noms souhaitée ici). Aucune coordonnée réelle ni commande/paiement soumis. Les étapes finales de commande sont documentées par les CGU ; elles n’ont pas été exercées par une commande réelle. Première sonde headless échouée sur body temporairementabsent, remplacée par observation CUA, pasdéduire un site défaillant.
+
+Supabase dédié GETauth/v1/settings200 : external.phone=false,email=true,sms_autoconfirm=false. Le dry-run config indique twilio.enabledtrue mais ce n’est pas une preuve de téléphone activé ni d’envoiSMS. Le propriétaire a choisi « À configurer plus tard » pour SMS : aucune activation/testOTP/message réel. Vercel branchepreview : STRIPE_SECRET_KEY,STRIPE_WEBHOOK_SECRET,PLATFORM_FEE_BPS absents. Aucun achat/envglobal/transaction/clé divulguée. Les seuls paramètres publics exposés par le nouveau endpointoptions sont des capacités/raisons neutres, pas une preuve d’autorisation.
+
+Conséquence : coder/tester les routes et l’UI reste autorisé ; aucun suivi SMS, empreinte ou guestbooking dépendant du SMS ne sera annoncé opérationnel avant fournisseur réel. Le compte existant reste une alternative facultative compatible ; pas d’accès privé par téléphone/nom seuls. Stripe et SMS ont des garde-fous d’indisponibilité honnêtes.

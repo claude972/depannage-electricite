@@ -1,0 +1,9 @@
+# Réservation connectée réelle — app243
+
+App `243aa0b22d3c24730c6469bc3caff727c0c6c574`, previewmvqi2dgij/READYdpl_GBYZekPDwyHRVdRG3M9i4QuZtN8f/Flight60_DYmfKRnZNBefMF6KVc. ROOTattestationAPI+HTML13:16:56.231UTC avantcredentials, checkout243épinglé. Driverprivébooking-connected-proof.mjs SHA25657e6ec9b5ba5d1bdefffa95bd5ff3d8b28195044ea54cc02d4e07d29de006bc9 reluROOT ;65contrôlesinjectésPASS. AncienlocatorConfirmerambigu corrigéavantcloud.
+
+Run `315e08c8bd10` terminé exit0 : **16/16PASS**,2clients QAconfirméssynthétiques/1dossier crééUNIQUEMENTparUI. Fiche→urgenceNon/Demain→coordonnées→adressemanuelle→Authprérempli→loginréel→confirmation, aucunPOSTautomatique. PATCHprofil503interceptélocalement→draftintact/0POST ; reprisePATCHréel200puisPOST503interceptélocalement→draftintact ; reprise/doubleclic→UNvraiPOST201,unparentDBexact/estimationserveur8000..18000. Prénom/téléphoneenprofilprivé,aucuneinjectionautomatiquedansdescription. ClientAlecture200 ;clientB/inexistant404uniformesprivate/no-store. Adresseprovider503simuléexpressémentpourtesterfallbackmanuel :paspreuveGPS/IGNdanscerun.
+
+Cleanupok/drain0/openintents0/unproven0. AprèsFINwriter19724, ROOTaécrit/relu/pinnépostflightREADONLYf7d443825983b6f7000d65cd9c3566d7ee5ec106a44612489b7cec24cfe6f9d8 : **43/43PASS**,2Auth404legacystrict/39scopesREST+2Auth+2Storage=43. Tousscopesàzéro,aucuneQAcohorteconservée. Preuvesprivéesreport/cleanup/manifest/intents/independent-postflight dansbooking-connected-315e08c8bd10.
+
+Bornes : comptespréconfirmésQA,pasSMTP/inboxsignup,pasStripe,pasiPhonephysique. Une réponseperdueAPRÈScommit n’étaitpascecas503local : reproLOCAL59c38f6 montrelerisqueencoursdecorrectionparcléidempotente021 ;aucuneprétentionzérodoublonacquiseparceseulnominal.

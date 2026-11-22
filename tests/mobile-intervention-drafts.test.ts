@@ -1,0 +1,140 @@
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
+import { createDraftStore, quoteDraftKey, reportDraftKey, requestDraftKey } from '../apps/mobile/src/lib/draft-store';
+import { quoteDraft, reportDraft } from '../apps/mobile/src/lib/intervention-drafts';
+import { requestDraft } from '../apps/mobile/src/lib/request-draft';
+
+const owner = '10000000-0000-4000-8000-000000000001';
+const dossier = '10000000-0000-4000-8000-000000000002';
+const other = '10000000-0000-4000-8000-000000000003';
+const photo = '10000000-0000-4000-8000-000000000004';
+const confirmedActor = '10000000-0000-4000-8000-000000000006';
+const receipt = { intent: null, confirmedId: dossier };
+const pending = { fileId: '10000000-0000-4000-8000-000000000005', key: Buffer.alloc(32, 4).toString('base64') };
+const quote = { lines: [{ label: 'Remplacement d’un interrupteur', quantity: '1', price: '80,50' }], rate: 8.5 };
+const request = { intent: {
+  id: dossier,
+  payload: { category: 'socket', description: 'Plusieurs prises sans courant', address: 'Adresse de recette',
+    postal_code: '97200', city: 'Fort-de-France', urgency: 'scheduled', reviewed_estimate_version: 1 },
+  estimate: { min_cents: 12000, max_cents: 18000 },
+  reviewRequired: false,
+}, confirmedId: null };
+const report = { summary: 'Travaux terminés, alimentation vérifiée.', name: 'Artisan de recette', before: photo, after: null, pendingBefore: null, pendingAfter: pending, command: null };
+
+function diskStore(directory: string) {
+  const filename = (key: string) => path.join(directory, key);
+  return createDraftStore({
+    getItem: async key => {
+      try { return await readFile(filename(key), 'utf8'); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw error; }
+    },
+    setItem: async (key, value) => {
+      await writeFile(filename(key) + '.tmp', value, { mode: 0o600 });
+      await rename(filename(key) + '.tmp', filename(key));
+    },
+    removeItem: async key => { await rm(filename(key), { force: true }); },
+  });
+}
+
+const index = process.argv.indexOf('--draft-worker');
+if (index !== -1) {
+  const store = diskStore(process.argv[index + 1]);
+  if (process.argv[index + 2] === 'write') {
+    void Promise.all([
+      store.write(quoteDraftKey(owner, dossier), quote),
+      store.write(reportDraftKey(owner, dossier), report),
+      store.write(requestDraftKey(owner), request),
+      store.write(requestDraftKey(confirmedActor), receipt),
+    ]).then(() => {
+      process.stdout.write('persisted', () => { process.kill(process.pid, 'SIGKILL'); });
+    });
+  } else {
+    void Promise.all([
+      store.read(quoteDraftKey(owner, dossier), quoteDraft),
+      store.read(reportDraftKey(owner, dossier), reportDraft),
+      store.read(quoteDraftKey(other, dossier), quoteDraft),
+      store.read(reportDraftKey(owner, other), reportDraft),
+      store.read(requestDraftKey(owner), requestDraft),
+      store.read(requestDraftKey(other), requestDraft),
+      store.read(requestDraftKey(confirmedActor), requestDraft),
+    ]).then(values => { process.stdout.write(JSON.stringify(values)); });
+  }
+} else {
+  test('a new process restores the exact quote, photo receipt, pending photo reference and request key after a kill', async t => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'mobile-drafts-'));
+    t.after(() => rm(directory, { recursive: true, force: true }));
+    function worker(mode: string) {
+      return spawnSync(process.execPath, [...process.execArgv, import.meta.filename, '--draft-worker', directory, mode], {
+        encoding: 'utf8', timeout: 10000,
+      });
+    }
+    const first = worker('write');
+    assert.equal(first.signal, 'SIGKILL', first.stderr);
+    assert.equal(first.stdout, 'persisted');
+    const reopened = worker('read');
+    assert.equal(reopened.status, 0, reopened.stderr);
+    assert.deepEqual(JSON.parse(reopened.stdout), [quote, report, null, null, request, null, receipt]);
+  });
+
+  test('the new booking intent requires valid private contact and keeps legacy pending intents readable', () => {
+    const booking = { service_slug: 'demande-socket', contact: { first_name: 'Camille', last_name: 'Recette', phone: '+596696123456' } };
+    const current = { ...request, intent: { ...request.intent, booking } };
+    assert.deepEqual(requestDraft.parse(current), current);
+    assert.deepEqual(requestDraft.parse(request), request);
+    for (const invalid of ['', '0696', 'un numéro']) {
+      assert.equal(requestDraft.safeParse({ ...current, intent: { ...current.intent, booking: { ...booking, contact: { ...booking.contact, phone: invalid } } } }).success, false);
+    }
+  });
+
+  test('the last local edit wins and a confirmed save clears only its own draft', async t => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'mobile-draft-order-'));
+    t.after(() => rm(directory, { recursive: true, force: true }));
+    const store = diskStore(directory);
+    const key = quoteDraftKey(owner, dossier);
+    const unrelated = quoteDraftKey(owner, other);
+    const second = { ...quote, rate: 20 };
+    await Promise.all([store.write(key, quote), store.write(key, second), store.write(unrelated, quote)]);
+    assert.deepEqual(await store.read(key, quoteDraft), second);
+    await Promise.all([store.write(key, quote), store.clear(key)]);
+    assert.equal(await store.read(key, quoteDraft), null);
+    assert.deepEqual(await store.read(unrelated, quoteDraft), quote);
+  });
+
+  test('queued edits coalesce without moving an update across a read', async () => {
+    const written: string[] = [];
+    let openFirstWrite!: () => void;
+    const firstWrite = new Promise<void>(resolve => { openFirstWrite = resolve; });
+    const store = createDraftStore({
+      getItem: async () => written.at(-1) ?? null,
+      setItem: async (_key, value) => {
+        written.push(value);
+        if (written.length === 1) await firstWrite;
+      },
+      removeItem: async () => {},
+    });
+    const key = quoteDraftKey(owner, dossier);
+    const first = store.write(key, quote);
+    await Promise.resolve();
+    const edits = Array.from({ length: 20 }, (_, i) =>
+      store.write(key, { ...quote, lines: [{ ...quote.lines[0], label: `Ligne ${i + 1}` }] }));
+    const beforeNextEdit = store.read(key, quoteDraft);
+    const last = store.write(key, { ...quote, rate: 20 });
+    openFirstWrite();
+    assert.equal((await beforeNextEdit)?.lines[0].label, 'Ligne 20');
+    await Promise.all([first, ...edits, last]);
+    assert.equal(written.length, 3);
+    assert.equal((await store.read(key, quoteDraft))?.rate, 20);
+  });
+
+  test('booking drafts retain confirmed location metadata while legacy drafts remain readable', () => {
+    const location = { latitude: 14.6049, longitude: -61.0685, access_details: 'Entrée côté cour' };
+    const current = { ...request, intent: { ...request.intent, payload: { ...request.intent.payload, location } } };
+    assert.deepEqual(requestDraft.parse(current), current);
+    assert.deepEqual(requestDraft.parse(request), request);
+    assert.equal(requestDraft.safeParse({ ...current, intent: { ...current.intent, payload: { ...current.intent.payload, location: { ...location, longitude: null } } } }).success, false);
+  });
+}

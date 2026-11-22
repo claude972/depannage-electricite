@@ -1,0 +1,526 @@
+/* Service booking wizard + fixed bottom bar (FASTSPLIT-SERVICE-BOOKING-FLOW-001). Inside
+   PublicChrome (ThemeSurface): --ui-* tokens only, light/dark, targets >= 44 px, focus visible. */
+.wizard {
+  padding-top: 8px;
+}
+.layout {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+/* Summary: sticky on desktop, compact strip on mobile */
+.summary {
+  position: sticky;
+  top: 16px;
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-card);
+  color: var(--ui-text-muted);
+  font-size: 14px;
+}
+.summary strong {
+  color: var(--ui-text);
+  font-size: 16px;
+}
+
+.panel {
+  padding: 24px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-card);
+  color: var(--ui-text);
+}
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--ui-accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 8px 0 16px;
+  padding: 0;
+  list-style: none;
+  color: var(--ui-text-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.steps .stepNumber {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--ui-border);
+  border-radius: 50%;
+}
+.steps li[aria-current] {
+  color: var(--ui-text);
+}
+.steps li[aria-current] .stepNumber,
+.steps li[data-done] .stepNumber {
+  border-color: var(--ui-primary);
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+.stepTitle {
+  margin: 0 0 16px;
+  color: var(--ui-text);
+  font-size: 26px;
+  font-weight: 700;
+  scroll-margin-top: 16px;
+}
+
+.form {
+  display: grid;
+  gap: 16px;
+}
+.form :global(.field) {
+  display: grid;
+  gap: 6px;
+}
+.form :global(.field) label,
+.form legend {
+  color: var(--ui-text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.form :global(.field) small {
+  color: var(--ui-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.form :global(.field) :global(.field-error) {
+  color: var(--ui-danger);
+  font-weight: 600;
+}
+.form input:not([type="radio"]):not([type="checkbox"]),
+.form textarea {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  font: inherit;
+  font-size: 16px; /* no iOS zoom on focus */
+  color-scheme: var(--ui-scheme);
+}
+.form :global(.field-invalid) input,
+.form [aria-invalid="true"] {
+  border-color: var(--ui-danger);
+}
+/* The bar stays fixed: a focused field (and the step title) is scrolled clear of it. */
+.form input,
+.form textarea,
+.form select {
+  scroll-margin-bottom: calc(var(--booking-bar-h, 88px) + 24px + env(safe-area-inset-bottom, 0px));
+}
+.form input::placeholder,
+.form textarea::placeholder {
+  color: var(--ui-text-muted);
+}
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.choices legend {
+  width: 100%;
+  margin-bottom: 8px;
+}
+.choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 16px;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  font-weight: 600;
+  cursor: pointer;
+}
+.choice:has(input:checked) {
+  border-color: var(--ui-accent);
+  box-shadow: inset 0 0 0 1px var(--ui-accent);
+}
+.choice input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--ui-primary);
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.hint {
+  width: 100%;
+  color: var(--ui-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.error,
+.failure {
+  width: 100%;
+  margin: 0;
+  color: var(--ui-danger);
+  font-size: 14px;
+  font-weight: 600;
+}
+.failure {
+  padding: 12px 14px;
+  border: 1px solid var(--ui-danger);
+  border-radius: 12px;
+  background: var(--ui-surface);
+}
+.private,
+.next {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.recap {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+.recap > div {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 8px 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--ui-border);
+}
+.recap dt {
+  color: var(--ui-text-muted);
+  font-size: 14px;
+}
+.recap dd {
+  margin: 0;
+  color: var(--ui-text);
+  overflow-wrap: anywhere;
+}
+
+/* Fixed bottom bar: same layer on the page and in the wizard */
+.bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: var(--floating-nav-offset, 0px);
+  z-index: 30;
+  /* Always fixed (never moved by focus/blur). Declared height = --booking-bar-h (page wrapper,
+     public-service.module.css) + safe area; the content fits inside it at every breakpoint. */
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  min-height: calc(var(--booking-bar-h, 88px) + env(safe-area-inset-bottom, 0px));
+  padding: 12px 0 calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--ui-border);
+  background: var(--ui-card);
+}
+.barInner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 32px;
+}
+.barText {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.barText strong {
+  overflow: hidden;
+  color: var(--ui-text);
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.barText span {
+  color: var(--ui-text-muted);
+  font-size: 13px;
+}
+.barText strong,
+.barText span {
+  line-height: 1.35;
+}
+.barButton {
+  flex-shrink: 0;
+  white-space: nowrap; /* the exact label never wraps nor shrinks */
+  min-height: 48px;
+  padding: 0 24px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.barButton:hover {
+  background: var(--ui-primary-hover);
+}
+.back:focus-visible,
+.barButton:focus-visible,
+.stepTitle:focus-visible,
+.choice:has(input:focus-visible) {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 960px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .summary {
+    position: static;
+    gap: 2px;
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+  .summary strong {
+    font-size: 15px;
+  }
+}
+@media (max-width: 760px) {
+  .steps {
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .steps .stepLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+  .barInner {
+    padding: 0 16px;
+  }
+  .panel {
+    padding: 16px;
+  }
+  .grid,
+  .recap > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .barText strong {
+    font-size: 14px;
+  }
+}
+/* Narrow screens: text above, full-width button (label and 48 px target never squeezed). */
+@media (max-width: 480px) {
+  .bar {
+    padding-top: 10px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+  .barInner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .barButton {
+    width: 100%;
+  }
+}
+/* Compact bar on a closed service page. Narrow screens keep the full-width action of Mobile B;
+   the estimate is already displayed above it in the service sheet. */
+.bar.barCompact {
+  padding-top: 8px;
+  padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+}
+.barCompact .barText strong {
+  font-size: 17px;
+}
+.barCompact .barText span {
+  font-size: 12px;
+}
+@media (max-width: 480px) {
+  .barCompact .barInner {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+  }
+  .barCompact .barText {
+    display: none;
+  }
+  .barCompact .barButton {
+    width: 100%;
+    padding-inline: 12px;
+    white-space: normal;
+  }
+}
+
+.barButton:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* In-form step action (FASTSPLIT-BOOKING-INLINE-CONTINUE-001): always visible at the end of each
+   step, in addition to the fixed bar. Same submit, 48px target, full width on mobile, long
+   « Continuer vers la connexion » label never clipped. */
+.inlineActions {
+  display: flex;
+  flex-wrap: wrap-reverse;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ui-border);
+}
+.inlineSubmit {
+  min-height: 48px;
+  padding: 12px 24px;
+  border: 0;
+  border-radius: var(--ui-radius-pill, 999px);
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: normal;
+  text-align: center;
+  cursor: pointer;
+}
+.inlineSubmit:hover {
+  filter: brightness(0.95);
+}
+.inlineSubmit:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+@media (max-width: 640px) {
+  .inlineSubmit {
+    width: 100%;
+  }
+}
+/* Payment step: two cards; the card option is disabled (never a fake card form) until available. */
+.payments {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.payments legend {
+  margin-bottom: 8px;
+  color: var(--ui-text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.payment {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 48px;
+  padding: 14px 16px;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  cursor: pointer;
+}
+.payment > span {
+  display: grid;
+  gap: 4px;
+}
+.payment > span > span {
+  color: var(--ui-text-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.payment input {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  accent-color: var(--ui-primary);
+}
+.payment:has(input:checked) {
+  border-color: var(--ui-accent);
+  box-shadow: inset 0 0 0 1px var(--ui-accent);
+}
+.payment[data-disabled] {
+  cursor: not-allowed;
+  background: var(--ui-surface);
+}
+.payment:has(input:focus-visible) {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+.soon {
+  color: var(--ui-text);
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 600;
+}
+.retry,
+.secondary {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-card);
+  color: var(--ui-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.secondary {
+  min-height: 48px;
+}
+.retry:focus-visible,
+.secondary:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+/* A single primary action at each breakpoint; the existing-account link remains in the form. */
+@media (min-width: 761px) { .wizard > .bar { display: none; } }
+@media (max-width: 760px) {
+  .wizard .inlineSubmit { display: none; }
+  .wizard > .bar { min-height: 0; }
+  .wizard > .bar .barText { display: none; }
+  .wizard > .bar .barButton { width: 100%; }
+}

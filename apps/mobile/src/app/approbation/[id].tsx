@@ -1,0 +1,11 @@
+import { useLocalSearchParams,useRouter } from 'expo-router';
+import { z } from 'zod';
+import { NativeApprovalWorkflow } from '@/components/native-approval-workflow';
+import { ManagementAccess } from '@/components/management-access';
+import { Action,Card,Copy,ReadState,Screen } from '@/components/ui';
+import { useResource } from '@/lib/api';
+import { useSession } from '@/lib/session';
+import { approvalDetail,approvalLabels } from '@/lib/management-contracts';
+import { categories,euros,timestamp } from '@/lib/contracts';
+export default function Approval(){const {id,organization_id}=useLocalSearchParams<{id:string;organization_id:string}>(),auth=useSession().session;return <ManagementAccess>{auth&&z.uuid().safeParse(id).success&&z.uuid().safeParse(organization_id).success?<Details id={id} org={organization_id} token={auth.access_token}/>:<Screen><Copy>Approbation introuvable.</Copy></Screen>}</ManagementAccess>;}
+function Details({id,org,token}:{id:string;org:string;token:string}){const router=useRouter(),state=useResource(`/api/enterprise/approvals/${id}?organization_id=${org}`,approvalDetail,token),item=state.data?.approval;return <Screen onRefresh={state.reload}><ReadState loading={state.loading} error={state.error} onRetry={state.reload}/>{item&&<><Copy kind="label">{approvalLabels[item.status]}</Copy><Copy kind="title">{item.site.name}</Copy><Card><Copy kind="subtitle">{categories[item.intervention.category]}</Copy><Copy kind="label">Montant du devis proposé</Copy><Copy>{euros(item.quote.total_cents)} TTC</Copy><Copy kind="muted">Ce montant décrit le devis soumis à cette approbation. Le total accepté et le règlement sont suivis dans le dossier.</Copy></Card><Copy>Demande du {timestamp(item.created_at)}</Copy>{item.decided_at&&<Copy>Décision du {timestamp(item.decided_at)}</Copy>}{Boolean(item.note)&&<Card><Copy kind="subtitle">Note de décision</Copy><Copy>{item.note}</Copy></Card>}{state.data?.rule&&<Copy kind="muted">Règle du site : {state.data.rule.required_role==='owner'?'propriétaire':'gestionnaire'} requis à partir de {euros(state.data.rule.threshold_cents)}.</Copy>}<NativeApprovalWorkflow quoteId={item.quote_id}/><Action label="Consulter le dossier de l’intervention" onPress={()=>router.push({pathname:'/dossier/[id]',params:{id:item.intervention.id}})}/></>}</Screen>;}

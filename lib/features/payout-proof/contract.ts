@@ -1,0 +1,12 @@
+import{z}from'zod';
+export const sid=(p:string)=>z.string().regex(new RegExp(`^${p}_[A-Za-z0-9_]{1,240}$`)),money=z.number().int().min(-2147483647).max(2147483647),epoch=z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),stamp=z.string().refine(x=>Number.isFinite(Date.parse(x)));
+export const source=z.object({event_id:sid('evt'),account_id:sid('acct'),artisan_id:z.uuid(),payout_id:sid('po'),live:z.boolean(),amount_cents:money.positive(),currency:z.literal('eur'),observation_fingerprint:z.string().regex(/^[a-f0-9]{64}$/),observation_created:stamp}).strict();
+export const sourceId=z.string().regex(/^(ch|py|re|tr|fee|fr|po|du|dp|txn|adj|tu|topup|ob|issauth|isscur|issdp)_[A-Za-z0-9_]{1,240}$/).nullable();
+export const line=z.object({id:sid('txn'),amount_cents:money,fee_cents:money,net_cents:money,currency:z.literal('eur'),type:z.string().regex(/^[a-z_]{1,80}$/),source_id:sourceId,created:epoch,available_on:epoch,status:z.literal('available'),allocation:z.literal('unallocated')}).strict();
+export const proof=z.object({payout_id:sid('po'),live:z.boolean(),currency:z.literal('eur'),amount_cents:money.positive(),status:z.literal('paid'),automatic:z.literal(true),reconciliation_status:z.literal('completed'),payout_created:epoch,debit:line,components:z.array(line).min(1).max(500),own_debit_included:z.boolean(),page_count:z.number().int().min(1).max(5),listed_count:z.number().int().min(1).max(500),net_components_cents:z.number().int().safe(),provider_observed_at:stamp,bank_receipt_confirmed:z.literal(false)}).strict();
+export const qualification=z.object({event_id:sid('evt'),source,proof,qualified_at:stamp}).strict();
+export function coherent(s:z.infer<typeof source>,p:z.infer<typeof proof>){
+ if(p.payout_id!==s.payout_id||p.live!==s.live||p.amount_cents!==s.amount_cents||p.debit.amount_cents!==-s.amount_cents||p.debit.net_cents!==-s.amount_cents||p.debit.fee_cents!==0||p.debit.type!=='payout'||p.debit.source_id!==s.payout_id||p.listed_count!==p.components.length+Number(p.own_debit_included))return false;
+ let total=0;const seen=new Set<string>();for(const l of[p.debit,...p.components]){if(seen.has(l.id)||l.net_cents!==l.amount_cents-l.fee_cents||l.created>Date.parse(p.provider_observed_at)/1000)return false;seen.add(l.id)}
+ for(const l of p.components){if(l.type==='payout'||l.source_id===s.payout_id)return false;total+=l.net_cents}return Number.isSafeInteger(total)&&total===s.amount_cents&&total===p.net_components_cents&&p.payout_created<=Date.parse(p.provider_observed_at)/1000;
+}

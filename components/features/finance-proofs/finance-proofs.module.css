@@ -1,0 +1,30 @@
+/* FIN-06 finance proofs. --ui-* tokens only, light/dark, 1px borders, 44 px targets. */
+.panel { display: grid; gap: 12px; padding: 20px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg); background: var(--ui-card); color: var(--ui-text); min-width: 0; }
+.panel h3 { margin: 0; font-size: 17px; }
+.proof { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); min-width: 0; }
+.proof h4, .sub { margin: 0; font-size: 14px; }
+.hint { margin: 0; font-size: 13px; color: var(--ui-text-muted); overflow-wrap: anywhere; }
+.note { margin: 0; padding: 10px 12px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); overflow-wrap: anywhere; }
+.scope { margin: 0; padding: 8px 12px; border: 1px solid var(--ui-warning); border-radius: var(--ui-radius-md); background: var(--ui-surface); font-size: 13px; overflow-wrap: anywhere; }
+.error { margin: 0; color: var(--ui-danger); font-size: 14px; }
+.ok { margin: 0; color: var(--ui-success); font-size: 14px; }
+.kv { display: grid; gap: 4px; margin: 0; }
+.kv > div { display: grid; grid-template-columns: minmax(140px, 30%) 1fr; gap: 8px; font-size: 14px; }
+.kv dt { color: var(--ui-text-muted); }
+.kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.mono { font-family: var(--ui-font-mono, ui-monospace, monospace); font-size: 12px; overflow-wrap: anywhere; }
+.list { display: grid; gap: 4px; margin: 0; padding-left: 18px; font-size: 13px; }
+.list li { overflow-wrap: anywhere; }
+.details summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+.form, .qualify, .confirm { display: grid; gap: 8px; }
+.confirm { padding: 12px 14px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-md); background: var(--ui-surface); }
+.confirm p { margin: 0; }
+.field { display: grid; gap: 4px; min-width: 0; font-size: 13px; color: var(--ui-text-muted); }
+.field input { min-height: 44px; padding: 8px 10px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-bg); color: var(--ui-text); font: inherit; color-scheme: var(--ui-scheme); min-width: 0; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.primary, .secondary { min-height: 44px; padding: 0 16px; border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); font: inherit; font-weight: 600; cursor: pointer; justify-self: start; }
+.primary { border-color: var(--ui-primary); background: var(--ui-primary); color: var(--ui-on-primary); }
+.secondary { background: var(--ui-card); color: var(--ui-text); }
+.primary:disabled, .secondary:disabled { opacity: 0.6; cursor: not-allowed; }
+.field input:focus-visible, .primary:focus-visible, .secondary:focus-visible, .details summary:focus-visible { outline: 3px solid var(--ui-focus); outline-offset: 2px; }
+@media (max-width: 640px) { .kv > div { grid-template-columns: 1fr; gap: 2px; } .primary, .secondary { justify-self: stretch; } .actions > * { flex: 1 1 100%; } }

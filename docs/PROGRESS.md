@@ -30,3 +30,44 @@
 1. Après résolution de la facturation Supabase, créer la base dédiée et appliquer uniquement à celle-ci les deux migrations versionnées.
 2. Configurer les accès Stripe par les canaux de secrets, vérifier les comptes et permissions distants, puis exécuter le paiement de test complet et les reprises webhook.
 3. Compléter les conditions commerciales et les fonctions encore non livrées avant toute ouverture à de vrais clients. Les preuves de démonstration ne valent pas une mise en exploitation commerciale.
+
+
+## Audit complet après les écarts signalés par le propriétaire
+
+- Revue documentaire des cinq PDF disponibles : 71 pages, 66 occurrences de maquettes, 59 images distinctes. Sept images du volume 5 sont des doublons exacts, trois écrans sont nouveaux (fiche bureaux, dashboard bureaux, approbation syndic).
+- Audit de tous les écrans et routes, du composant, du CSS, du backend, des migrations, RLS et fichiers de tests. Matrice consolidée de 74 points de couverture ; annexes par rôle et par capacité serveur.
+- La référence Super Admin M43 et les vrais back-offices artisan/entreprise sont explicites dans les sources ; l’interface commune actuelle ne les couvre pas complètement.
+- 38 domaines de spécification à préciser, 16 contradictions/variantes et dix précisions supplémentaires du volume 5 consignés. L’absence initiale de maquettes bureaux est résolue par le nouveau volume ; les numéros 19–32 restent non identifiés.
+- Nouveaux risques/écarts statiques à traiter avant activation : cache professionnel à la déconnexion et garde des vues, retours Auth/Stripe ignorés, accès aux contacts après attribution, règles de payeur/départ de membre d’organisation, historiques bornés et finance incomplète. Ce sont des constats de code, pas des incidents distants démontrés.
+- Contrôles fournisseur en lecture seule : aucune variable applicative Vercel et aucun projet Supabase dédié identifié. Le refus de création pour facturation reste le constat historique, sans nouvelle tentative pendant cet audit.
+- Aucun nouveau test d’intégration ou paiement n’est prétendu. Les 11 tests et 13 groupes SQL décrits plus haut sont des preuves antérieures, pas une preuve que les manques inventoriés sont résolus.
+- Documents de référence : `AUDIT_COMPLET_SPECIFICATIONS.md`, `SPECIFICATIONS_A_COMPLETER.md`, `PLAN_REPRISE.md` et les annexes `audit/`. Aucun code applicatif, service, secret ou déploiement modifié pendant cette revue.
+
+
+## Intégration documentaire des volumes 6 à 9
+
+- Quatre PDF copiés sans altération et intégralement inspectés : corpus désormais de 9 PDF, 102 pages, 93 occurrences et 63 images distinctes.
+- Les 6 occurrences V6, 8 occurrences V7 et 5 occurrences V9 sont des doublons exacts ; V8 a quatre doublons et quatre images nouvelles : À propos, confidentialité, devis client et détail d’intervention.
+- Deux nouvelles lignes de couverture publique sont ajoutées ; la matrice passe de 74 à 76 points. Les nouveaux détails client renforcent des manques déjà recensés : refus, PDF, contact, galerie, historique et modification de rendez-vous.
+- Neuf précisions V8-Q01–Q09 sont ajoutées au registre, sans transformer les histoires/équipes/garanties/annulation/cookies d’exemple en décisions validées. Le titre FINAL du volume 9 n’a pas modifié la hiérarchie des sources.
+- Références et doublons conservés par volume ; les numéros initiaux 19–32 restent non identifiés. Aucun nouveau back-office artisan ou Super Admin n’est apporté par ces volumes, mais les références précédentes restent à réaliser.
+- Aucun code applicatif, service distant, secret ou déploiement modifié ; aucune nouvelle exécution de paiement ou de test d’intégration prétendue. Source et couverture sont documentées dans les annexes et le manifeste mis à jour.
+
+## Audit des quatre archives de code
+
+- Lecture statique intégrale : 44 membres, 16 fichiers distincts, dont 12 composants JSX ; aucun conflit de version par nom. Les archives 1/2/4 sont des sous-ensembles exacts de la troisième.
+- Originaux conservés dans references/code-archives ; SHA-256 et membres dans docs/audit/INVENTAIRE_ARCHIVES_CODE.json.
+- Interfaces de base, sans backend, Stripe ou Super Admin ; aucune capacité intégrée déclarée terminée par ces apports. Corpus PDF et matrice de 76 points inchangés.
+- Audit et plan enrichis ; aucun code joint exécuté, aucun code applicatif, secret, service ou déploiement modifié.
+
+## Archive CSS et animations
+
+Lecture intégrale et comparaison SHA-256 de la cinquième archive : 17 membres, 14 identiques, deux variantes et un fichier nouveau. Originaux et manifeste conservés ; cumul de 61 occurrences et 19 contenus distincts. Audit et plan enrichis sur les animations permanentes, réduction du mouvement, délais de fade et collisions CSS. Aucun code fourni exécuté ni code applicatif, service ou déploiement modifié.
+
+## Réaudit demandé et plan réécrit
+
+- Trois collectes indépendantes backend/frontend/sources, consolidées dans docs/audit/REAUDIT_CONSOLIDE.md ; intégrité des 9 PDF et 5 archives recontrôlée.
+- Corrections documentaires : références bureaux effectivement fournies, tri des offres plus anciennes d’abord, contrôles fournisseur qualifiés historiques, méthode hash image explicitée. Nouvelles précisions suspension artisan et rejet d’approbation B2B.
+- Plan réécrit en phases 0–11 ; sécurité avant parcours réels, poste opérateur tôt, matching minimal dans le socle, trois back-offices suivis séparément. Tableau CSV : les 76 capacités ont une affectation et une cible de vérification.
+- Vérifications fraîches : npm run typecheck réussi ; npm test 11 réussis. Aucun build, test cloud, SQL distant, navigateur ou paiement exécuté dans cette révision.
+- Aucun code applicatif modifié, aucune infrastructure/secret/donnée distante modifié ; pas de push ni déploiement pendant cette préparation.

@@ -1,0 +1,66 @@
+// Identity adoption inside a login chain. Three facts must agree before a chain adopts an
+// identity: the user the login promise returned, the user the SDK currently holds (another
+// tab or a later login may have replaced it), and the user the controller already loaded
+// (the SIGNED_IN event often arrives before the promise resolves). Pure sequence, exercised
+// by tests/ui/identity.test.ts with the same runner the controller uses.
+import type { RunContext } from "./guard";
+import type { RequestValues, View } from "./types";
+
+export type IdentityDeps = {
+  /** Authoritative current user according to the auth SDK (server-verified), or null. */
+  currentUserId(): Promise<string | null>;
+  /** User whose workspace the controller currently holds (userId ref), or null. */
+  loadedUserId(): string | null;
+  /** Clears every account-scoped state and bumps the identity generation. */
+  clearSessionState(): void;
+  setUserId(id: string | null): void;
+  /** Loads the workspace for the current user id. */
+  refresh(): Promise<void>;
+  navigate(view: View, param?: string): void;
+  setPendingDraft(draft: RequestValues | null): void;
+  /** Home view for the role known after refresh. */
+  homeView(): View;
+  /** Signed-in deep link to land on instead of the home view (read after refresh), or null. */
+  landing?(): { view: View; param: string } | null;
+};
+export type AdoptionOutcome = "adopted" | "superseded" | "interrupted";
+export async function adoptIdentity(
+  ctx: RunContext,
+  expectedUserId: string | null,
+  keepDraft: RequestValues | null,
+  deps: IdentityDeps,
+): Promise<AdoptionOutcome> {
+  // 1. The SDK is the authority: a login promise resolving after another account took over
+  //    the browser must not reset that account's session.
+  const authoritative = await deps.currentUserId();
+  if (!expectedUserId || authoritative !== expectedUserId) return "superseded";
+  // 2. Ownership is re-checked after the await: if, meanwhile, the auth listener adopted a
+  //    different identity (another account signed in, even with a stale verification reply),
+  //    this attempt is superseded and must never reset that newer session.
+  const loaded = deps.loadedUserId();
+  if (loaded !== null && loaded !== expectedUserId) return "superseded";
+  // A logout happened during verification (generation bumped, nothing loaded): a stale
+  // "still A" reply must not re-adopt A over the anonymous state the user just chose.
+  if (loaded === null && !ctx.alive()) return "superseded";
+  // 3. The listener may already have adopted this very identity: do not clear it again,
+  //    simply continue the chain as that identity.
+  if (loaded !== expectedUserId) {
+    deps.clearSessionState();
+    deps.setUserId(expectedUserId);
+  }
+  ctx.rebind();
+  await deps.refresh();
+  // 4. Logged out or replaced while loading: nothing more.
+  if (!ctx.alive() || deps.loadedUserId() !== expectedUserId) return "interrupted";
+  if (keepDraft) {
+    deps.setPendingDraft(keepDraft);
+    deps.navigate("new");
+  } else {
+    // A deep link (#detail/<id>) opened before or during the login is honoured: forcing the
+    // home view here overwrote it once the workspace had loaded (WEB-DEEPLINK-LOGIN-001).
+    const link = deps.landing?.() ?? null;
+    if (link) deps.navigate(link.view, link.param);
+    else deps.navigate(deps.homeView());
+  }
+  return "adopted";
+}

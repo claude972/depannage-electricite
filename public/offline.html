@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
+    <title>Connexion indisponible — DomDépannage</title>
+    <style>
+      /* Self-contained (no external request): DESIGN.md tokens, light/dark from the system. */
+      :root {
+        color-scheme: light dark;
+        --bg: #ffffff;
+        --surface: #f4f6fa;
+        --text: #111318;
+        --muted: #4b5563;
+        --border: #d9dee7;
+        --primary: #2246e5;
+        --on-primary: #ffffff;
+        --accent: #2246e5;
+        --focus: #2246e5;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #121417;
+          --surface: #1b1e23;
+          --text: #f5f7fa;
+          --muted: #b5bac4;
+          --border: #343a44;
+          --primary: #4062f7;
+          --accent: #8ea2ff;
+          --focus: #8ea2ff;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Plus Jakarta Sans", "Avenir Next", Avenir, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+        font-size: 1rem;
+        line-height: 1.6;
+      }
+      main { max-width: 34rem; margin: 12vh auto; padding: 2rem 1.5rem; }
+      .brand { margin: 0 0 1.5rem; color: var(--text); font-weight: 500; font-size: 1rem; letter-spacing: normal; }
+      .brand span { color: var(--accent); }
+      h1 { margin: 0 0 1rem; color: var(--text); line-height: 32px; font-size: 23px; font-weight: 500; letter-spacing: -0.2px; }
+      @media (min-width: 1024px) { h1 { font-size: 28px; line-height: 36px; } }
+      p { max-width: 60ch; margin: 0 0 1rem; color: var(--muted); }
+      .lead { color: var(--text); }
+      .note { padding: 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+      a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+        margin-top: 0.5rem;
+        padding: 0.625rem 1.25rem;
+        border-radius: 8px;
+        color: var(--on-primary);
+        background: var(--primary);
+        font-weight: 500;
+        text-decoration: none;
+      }
+      a:hover { filter: brightness(0.92); }
+      a:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+    </style>
+  </head>
+  <body>
+    <main id="main">
+      <p class="brand">DomDépannage</p>
+      <h1>La connexion est indisponible</h1>
+      <p class="lead">Reconnectez-vous à Internet pour retrouver vos demandes, devis et messages.</p>
+      <p class="note">Aucun dossier personnel n’est enregistré dans le cache hors connexion. Une action interrompue n’est pas envoyée automatiquement : vérifiez son état à votre retour avant de réessayer.</p>
+      <a href="/">Réessayer</a>
+      <a href="/offline-request.html">Préparer une demande hors connexion</a>
+    </main>
+  </body>
+</html>

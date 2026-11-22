@@ -1,0 +1,442 @@
+import { fileURLToPath as localSourcePath } from "node:url";
+// FASTSPLIT-MESSAGE-HISTORY-001: paginated message history. Pure merge/order/cursor tests, then
+// the real MessageCenter in a real React root in local Chromium with a fake fetch. The browser
+// part is skipped — never passed — when no local Playwright/Chromium is available.
+import test from "node:test";
+import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+import { createServer } from "node:http";
+import { homedir } from "node:os";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+import { build } from "esbuild";
+import {
+  applyOutcome,
+  fetchHistoryPage,
+  historyKey,
+  historyUrl,
+  initialHistory,
+  clearSentDraft,
+  draftText,
+  mergeMessages,
+  offersOlder,
+  openThread,
+  parseHistoryPage,
+  visibleHistoryMessages,
+} from "../../components/app/message-history";
+import type { Message } from "../../components/app/types";
+
+const A = "10000000-0000-4000-8000-00000000000a";
+const B = "10000000-0000-4000-8000-00000000000b";
+const msg = (n: number, dossier = A, at = `2026-10-01T10:${String(n % 60).padStart(2, "0")}:00.000Z`): Message => ({
+  id: `m-${dossier.slice(-1)}-${String(n).padStart(4, "0")}`,
+  intervention_id: dossier,
+  author_id: "u1",
+  body: `b${n}`,
+  created_at: at,
+});
+
+test("merge: dedupe by id, chronological (created_at then id), other dossiers dropped", () => {
+  const same = "2026-10-01T10:00:00.000Z";
+  const preview = [msg(3, A, "2026-10-01T10:03:00.000Z"), msg(2, A, same), msg(9, B)];
+  const page = [msg(3, A, "2026-10-01T10:03:00.000Z"), msg(1, A, same), msg(0, A, "2026-10-01T09:00:00.000Z")];
+  const merged = mergeMessages(A, preview, page);
+  assert.deepEqual(merged.map((m) => m.id), ["m-a-0000", "m-a-0001", "m-a-0002", "m-a-0003"]);
+  assert.ok(merged.every((m) => m.intervention_id === A));
+  assert.equal(new Set(merged.map((m) => m.id)).size, merged.length);
+});
+
+test("parse + cursor: opaque cursor kept per dossier, foreign rows or bad page refused, resume after error", async () => {
+  assert.equal(historyUrl(A, null), `/api/messages?intervention_id=${A}&limit=25`);
+  assert.equal(historyUrl(A, "x/y+z="), `/api/messages?intervention_id=${A}&limit=25&cursor=x%2Fy%2Bz%3D`);
+  const ok = parseHistoryPage({ messages: [msg(1)], page: { limit: 25, has_more: true, next_cursor: "C1" } }, A);
+  assert.deepEqual(ok?.nextCursor, "C1");
+  assert.equal(parseHistoryPage({ messages: [msg(1, B)], page: { limit: 25, has_more: false, next_cursor: null } }, A), null);
+  assert.equal(parseHistoryPage({ messages: [], page: { limit: 25, has_more: true, next_cursor: null } }, A), null);
+  assert.deepEqual(parseHistoryPage({ messages: [], page: { limit: 25, has_more: false, next_cursor: null } }, A), { messages: [], hasMore: false, nextCursor: null });
+
+  const kA = historyKey("u1", A);
+  let s = applyOutcome(initialHistory(kA), kA, { kind: "loaded", messages: [msg(5)], hasMore: true, nextCursor: "C1" });
+  s = applyOutcome(s, kA, { kind: "failed", status: 503 });
+  assert.equal(s.status, "error");
+  assert.equal(s.cursor, "C1", "a failure keeps the cursor: retry resumes at the same page");
+  assert.equal(s.pages.length, 1, "what was shown stays");
+  // A reply for another dossier/identity never lands in this state.
+  assert.equal(applyOutcome(s, historyKey("u2", A), { kind: "loaded", messages: [msg(1)], hasMore: false, nextCursor: null }), s);
+
+  const seen: [string, RequestInit][] = [];
+  const fake = async (url: string, init: RequestInit) => {
+    seen.push([url, init]);
+    return new Response(JSON.stringify({ messages: [], page: { limit: 25, has_more: false, next_cursor: null } }), { status: 200 });
+  };
+  const out = await fetchHistoryPage(fake, A, "C1", new AbortController().signal);
+  assert.equal(out.kind, "loaded");
+  assert.equal(seen[0][1].credentials, "same-origin");
+  assert.equal(seen[0][1].cache, "no-store");
+  for (const [status, kind] of [[401, "signed_out"], [404, "not_found"], [503, "failed"], [422, "failed"]] as const)
+    assert.equal((await fetchHistoryPage(async () => new Response("{}", { status }), A, null, new AbortController().signal)).kind, kind);
+  assert.equal((await fetchHistoryPage(async () => { throw new TypeError("net"); }, A, null, new AbortController().signal)).kind, "failed");
+  const ctl = new AbortController();
+  ctl.abort();
+  assert.equal((await fetchHistoryPage(async () => { throw new DOMException("x", "AbortError"); }, A, null, ctl.signal)).kind, "aborted");
+});
+
+test("401 after a partial page: no older-page offer, loaded messages kept, never re-requested", () => {
+  const k = historyKey("u1", A);
+  let s = applyOutcome(initialHistory(k), k, { kind: "loaded", messages: [msg(1), msg(2)], hasMore: true, nextCursor: "C1" });
+  assert.equal(offersOlder(s), true);
+  s = applyOutcome(s, k, { kind: "signed_out" });
+  assert.equal(s.status, "signed_out");
+  assert.equal(offersOlder(s), false, "no dead « Charger les messages plus anciens » button");
+  assert.equal(s.pages.length, 2, "already loaded messages stay shown");
+  // A later reply (e.g. a stale read) cannot revive the offer for this identity: only a new key resets.
+  assert.equal(offersOlder(applyOutcome(s, k, { kind: "failed", status: 503 })), false);
+  assert.equal(offersOlder(applyOutcome(initialHistory(k), k, { kind: "not_found" })), false);
+});
+
+test("compose draft is bound to identity + dossier: A's text is never shown nor sent in B", () => {
+  const draft = { key: historyKey("u1", A), text: "secret A" };
+  assert.equal(draftText(draft, historyKey("u1", A)), "secret A");
+  assert.equal(draftText(draft, historyKey("u1", B)), "", "another dossier starts empty");
+  assert.equal(draftText(draft, historyKey("u2", A)), "", "another identity starts empty");
+});
+
+test("successful send clears only the unchanged sent draft; text typed meanwhile and failures keep it", () => {
+  const k = historyKey("u1", A);
+  assert.deepEqual(clearSentDraft({ key: k, text: "bonjour" }, k, "bonjour"), { key: k, text: "" });
+  assert.deepEqual(clearSentDraft({ key: k, text: "bonjour suite" }, k, "bonjour"), { key: k, text: "bonjour suite" }, "text typed during the request is kept");
+  const other = { key: historyKey("u1", B), text: "draft B" };
+  assert.equal(clearSentDraft(other, k, "bonjour"), other, "another thread's draft is never cleared");
+});
+
+test("openThread: a dossier that left the list is never kept open, unless it is the explicit target", () => {
+  assert.equal(openThread(B, "", [A]), A, "B left the scope (rights removed / context switch): first listed");
+  assert.equal(openThread(B, "", []), "", "nothing listed: nothing open");
+  assert.equal(openThread(B, B, [A]), B, "explicit target outside the loaded list stays (server decides)");
+  assert.equal(openThread(B, A, [A, B]), B, "explicit click in the list is kept");
+  assert.equal(openThread("", "", [A, B]), A);
+});
+
+test("visibleHistoryMessages: a 500-message preview never pre-fills older history", () => {
+  // 537 messages; pairs share a created_at so ties are ordered by id.
+  const all = Array.from({ length: 537 }, (_, n) => msg(n, A, new Date(Date.UTC(2026, 9, 1, 0, Math.floor(n / 2))).toISOString()));
+  const preview = [...all.slice(-500), msg(9, B)];
+  const newestFirst = [...all].reverse();
+  const pages = (k: number) => newestFirst.slice(0, 25 * k);
+  assert.deepEqual(visibleHistoryMessages(A, preview, []).map((m) => m.id), all.slice(-25).map((m) => m.id), "before any page: 25 most recent");
+  assert.equal(visibleHistoryMessages(A, preview, pages(1)).length, 25, "first page: 25");
+  assert.equal(visibleHistoryMessages(A, preview, pages(2)).length, 50, "first older click: 50");
+  const end = visibleHistoryMessages(A, preview, pages(22));
+  assert.equal(end.length, 537);
+  assert.equal(new Set(end.map((m) => m.id)).size, 537);
+  assert.deepEqual(end.map((m) => m.id), all.map((m) => m.id), "chronological, ties by id");
+  // A realtime arrival (newer than every page) joins the preview after pages were loaded: kept.
+  const live = msg(9000, A, "2026-10-02T00:00:00.000Z");
+  const withLive = visibleHistoryMessages(A, [...preview, live], pages(2));
+  assert.equal(withLive.length, 51);
+  assert.equal(withLive.at(-1)?.id, live.id);
+  assert.ok(withLive.every((m) => m.intervention_id === A), "never another dossier");
+});
+
+const PW = process.env.QA_PLAYWRIGHT_PATH || "/Users/claudebrafa/rea/node_modules/playwright-core";
+const CHROMIUM =
+  process.env.QA_CHROMIUM_PATH ||
+  path.join(homedir(), "Library/Caches/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell");
+const available = existsSync(path.join(PW, "index.mjs")) && existsSync(CHROMIUM);
+const ROOT = path.resolve(path.dirname(localSourcePath(import.meta.url)), "..", "..");
+
+const APP = `
+import { createElement as h, useState } from "react";
+import { createRoot } from "react-dom/client";
+import { MessageCenter } from "./components/app/forms";
+const A = "${A}", B = "${B}";
+const kind = new URLSearchParams(location.search).get("case");
+const TOTAL = kind === "empty" ? 0 : kind === "big" ? 537 : 237;
+const pad = (n) => String(n).padStart(4, "0");
+// Server truth: TOTAL messages per dossier; several share a created_at (tie broken by id).
+const all = (d) => Array.from({ length: d === A ? TOTAL : 30 }, (_, n) => ({ id: "m-" + d.slice(-1) + "-" + pad(n), intervention_id: d, author_id: n % 2 ? "u1" : "u2", body: "body " + n, created_at: new Date(Date.UTC(2026, 9, 1, 0, Math.floor(n / 2))).toISOString() }));
+const desc = (d) => all(d).sort((x, y) => (x.created_at === y.created_at ? (x.id < y.id ? 1 : -1) : x.created_at < y.created_at ? 1 : -1));
+window.calls = [];
+let n503 = 0;
+const fakeFetch = async (url, init) => {
+  const u = new URL(url, location.origin);
+  const d = u.searchParams.get("intervention_id"), cursor = u.searchParams.get("cursor"), limit = Number(u.searchParams.get("limit"));
+  window.calls.push({ d, cursor, limit, credentials: init.credentials, cache: init.cache });
+  const late = ((kind === "switch" || kind === "follow") && d === A && window.calls.length === 1) || ((kind === "scope" || kind === "scope2") && d === B && window.calls.length === 1);
+  await new Promise((r) => setTimeout(r, late ? 400 : 20)); // late reply ignores the abort on purpose
+  if (kind === "401") return new Response("{}", { status: 401 });
+  if (kind === "401late" && cursor) return new Response("{}", { status: 401 });
+  if (kind === "404") return new Response("{}", { status: 404 });
+  if (kind === "503" && cursor && n503++ === 0) return new Response("{}", { status: 503 });
+  const off = cursor ? Number(cursor.split(":")[1]) : 0; // opaque to the client
+  const rows = desc(d).slice(off, off + limit);
+  const more = off + limit < desc(d).length;
+  return new Response(JSON.stringify({ messages: rows, page: { limit, has_more: more, next_cursor: more ? d.slice(-1) + ":" + (off + limit) : null } }), { status: 200 });
+};
+// Workspace preview: the 5 newest of A (duplicated by page 1) + 2 of B.
+const preview = kind === "empty" ? [] : kind === "big" ? desc(A).slice(0, 500) : [...desc(A).slice(0, 5), ...desc(B).slice(0, 2)];
+const interventions = [A, B].map((id) => ({ id, category: "panel", status: "requested", created_at: "2026-10-01T00:00:00.000Z" }));
+window.sent = [];
+// selectedId and profileId are driven like the shell does (#messages/<id> param, identity change).
+const X = "10000000-0000-4000-8000-00000000000c"; // a dossier absent from the given list
+const mk = (id) => ({ id, category: "panel", status: "requested", created_at: "2026-10-01T00:00:00.000Z" });
+const START = { scope: { ids: [A, B], sel: B, key: "ctx1|" + B }, scope2: { ids: [A, B], sel: B, key: "ctx1|" + B }, readonly: { ids: [A, B], sel: A, key: "k", ro: true }, unknown: { ids: [A], sel: X, key: "k" } };
+function App() {
+  const [sel, setSel] = useState(A);
+  const [profile, setProfile] = useState("u1");
+  const [cfg, setCfg] = useState(START[kind] || null);
+  window.setSel = setSel;
+  window.setProfile = setProfile;
+  window.setCfg = (p) => setCfg((c) => ({ ...c, ...p }));
+  if (cfg)
+    // Mirrors the enterprise call site: scoped list, visible target only, read-only rights.
+    return h(MessageCenter, { key: cfg.key, interventions: cfg.ids.map(mk), messages: preview, role: "manager", profileId: profile, selectedId: cfg.sel, busy: false, canSend: cfg.ro ? () => false : undefined, onSubmit: (id, body) => { window.sent.push([id, body]); return Promise.resolve(true); }, live: true, fetchHistory: fakeFetch });
+  return h(MessageCenter, { interventions, messages: preview, role: "client", profileId: profile, selectedId: sel, busy: false, onSubmit: (id, body) => { window.sent.push([id, body]); return kind === "deferred" ? new Promise((r) => { window.resolveSend = r; }) : Promise.resolve(true); }, live: kind !== "demo", fetchHistory: fakeFetch });
+}
+createRoot(document.getElementById("app")).render(h(App));
+`;
+
+test("MessageCenter history in real React/Chromium: 237 messages over 10 pages, 503+retry, 404, 401, empty, switch, demo", { skip: available ? false : "local Playwright/Chromium not found (SKIPPED, never PASS)" }, async () => {
+  const out = await build({ absWorkingDir: ROOT, stdin: { contents: APP, resolveDir: ROOT, loader: "tsx" }, bundle: true, write: false, outdir: "out", platform: "browser", format: "iife", jsx: "automatic", loader: { ".css": "local-css" }, define: { "process.env.NODE_ENV": '"development"' } });
+  const js = out.outputFiles.find((f) => f.path.endsWith(".js"))!.text;
+  const server = createServer((_rq, rs) => {
+    rs.setHeader("content-type", "text/html");
+    rs.end('<div id="app"></div><script>' + js + "</script>");
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const port = (server.address() as { port: number }).port;
+  const pw = await import(pathToFileURL(path.join(PW, "index.mjs")).href);
+  const browser = await pw.chromium.launch({ executablePath: CHROMIUM, headless: true });
+  type Call = { d: string; cursor: string | null; limit: number; credentials: string; cache: string };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type Page = any;
+  const open = async (kind: string) => {
+    const page: Page = await browser.newPage();
+    const errors: string[] = [];
+    page.on("pageerror", (e: Error) => errors.push(e.message));
+    await page.goto(`http://127.0.0.1:${port}/?case=${kind}`);
+    return { page, errors };
+  };
+  const ids = (page: Page): Promise<string[]> => page.$$eval("[data-message-id]", (els: Element[]) => els.map((e) => e.getAttribute("data-message-id") as string));
+  const calls = (page: Page): Promise<Call[]> => page.evaluate(() => (window as unknown as { calls: Call[] }).calls);
+  const OLDER = "text=Charger les messages plus anciens";
+  try {
+    // 1. 237 messages: first page automatically, then « Charger les messages plus anciens » until exhausted.
+    {
+      const { page, errors } = await open("pages");
+      await page.waitForSelector(OLDER);
+      assert.equal((await ids(page)).length, 25, "page 1 (25) merged with the 5-message preview, no duplicate");
+      for (let n = 0; n < 20 && (await page.$(OLDER)); n++) {
+        const before = (await calls(page)).length;
+        await page.click(OLDER);
+        await page.waitForFunction((k: number) => (window as unknown as { calls: Call[] }).calls.length > k && !document.querySelector("[data-message-history=loading]"), before);
+      }
+      const shown = await ids(page);
+      assert.equal(shown.length, 237);
+      assert.equal(new Set(shown).size, 237, "never a duplicate");
+      assert.deepEqual(shown, [...shown].sort(), "chronological (ids sort like created_at, id here)");
+      assert.ok(shown.every((i) => i.startsWith("m-a-")), "no message of dossier B");
+      const c = await calls(page);
+      assert.equal(c.length, 10, "ceil(237/25) reads");
+      assert.equal(c[0].cursor, null);
+      c.slice(1).forEach((call, i) => assert.equal(call.cursor, `a:${(i + 1) * 25}`, "cursor sent back unchanged"));
+      assert.ok(c.every((call) => call.d === A && call.limit === 25 && call.credentials === "same-origin" && call.cache === "no-store"));
+      assert.equal(await page.$(OLDER), null, "no button once has_more is false");
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+    // 2. 503 on an older page: error + Réessayer, what is shown stays, retry resumes with the same cursor.
+    {
+      const { page, errors } = await open("503");
+      await page.waitForSelector(OLDER);
+      await page.click(OLDER);
+      await page.waitForSelector("[data-message-history=error]");
+      assert.equal((await ids(page)).length, 25, "messages already shown are kept");
+      await page.click("text=Réessayer");
+      await page.waitForFunction(() => document.querySelectorAll("[data-message-id]").length === 50);
+      const c = await calls(page);
+      assert.deepEqual(c.map((x) => x.cursor), [null, "a:25", "a:25"]);
+      assert.equal(await page.$("[data-message-history=error]"), null);
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+    // 3. 404: uniform unavailable state, nothing of the dossier shown (not even the preview), no compose.
+    {
+      const { page, errors } = await open("404");
+      await page.waitForSelector("[data-message-history=not_found]");
+      assert.deepEqual(await ids(page), []);
+      assert.equal(await page.$("#message-body"), null);
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+    // 4. 401: session-expired message, no retry button, no automatic re-read.
+    {
+      const { page, errors } = await open("401");
+      await page.waitForSelector("[data-message-history=signed_out]");
+      await page.waitForTimeout(400);
+      assert.equal((await calls(page)).length, 1);
+      assert.equal(await page.$("text=Réessayer"), null);
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+    // 4b. 401 AFTER a partial page: button gone (not a dead control), protected messages and compose
+    //     purged in the same document (phase 2 lot B, E39 / P1), 0 further GET.
+    {
+      const { page, errors } = await open("401late");
+      await page.waitForSelector(OLDER);
+      await page.click(OLDER);
+      await page.waitForSelector("[data-message-history=signed_out]");
+      assert.equal(await page.$(OLDER), null, "older-page button removed after the 401");
+      assert.equal((await ids(page)).length, 0, "E39: loaded messages purged after the 401");
+      assert.equal(await page.$("#message-body"), null, "E39: no compose after the 401");
+      await page.click(".message-threads button:nth-child(2)"); // re-render, same dossier and identity
+      await page.waitForTimeout(400);
+      assert.equal((await calls(page)).length, 2, "no request after the 401 for this identity");
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+    // 5. Empty dossier: empty state, no older button.
+    {
+      const { page, errors } = await open("empty");
+      await page.waitForSelector("text=Commencez l’échange");
+      assert.equal(await page.$(OLDER), null);
+      assert.equal((await calls(page)).length, 1);
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+    // 6. Dossier switch while A's first page is in flight: A's late reply is ignored; B uses its own cursor.
+    {
+      const { page, errors } = await open("switch");
+      await page.click(`.message-threads button:nth-child(3)`); // B (h2 is child 1, A child 2)
+      await page.waitForSelector(OLDER);
+      await page.click(OLDER);
+      await page.waitForFunction(() => document.querySelectorAll("[data-message-id]").length === 30);
+      await page.waitForTimeout(500); // A's late reply has arrived by now
+      const shown = await ids(page);
+      assert.ok(shown.every((i) => i.startsWith("m-b-")), "never a message of A in B's conversation");
+      const c = await calls(page);
+      assert.deepEqual(c.map((x) => [x.d, x.cursor]), [[A, null], [B, null], [B, "b:25"]]);
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+    // 6b. Hash #messages/A → #messages/B in the same document (selectedId prop changes): B opens,
+    //     B's history is read, A's late reply is ignored, A's typed text never reaches B's POST.
+    {
+      const { page, errors } = await open("follow");
+      await page.fill("#message-body", "secret A");
+      await page.evaluate((b: string) => (window as unknown as { setSel(v: string): void }).setSel(b), B);
+      await page.waitForFunction(() => document.querySelectorAll("[data-message-id]").length === 25);
+      assert.equal(await page.inputValue("#message-body"), "", "A's draft is not carried into B");
+      await page.waitForTimeout(500); // A's late reply has arrived by now
+      const shown = await ids(page);
+      assert.ok(shown.length > 0 && shown.every((i) => i.startsWith("m-b-")), "only B's messages");
+      assert.deepEqual((await calls(page)).map((x) => [x.d, x.cursor]), [[A, null], [B, null]]);
+      await page.fill("#message-body", "hello B");
+      await page.click("[aria-label='Envoyer le message']");
+      await page.waitForFunction(() => (window as unknown as { sent: unknown[] }).sent.length === 1);
+      const sent = await page.evaluate(() => (window as unknown as { sent: [string, string][] }).sent);
+      assert.deepEqual(sent, [[B, "hello B"]], "B's POST never carries A's text");
+      // 6c. Identity change on the same dossier: history and draft reset, re-read for the new identity.
+      await page.fill("#message-body", "draft of u1");
+      await page.evaluate(() => (window as unknown as { setProfile(v: string): void }).setProfile("u2"));
+      await page.waitForFunction(() => (window as unknown as { calls: unknown[] }).calls.length === 3);
+      assert.equal(await page.inputValue("#message-body"), "", "the previous identity's draft is gone");
+      assert.deepEqual((await calls(page)).map((x) => [x.d, x.cursor]).slice(2), [[B, null]], "fresh newest page, no old cursor");
+      // Wait for the rendered reply (fake answers after 20 ms), not just the request count.
+      await page.waitForSelector("[data-message-older]", { timeout: 3000 });
+      assert.equal(await page.textContent("[data-message-older]"), "Charger les messages plus anciens");
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+    // 6d. Deferred send: « bonjour » sent, « suite » typed before the reply ⇒ kept on success;
+    //     a failed send keeps the draft as is.
+    {
+      const { page, errors } = await open("deferred");
+      await page.waitForSelector(OLDER);
+      type Win = { sent: [string, string][]; resolveSend(v: boolean): void };
+      await page.fill("#message-body", "bonjour");
+      await page.click("[aria-label='Envoyer le message']");
+      await page.waitForFunction(() => (window as unknown as Win).sent.length === 1);
+      await page.fill("#message-body", "suite");
+      await page.evaluate(() => (window as unknown as Win).resolveSend(true));
+      await page.waitForTimeout(100);
+      assert.equal(await page.inputValue("#message-body"), "suite", "new text typed in flight survives the success");
+      await page.click("[aria-label='Envoyer le message']");
+      await page.waitForFunction(() => (window as unknown as Win).sent.length === 2);
+      await page.evaluate(() => (window as unknown as Win).resolveSend(false));
+      await page.waitForTimeout(100);
+      assert.equal(await page.inputValue("#message-body"), "suite", "failed send keeps the draft");
+      assert.deepEqual(await page.evaluate(() => (window as unknown as Win).sent), [[A, "bonjour"], [A, "suite"]]);
+      (globalThis as { deferredReached?: boolean }).deferredReached = true;
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+    // 8. Enterprise scope: B open (its first reply late), draft typed, then B leaves the visible scope
+    //    (rights removed: same key) or the context switches (new key): never B's messages/draft in A.
+    for (const kind of ["scope", "scope2"]) {
+      const { page, errors } = await open(kind);
+      await page.fill("#message-body", "draft B");
+      await page.evaluate(([k, a]: string[]) => (window as unknown as { setCfg(p: object): void }).setCfg(k === "scope" ? { ids: [a], sel: "" } : { ids: [a], sel: "", key: "ctx2|" }), [kind, A]);
+      await page.waitForFunction(() => document.querySelectorAll("[data-message-id]").length === 25);
+      await page.waitForTimeout(500); // B's late reply has arrived by now
+      const shown = await ids(page);
+      assert.ok(shown.every((i) => i.startsWith("m-a-")), kind + ": never a message of B in scope A");
+      assert.equal(await page.inputValue("#message-body"), "", kind + ": B's draft is not carried into A");
+      assert.deepEqual((await calls(page)).map((x) => [x.d, x.cursor]), [[B, null], [A, null]], kind + ": history GET for the new target only");
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+    // 9. Read-only rights: no compose box, a short reason instead.
+    {
+      const { page, errors } = await open("readonly");
+      await page.waitForSelector("[data-message-readonly]");
+      assert.equal(await page.$("#message-body"), null);
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+    // 10. Target absent from the list: generic « Conversation » + reference, no invented category.
+    {
+      const { page, errors } = await open("unknown");
+      await page.waitForSelector(".conversation-header h2");
+      assert.equal((await page.textContent(".conversation-header h2"))?.trim(), "Conversation");
+      assert.match((await page.textContent(".conversation-header")) ?? "", /Dossier/);
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+    // 11. 500-message workspace preview: 25 shown, 50 after the FIRST older click, 537 at the end.
+    {
+      const { page, errors } = await open("big");
+      await page.waitForSelector(OLDER);
+      assert.equal((await ids(page)).length, 25, "the preview does not pre-fill 500 messages");
+      await page.click(OLDER);
+      await page.waitForFunction(() => document.querySelectorAll("[data-message-id]").length === 50);
+      for (let n = 0; n < 30 && (await page.$(OLDER)); n++) {
+        const before = (await calls(page)).length;
+        await page.click(OLDER);
+        await page.waitForFunction((k: number) => (window as unknown as { calls: Call[] }).calls.length > k && !document.querySelector("[data-message-history=loading]"), before);
+      }
+      const shown = await ids(page);
+      assert.equal(shown.length, 537);
+      assert.equal(new Set(shown).size, 537);
+      assert.deepEqual(shown, [...shown].sort());
+      assert.equal((await calls(page)).length, 22);
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+    // 7. Demo: workspace preview only, zero fetch.
+    {
+      const { page, errors } = await open("demo");
+      await page.waitForSelector("[data-message-id]");
+      await page.waitForTimeout(200);
+      assert.equal((await calls(page)).length, 0);
+      assert.equal((await ids(page)).length, 5);
+      assert.equal(await page.$(OLDER), null);
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+    assert.equal((globalThis as { deferredReached?: boolean }).deferredReached, true, "the deferred-send scenario ran to its snapshot checks");
+  } finally {
+    await browser.close();
+    server.close();
+  }
+});

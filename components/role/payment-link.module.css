@@ -1,0 +1,26 @@
+/* PAY-QR: dark modules on a light quiet zone in BOTH themes (scannable): the two tokens below are
+   theme-invariant (--ui-on-primary is white, --ui-on-advice near-black, in light and dark). */
+.qr {
+  display: grid;
+  justify-items: start;
+  gap: var(--ui-space-2);
+  margin: var(--ui-space-3) 0 0;
+}
+.code {
+  display: block;
+  width: 192px;
+  height: 192px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+}
+.quiet {
+  fill: var(--ui-on-primary);
+}
+.modules {
+  fill: var(--ui-on-advice);
+}
+.caption {
+  margin: 0;
+  color: var(--ui-text-muted);
+  font-size: 14px;
+}

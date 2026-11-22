@@ -1,0 +1,520 @@
+/* Site operations (ADV-B2B-OPERATIONS-001). Dense, 1px borders, 8px grid, one accent (the
+   global blue); statuses always carry text. Shared primitives come from app/globals.css. */
+.root {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.demoBanner {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid #eeddba;
+  border-radius: 6px;
+  background: #fffaed;
+  color: #7d5a12;
+  font-size: 13px;
+  font-weight: 600;
+}
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.header h2 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.3;
+}
+.muted {
+  color: #526178;
+  font-size: 13px;
+  font-weight: 400;
+}
+/* Tabs: dense but ≥ 44 px targets (DESIGN.md); the global .tabs wraps, so nothing overflows at 360. */
+.tablist {
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.tablist > button {
+  min-height: 44px;
+  padding: 8px 12px;
+}
+.panel {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.sectionHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.sectionHead h3 {
+  margin: 0 0 4px;
+  font-size: 17px;
+}
+.sectionHead p {
+  margin: 0;
+  color: #526178;
+  font-size: 13px;
+  max-width: 68ch;
+}
+.subhead {
+  margin: 8px 0 0;
+  font-size: 15px;
+}
+.hint {
+  margin: 0;
+  color: #526178;
+  font-size: 13px;
+}
+.readOnly {
+  border: 1px solid #925c00;
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: #fff;
+  font-size: 13px;
+}
+.readOnly strong {
+  display: block;
+  margin-bottom: 2px;
+}
+.readOnly p {
+  margin: 0;
+  color: #526178;
+}
+.loading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 0;
+  color: #526178;
+  font-size: 14px;
+}
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #d8e0eb;
+  border-top-color: #1457d9;
+  border-radius: 50%;
+  animation: so-spin 0.8s linear infinite;
+}
+@keyframes so-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}
+.statRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+@media (min-width: 720px) {
+  .statRow {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.statRow > div {
+  display: grid;
+  gap: 2px;
+  padding: 12px;
+  border: 1px solid #d8e0eb;
+  border-radius: 6px;
+  background: #fff;
+}
+.statRow span {
+  font-size: 12px;
+  color: #526178;
+}
+.statRow strong {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  color: #102a43;
+}
+.statRow small {
+  font-size: 12px;
+  color: #526178;
+}
+.cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.card {
+  border: 1px solid #d8e0eb;
+  border-radius: 6px;
+  background: #fff;
+  padding: 12px 16px;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.cardHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cardHead strong {
+  font-size: 15px;
+  color: #102a43;
+}
+.tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.meta {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px 16px;
+}
+.meta div {
+  min-width: 0;
+}
+.meta dt {
+  font-size: 11px;
+  color: #526178;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.meta dd {
+  margin: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.notes {
+  margin: 0;
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.cardActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.form {
+  border: 1px solid #d8e0eb;
+  border-radius: 6px;
+  background: #fff;
+  padding: 16px;
+  display: grid;
+  gap: 0;
+}
+.form h4 {
+  margin: 0 0 12px;
+  font-size: 15px;
+}
+.subform {
+  border-top: 1px solid #d8e0eb;
+  padding-top: 12px;
+}
+.grid2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0 16px;
+}
+@media (min-width: 720px) {
+  .grid2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.fieldset {
+  border: 1px solid #d8e0eb;
+  border-radius: 6px;
+  padding: 12px;
+  margin: 0 0 16px;
+  display: grid;
+  gap: 8px;
+}
+.fieldset legend {
+  font-size: 12px;
+  font-weight: 600;
+  color: #102a43;
+  padding: 0 4px;
+}
+.lineRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0 8px;
+  align-items: end;
+  border-bottom: 1px solid #eef2f7;
+  padding-bottom: 4px;
+}
+.lineRow > :global(.field) {
+  margin-bottom: 8px;
+}
+.lineRow > button {
+  margin-bottom: 8px;
+}
+/* E67: optional document of a lifted reserve, on its own full-width line under the item. */
+.reserveDoc {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  margin-bottom: 8px;
+}
+.reserveDocLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: 0;
+}
+.reserveDocList {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  border: 1px solid #d9dfdc;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+@media (min-width: 900px) {
+  .lineRow {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  }
+}
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px 16px;
+}
+.toolbar > :global(.field) {
+  flex: 1 1 280px;
+  margin-bottom: 0;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #d8e0eb;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 13px;
+}
+.table caption {
+  text-align: left;
+  padding: 8px 12px;
+  font-weight: 600;
+  color: #102a43;
+}
+.table th,
+.table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-top: 1px solid #eef2f7;
+  vertical-align: middle;
+}
+.table thead th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #526178;
+  border-top: 0;
+}
+.table tbody th {
+  font-weight: 600;
+  color: #102a43;
+}
+@media (max-width: 719px) {
+  .table {
+    display: block;
+    overflow-x: auto;
+  }
+}
+.plain {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.plain li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid #eef2f7;
+  font-size: 13px;
+}
+@media (min-width: 720px) {
+  .plain li {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto;
+    align-items: center;
+  }
+}
+.details summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1457d9;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+.link {
+  background: none;
+  border: 0;
+  padding: 0;
+  min-height: 44px;
+  color: #1457d9;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.link:disabled {
+  color: #526178;
+  cursor: default;
+}
+.tracks {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+@media (min-width: 720px) {
+  .tracks {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.track {
+  display: grid;
+  gap: 4px;
+  padding: 8px 12px;
+  border: 1px solid #d8e0eb;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.track > span {
+  font-weight: 600;
+  color: #102a43;
+}
+.track small {
+  color: #526178;
+}
+.truncated {
+  margin: 0;
+  font-size: 12px;
+  color: #925c00;
+}
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* FASTSPLIT site/tracking theme — opt-in Delivo theme. Applies only inside a ThemeSurface
+   (`.ui-v2`, which sets the --ui-* tokens for light and dark); unthemed consumers keep the rules
+   above. --ui-* tokens only, 1px borders. Status, SLA and budget tones keep their meaning
+   (green = on track, amber = attention, red = overdue/over budget) and always carry text. */
+:global(.ui-v2) .root { color: var(--ui-text); font-family: var(--ui-font); }
+:global(.ui-v2) .demoBanner { border-color: var(--ui-warning); background: var(--ui-surface); color: var(--ui-warning); }
+:global(.ui-v2) .header h2,
+:global(.ui-v2) .sectionHead h3,
+:global(.ui-v2) .subhead,
+:global(.ui-v2) .form h4 { color: var(--ui-text); }
+:global(.ui-v2) .muted,
+:global(.ui-v2) .sectionHead p,
+:global(.ui-v2) .hint,
+:global(.ui-v2) .readOnly p,
+:global(.ui-v2) .loading,
+:global(.ui-v2) .statRow span,
+:global(.ui-v2) .statRow small,
+:global(.ui-v2) .meta dt,
+:global(.ui-v2) .table thead th,
+:global(.ui-v2) .track small { color: var(--ui-text-muted); }
+:global(.ui-v2) .readOnly { border-color: var(--ui-warning); background: var(--ui-surface); color: var(--ui-text); }
+:global(.ui-v2) .spinner { border-color: var(--ui-border); border-top-color: var(--ui-accent); }
+:global(.ui-v2) .statRow > div,
+:global(.ui-v2) .card,
+:global(.ui-v2) .form,
+:global(.ui-v2) .table { border-color: var(--ui-border); background: var(--ui-card); }
+:global(.ui-v2) .statRow strong,
+:global(.ui-v2) .cardHead strong,
+:global(.ui-v2) .meta dd,
+:global(.ui-v2) .notes,
+:global(.ui-v2) .table td,
+:global(.ui-v2) .table caption,
+:global(.ui-v2) .table tbody th,
+:global(.ui-v2) .fieldset legend,
+:global(.ui-v2) .plain li,
+:global(.ui-v2) .track > span { color: var(--ui-text); }
+:global(.ui-v2) .subform,
+:global(.ui-v2) .fieldset,
+:global(.ui-v2) .track { border-color: var(--ui-border); }
+:global(.ui-v2) .lineRow,
+:global(.ui-v2) .plain li { border-bottom-color: var(--ui-border); }
+:global(.ui-v2) .table th,
+:global(.ui-v2) .table td { border-top-color: var(--ui-border); }
+:global(.ui-v2) .table thead th { background: var(--ui-surface); }
+:global(.ui-v2) .details summary,
+:global(.ui-v2) .link { color: var(--ui-accent); }
+:global(.ui-v2) .link:disabled { color: var(--ui-text-muted); }
+:global(.ui-v2) .truncated { color: var(--ui-warning); }
+:global(.ui-v2) .details summary:focus-visible,
+:global(.ui-v2) .link:focus-visible,
+:global(.ui-v2) .tablist > button:focus-visible { outline: 3px solid var(--ui-focus); outline-offset: 2px; }
+/* Global primitives rendered by this module, scoped to its root. */
+:global(.ui-v2) .tablist > button { color: var(--ui-text-muted); }
+:global(.ui-v2) .tablist > button:global(.active) { background: var(--ui-surface); color: var(--ui-accent); box-shadow: inset 0 -2px 0 var(--ui-accent); }
+:global(.ui-v2) .root :global(.tag) { border: 1px solid var(--ui-border); background: var(--ui-surface); color: var(--ui-text-muted); }
+:global(.ui-v2) .root :global(.tag-blue),
+:global(.ui-v2) .root :global(.tag-violet) { color: var(--ui-accent); }
+:global(.ui-v2) .root :global(.tag-green) { color: var(--ui-success); }
+:global(.ui-v2) .root :global(.tag-amber) { border-color: var(--ui-warning); color: var(--ui-warning); }
+:global(.ui-v2) .root :global(.tag-red) { border-color: var(--ui-danger); color: var(--ui-danger); }
+:global(.ui-v2) .root :global(.alert) { border: 1px solid var(--ui-border); background: var(--ui-surface); color: var(--ui-text); }
+:global(.ui-v2) .root :global(.alert.error) { border-color: var(--ui-danger); color: var(--ui-danger); }
+:global(.ui-v2) .root :global(.alert.success) { border-color: var(--ui-success); color: var(--ui-success); }
+:global(.ui-v2) .root :global(.alert.warning) { border-color: var(--ui-warning); color: var(--ui-warning); }
+:global(.ui-v2) .root :global(.field) label,
+:global(.ui-v2) .root :global(.field) > span { color: var(--ui-text); }
+:global(.ui-v2) .root :global(.field) small { color: var(--ui-text-muted); }
+:global(.ui-v2) .root :global(.field) input,
+:global(.ui-v2) .root :global(.field) select,
+:global(.ui-v2) .root :global(.field) textarea { border: 1px solid var(--ui-border); background: var(--ui-bg); color: var(--ui-text); color-scheme: var(--ui-scheme); }
+:global(.ui-v2) .root :global(.field-invalid) input,
+:global(.ui-v2) .root :global(.field-invalid) select,
+:global(.ui-v2) .root :global(.field-invalid) textarea { border-color: var(--ui-danger); }
+:global(.ui-v2) .root :global(.field-error) { color: var(--ui-danger); }
+:global(.ui-v2) .root :global(.button.primary) { border-color: var(--ui-primary); background: var(--ui-primary); color: var(--ui-on-primary); }
+:global(.ui-v2) .root :global(.button.primary):hover:not(:disabled) { background: var(--ui-primary-hover); }
+:global(.ui-v2) .root :global(.button.outline) { border-color: var(--ui-border); background: transparent; color: var(--ui-text); }
+:global(.ui-v2) .root :global(.button.outline):hover:not(:disabled) { border-color: var(--ui-accent); background: var(--ui-surface); }
+:global(.ui-v2) .root :global(.empty-state) h3 { color: var(--ui-text); }
+:global(.ui-v2) .root :global(.empty-state) p { color: var(--ui-text-muted); }
+:global(.ui-v2) .root :global(.unavailable) { border-color: var(--ui-border); background: var(--ui-surface); color: var(--ui-text-muted); }
+:global(.ui-v2) .root :global(.unavailable) strong { color: var(--ui-text); }
+
+/* Dates and nested fieldsets must shrink inside the site's mobile column. */
+.form, .subform, .grid2, .fieldset, .lineRow { min-width: 0; max-width: 100%; }
+.form :global(.field), .subform :global(.field) { min-width: 0; }
+.form :is(input, select, textarea), .subform :is(input, select, textarea) { min-width: 0; max-width: 100%; width: 100%; box-sizing: border-box; }
+.panel > section { min-width: 0; max-width: 100%; }
+.form, .subform { grid-template-columns: minmax(0, 1fr); }
+.table { position: relative; max-width: 100%; }

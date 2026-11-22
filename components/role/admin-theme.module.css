@@ -1,0 +1,690 @@
+/* Super Admin space theme (FASTSPLIT-ADMIN-THEME-001). Exported `.adminSkin` sits on the admin
+   root together with ThemeSurface (`.ui-v2`), see admin-space.tsx; same contract as the client,
+   artisan and enterprise skins. Every rule is scoped under `.adminSkin` and uses --ui-* tokens
+   only; legacy variables (--navy, --blue, --text…) are never redefined, globals.css is not edited.
+   This file repaints the shared GLOBAL primitives (panels, buttons, tags, alerts, fields, tables,
+   Empty / Unavailable / Loader…) rendered in the admin space. Local classes of admin.module.css
+   are themed in that module itself (`:global(.ui-v2) .x` overrides at its end): no selector here
+   depends on the generated class-name format. Leaf modules owned by other slices stay light
+   islands, selected by stable attributes (end of file). */
+.adminSkin {
+  min-height: 100vh;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+:where(.adminSkin) h1,
+:where(.adminSkin) h2,
+:where(.adminSkin) h3,
+:where(.adminSkin) h4 {
+  color: inherit;
+}
+:where(.adminSkin) p {
+  color: var(--ui-text-muted);
+}
+.adminSkin input,
+.adminSkin select,
+.adminSkin textarea {
+  color-scheme: var(--ui-scheme);
+}
+.adminSkin a {
+  color: var(--ui-accent);
+}
+.adminSkin input::placeholder,
+.adminSkin textarea::placeholder {
+  color: var(--ui-text-muted);
+  opacity: 1;
+}
+/* ---- Generated: shared primitives (app/globals.css rules reachable from the admin space) */
+.adminSkin :global(.button) {
+  border-color: transparent;
+}
+.adminSkin :global(.primary) {
+  background-color: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+.adminSkin :global(.primary):hover {
+  background-color: var(--ui-primary);
+}
+.adminSkin :global(.outline) {
+  border-color: var(--ui-border);
+  background-color: var(--ui-card);
+  color: var(--ui-text);
+}
+.adminSkin :global(.outline):hover {
+  border-color: var(--ui-accent);
+  background-color: var(--ui-surface);
+}
+.adminSkin :global(.text-button) {
+  color: var(--ui-accent);
+}
+.adminSkin :global(.danger) {
+  color: var(--ui-danger);
+}
+.adminSkin :global(.brand) {
+  color: var(--ui-text);
+}
+.adminSkin :global(.brand) small {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.brand-mark) {
+  background-color: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+.adminSkin :global(.brand-dot) {
+  color: var(--ui-accent);
+}
+.adminSkin :global(.spinner) {
+  border-color: var(--ui-border);
+  border-top-color: var(--ui-accent);
+}
+.adminSkin :global(.avatar) {
+  background-color: var(--ui-surface);
+  color: var(--ui-text);
+}
+.adminSkin :global(.hello-dot) {
+  color: var(--ui-accent);
+}
+.adminSkin :global(.stats-strip) {
+  border-color: var(--ui-border);
+  background-color: var(--ui-card);
+}
+.adminSkin :global(.stats-strip) > div {
+  border-right-color: var(--ui-border);
+}
+.adminSkin :global(.stat-icon):global(.blue) {
+  background-color: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.adminSkin :global(.stat-icon):global(.amber) {
+  background-color: var(--ui-surface);
+  color: var(--ui-warning);
+}
+.adminSkin :global(.stat-icon):global(.green) {
+  background-color: var(--ui-surface);
+  color: var(--ui-success);
+}
+.adminSkin :global(.stats-strip) section > span {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.stats-strip) strong {
+  color: var(--ui-text);
+}
+.adminSkin :global(.panel) {
+  background-color: var(--ui-card);
+  border-color: var(--ui-border);
+}
+.adminSkin :global(.attention-panel) {
+  background-color: var(--ui-card);
+  border-color: var(--ui-border);
+}
+.adminSkin :global(.attention-title) {
+  background-color: var(--ui-surface);
+  border-bottom-color: var(--ui-border);
+  color: var(--ui-accent);
+}
+.adminSkin :global(.attention-body) section > span {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.request-row) {
+  border-top-color: var(--ui-border);
+}
+.adminSkin :global(.request-row):hover {
+  background-color: var(--ui-surface);
+}
+.adminSkin :global(.service-icon) {
+  background-color: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.adminSkin :global(.request-title) {
+  color: var(--ui-text);
+}
+.adminSkin :global(.request-address) {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.request-ref) {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.request-price) {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.request-price) > :global(.urgent-text) {
+  color: var(--ui-warning);
+}
+.adminSkin :global(.request-row) > svg {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.badge) {
+  background-color: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.status-quoted),
+.adminSkin :global(.status-completed) {
+  background-color: var(--ui-surface);
+  color: var(--ui-warning);
+}
+.adminSkin :global(.status-paid) {
+  background-color: var(--ui-surface);
+  color: var(--ui-success);
+}
+.adminSkin :global(.status-assigned),
+.adminSkin :global(.status-accepted),
+.adminSkin :global(.status-in_progress) {
+  background-color: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.adminSkin :global(.status-cancelled) {
+  background-color: var(--ui-surface);
+  color: var(--ui-danger);
+}
+.adminSkin :global(.quick-categories) {
+  background-color: var(--ui-card);
+  border-color: var(--ui-border);
+}
+.adminSkin :global(.quick-categories) > button {
+  border-right-color: var(--ui-border);
+  color: var(--ui-accent);
+}
+.adminSkin :global(.quick-categories) > button:hover {
+  background-color: var(--ui-surface);
+}
+.adminSkin :global(.quick-categories) span {
+  color: var(--ui-text);
+}
+.adminSkin :global(.help-panel) {
+  background-color: var(--ui-surface);
+  border-color: var(--ui-border);
+}
+.adminSkin :global(.help-symbol) {
+  background-color: var(--ui-card);
+  border-color: var(--ui-border);
+  color: var(--ui-accent);
+}
+.adminSkin :global(.sidebar-note) {
+  border-color: var(--ui-border);
+  background-color: var(--ui-card);
+}
+.adminSkin :global(.sidebar-note) > svg {
+  color: var(--ui-accent);
+}
+.adminSkin :global(.support-link) > span {
+  background-color: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.support-link) button {
+  color: var(--ui-accent);
+}
+.adminSkin :global(.alert):global(.error) {
+  background-color: var(--ui-surface);
+  color: var(--ui-danger);
+  border-color: var(--ui-danger);
+}
+.adminSkin :global(.alert):global(.success) {
+  background-color: var(--ui-surface);
+  color: var(--ui-success);
+  border-color: var(--ui-success);
+}
+.adminSkin :global(.alert):global(.warning) {
+  background-color: var(--ui-surface);
+  color: var(--ui-warning);
+  border-color: var(--ui-warning);
+}
+.adminSkin :global(.empty-icon) {
+  background-color: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.tabs) > button {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.tabs) > button:global(.active) {
+  color: var(--ui-accent);
+  background-color: var(--ui-surface);
+}
+.adminSkin :global(.subtle) {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.back-link) {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.back-link):hover {
+  color: var(--ui-accent);
+}
+.adminSkin :global(.stepper) li {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.stepper) li > span {
+  border-color: var(--ui-border);
+  background-color: var(--ui-card);
+}
+.adminSkin :global(.stepper) li:global(.current) {
+  color: var(--ui-accent);
+}
+.adminSkin :global(.stepper) li:global(.current) > span {
+  background-color: var(--ui-primary);
+  border-color: var(--ui-accent);
+  color: var(--ui-on-primary);
+}
+.adminSkin :global(.field) > span,
+.adminSkin :global(.urgency-options) legend {
+  color: var(--ui-text);
+}
+.adminSkin :global(.field) input,
+.adminSkin :global(.field) select,
+.adminSkin :global(.field) textarea {
+  border-color: var(--ui-border);
+  background-color: var(--ui-card);
+  color: var(--ui-text);
+}
+.adminSkin :global(.field) small {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.category-grid) > button {
+  border-color: var(--ui-border);
+}
+.adminSkin :global(.category-grid) > button > svg {
+  color: var(--ui-accent);
+}
+.adminSkin :global(.category-grid) small {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.category-grid) > button:global(.selected) {
+  background-color: var(--ui-surface);
+  border-color: var(--ui-accent);
+}
+.adminSkin :global(.radio-dot) {
+  border-color: var(--ui-accent);
+}
+.adminSkin :global(.selected) > :global(.radio-dot) {
+  background-color: var(--ui-primary);
+  border-color: var(--ui-border);
+  outline-color: var(--ui-focus);
+}
+.adminSkin :global(.form-actions) {
+  border-top-color: var(--ui-border);
+}
+.adminSkin :global(.inline-note) {
+  background-color: var(--ui-surface);
+}
+.adminSkin :global(.inline-note) svg {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.urgency-options) > label {
+  border-color: var(--ui-border);
+}
+.adminSkin :global(.urgency-options) > label:global(.selected) {
+  border-color: var(--ui-accent);
+  background-color: var(--ui-surface);
+}
+.adminSkin :global(.urgency-options) input {
+  accent-color: var(--ui-accent);
+}
+.adminSkin :global(.urgency-options) small {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.form-note) {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.recap-service) {
+  background-color: var(--ui-surface);
+  border-color: var(--ui-border);
+}
+.adminSkin :global(.recap-service) div > span {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.recap-address) {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.estimate-box) {
+  border-color: var(--ui-border);
+  background-color: var(--ui-surface);
+}
+.adminSkin :global(.estimate-box) > span {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.estimate-box) > strong {
+  color: var(--ui-text);
+}
+.adminSkin :global(.timeline) li:not(:last-child):before {
+  background-color: var(--ui-surface);
+}
+.adminSkin :global(.timeline) li:global(.reached):not(:last-child):before {
+  background-color: var(--ui-primary);
+}
+.adminSkin :global(.timeline) li > span {
+  background-color: var(--ui-surface);
+  border-color: var(--ui-border);
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.timeline) li:global(.reached) > span {
+  background-color: var(--ui-surface);
+  border-color: var(--ui-border);
+  color: var(--ui-accent);
+}
+.adminSkin :global(.timeline) strong {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.timeline) :global(.reached) strong {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.timeline) small {
+  color: var(--ui-accent);
+}
+.adminSkin :global(.quote-totals) :global(.total) {
+  border-top-color: var(--ui-border);
+  color: var(--ui-text);
+}
+.adminSkin :global(.document-list) > div {
+  border-bottom-color: var(--ui-border);
+}
+.adminSkin :global(.site-form) form {
+  border-top-color: var(--ui-border);
+}
+.adminSkin :global(.message-threads) {
+  border-right-color: var(--ui-border);
+  background-color: var(--ui-surface);
+}
+.adminSkin :global(.message-threads) > button {
+  border-bottom-color: var(--ui-border);
+}
+.adminSkin :global(.message-threads) > button:global(.selected) {
+  background-color: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.adminSkin :global(.message-threads) small {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.conversation-header) {
+  border-bottom-color: var(--ui-border);
+}
+.adminSkin :global(.conversation-header) > span {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.message-bubble) {
+  background-color: var(--ui-surface);
+  border-color: var(--ui-border);
+}
+.adminSkin :global(.message-bubble) > span {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.message-bubble) > p {
+  color: var(--ui-text);
+}
+.adminSkin :global(.message-bubble) small {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.message-compose) {
+  border-top-color: var(--ui-border);
+}
+.adminSkin :global(.message-compose) textarea {
+  border-color: var(--ui-border);
+}
+.adminSkin :global(.profile-intro) {
+  border-bottom-color: var(--ui-border);
+}
+.adminSkin :global(.auth-mark) {
+  background-color: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.adminSkin :global(.forgot-link) {
+  color: var(--ui-accent);
+}
+.adminSkin :global(.auth-switch) button {
+  color: var(--ui-accent);
+}
+@media (max-width: 950px) {
+  .adminSkin :global(.message-threads) {
+    border-bottom-color: var(--ui-border);
+  }
+  .adminSkin :global(.message-threads) > button {
+    border-color: var(--ui-border);
+    background-color: var(--ui-card);
+  }
+}
+@media (max-width: 760px) {
+  .adminSkin :global(.quick-categories) > button {
+    border-bottom-color: var(--ui-border);
+  }
+}
+.adminSkin :global(.review-stars) {
+  color: var(--ui-warning);
+}
+.adminSkin :global(.rating-options) legend {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.rating-options) span {
+  border-color: var(--ui-border);
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.rating-options) input:checked + span {
+  color: var(--ui-warning);
+  border-color: var(--ui-warning);
+  background-color: var(--ui-surface);
+}
+.adminSkin :global(.rating-options) input:focus-visible + span {
+  outline-color: var(--ui-focus);
+}
+.adminSkin :global(.document-manager) form {
+  border-top-color: var(--ui-border);
+}
+.adminSkin :global(.operations-tabs) {
+  border-bottom-color: var(--ui-border);
+}
+.adminSkin :global(.operations-form) {
+  border-left-color: var(--ui-border);
+}
+.adminSkin :global(.approval-list) > div {
+  border-bottom-color: var(--ui-border);
+}
+.adminSkin :global(.rule-row) {
+  border-bottom-color: var(--ui-border);
+}
+.adminSkin :global(.rule-row) > svg {
+  color: var(--ui-accent);
+}
+.adminSkin :global(.rule-row) small {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.checkbox-field) input {
+  accent-color: var(--ui-accent);
+}
+.adminSkin :global(.contract-list) details {
+  border-bottom-color: var(--ui-border);
+}
+.adminSkin :global(.contract-list) small {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.compliance-list) > div {
+  border-bottom-color: var(--ui-border);
+}
+.adminSkin :global(.record-icon) {
+  background-color: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.operation-empty) {
+  color: var(--ui-text-muted);
+}
+@media (max-width: 1050px) {
+  .adminSkin :global(.operations-form) {
+    border-top-color: var(--ui-border);
+  }
+}
+.adminSkin :global(.warranty-list) > div {
+  border-top-color: var(--ui-border);
+}
+.adminSkin :global(.warranty-list) small {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.warranty-panel) form {
+  border-top-color: var(--ui-border);
+}
+.adminSkin :global(.confirmation-review) {
+  border-color: var(--ui-border);
+  background-color: var(--ui-card);
+}
+.adminSkin :global(.destructive-button) {
+  color: var(--ui-on-primary);
+  background-color: var(--ui-danger);
+}
+.adminSkin :global(.destructive-button):hover {
+  background-color: var(--ui-danger);
+}
+.adminSkin :global(.inline-editor) {
+  border-top-color: var(--ui-border);
+}
+.adminSkin :global(.inline-validation) {
+  color: var(--ui-danger);
+}
+.adminSkin :global(.tag) {
+  background-color: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.tag-blue) {
+  background-color: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.adminSkin :global(.tag-green) {
+  background-color: var(--ui-surface);
+  color: var(--ui-success);
+}
+.adminSkin :global(.tag-amber) {
+  background-color: var(--ui-surface);
+  color: var(--ui-warning);
+}
+.adminSkin :global(.tag-red) {
+  background-color: var(--ui-surface);
+  color: var(--ui-danger);
+}
+.adminSkin :global(.tag-violet) {
+  background-color: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.adminSkin :global(.stat) {
+  background-color: var(--ui-card);
+  border-color: var(--ui-border);
+}
+.adminSkin :global(.stat) section > span {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.stat) strong {
+  color: var(--ui-text);
+}
+.adminSkin :global(.stat) small {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.stat-icon):global(.violet) {
+  background-color: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.adminSkin :global(.stat-icon):global(.navy) {
+  background-color: var(--ui-surface);
+  color: var(--ui-text);
+}
+.adminSkin :global(.unavailable) {
+  border-color: var(--ui-accent);
+  background-color: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.unavailable-icon) {
+  background-color: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.unavailable) strong {
+  color: var(--ui-text);
+}
+.adminSkin :global(.unavailable) small {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.field) label {
+  color: var(--ui-text);
+}
+.adminSkin :global(.field-error) {
+  color: var(--ui-danger);
+}
+.adminSkin :global(.field-invalid) input,
+.adminSkin :global(.field-invalid) select,
+.adminSkin :global(.field-invalid) textarea {
+  border-color: var(--ui-danger);
+}
+.adminSkin :global(.demo-note) {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.tabs) > button[aria-pressed="true"] {
+  color: var(--ui-accent);
+  background-color: var(--ui-surface);
+}
+.adminSkin :global(.install-icon) {
+  background-color: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.adminSkin :global(.photo-list) li {
+  color: var(--ui-text);
+  border-color: var(--ui-border);
+  background-color: var(--ui-card);
+}
+.adminSkin :global(.upload-queue) li {
+  border-color: var(--ui-border);
+}
+.adminSkin :global(.upload-queue) li[data-status="failed"] {
+  border-color: var(--ui-danger);
+  background-color: var(--ui-surface);
+}
+.adminSkin :global(.upload-queue) li[data-status="done"] {
+  border-color: var(--ui-success);
+  background-color: var(--ui-surface);
+}
+.adminSkin :global(.upload-queue) li small {
+  color: var(--ui-text-muted);
+}
+.adminSkin :global(.upload-queue) li[data-status="uncertain"] {
+  border-color: var(--ui-warning);
+  background-color: var(--ui-surface);
+}
+.adminSkin :global(.upload-candidates) li {
+  background-color: transparent;
+}
+.adminSkin :global(.upload-open) small {
+  color: var(--ui-danger);
+}
+/* ---- Manual corrections ------------------------------------------------------------------- */
+.adminSkin :global(.checkbox-field) input,
+.adminSkin :global(.urgency-options) input {
+  accent-color: var(--ui-primary);
+}
+/* Shared primitives, aligned with the client skin. */
+.adminSkin :global(.primary):hover:not(:disabled),
+.adminSkin :global(.button.primary):hover:not(:disabled) {
+  background: var(--ui-primary);
+}
+.adminSkin :global(.destructive-button),
+.adminSkin :global(.destructive-button):hover {
+  border: 1px solid var(--ui-danger);
+  background: transparent;
+  color: var(--ui-danger);
+}
+.adminSkin :global(.tabs) > button {
+  min-height: 44px;
+}
+.adminSkin :global(.timeline) li:not(:last-child):before {
+  background: var(--ui-border);
+}
+.adminSkin :global(.timeline) li:global(.reached):not(:last-child):before {
+  background: var(--ui-accent);
+}
+.adminSkin :global(.timeline) li:global(.reached) > span {
+  border-color: var(--ui-accent);
+}
+.adminSkin :global(.timeline) :global(.reached) strong {
+  color: var(--ui-text);
+}
+.adminSkin :global(.timeline) small {
+  color: var(--ui-text-muted);
+}
+/* Install note: inline legacy colour in the shared PWA panel. */
+.adminSkin :global(.install-panel) p[style] {
+  color: var(--ui-text-muted) !important;
+}
+
+/* Support centre honesty note (leaf module, legacy #52627a): the paragraph right under the page
+   title, reached through the shared global class only. */
+.adminSkin :global(.page-title) + p {
+  color: var(--ui-text-muted);
+}

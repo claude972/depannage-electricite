@@ -1,0 +1,243 @@
+# Catalogue des sources et des maquettes
+
+Annexe factuelle de [l’audit consolidé](../AUDIT_COMPLET_SPECIFICATIONS.md). État du code : `46aac2a`, 30 octobre 2026. Lecture des sources et du code ; aucun test live nouveau ni modification applicative. Les lignes sont celles de cet instantané.
+
+
+Lecture seule, 30 octobre 2026. Aucun code applicatif modifié pendant la collecte. Rapport de travail pour le parent, non déclaration de conformité fonctionnelle du code.
+
+## État courant après réception des volumes 6 à 9
+
+Le corpus comprend **9 PDF, 102 pages, 93 occurrences de maquettes et 63 images distinctes**. Les quatre nouveaux volumes ajoutent 27 occurrences : 23 doublons et quatre images nouvelles du volume 8 (À propos, confidentialité, devis client, détail intervention). Il y a donc deux nouvelles surfaces publiques à ajouter à la couverture, tandis que les détails client précisent plusieurs points déjà inventoriés.
+
+Les références sont qualifiées par volume : V6-C01–C06, V7-C01–C08, V8-C01–C08 et V9-C01–C05. Le préfixe C est un identifiant d’audit : les libellés imprimés restent conservés dans les tableaux et le manifeste. Aucun numéro local ne rétablit arbitrairement les numéros globaux 19 à 32. Les volumes 6/7/9 ne fournissent pas de nouveaux écrans artisan ou Super Admin ; V8 répète M65/M14 pour l’artisan.
+
+Catalogues complémentaires : [volumes 6/7](COMPLEMENTS_VOLUMES_6_7.md), [volume 8](COMPLEMENT_VOLUME_8.md), [volume 9](COMPLEMENT_VOLUME_9.md). Le manifeste JSON contient tous les PDF, pages, identifiants, libellés originaux, dimensions, empreintes et groupes d’images identiques.
+
+## État précédent après réception du volume 5
+
+**5 PDF, 71 pages, 66 occurrences de maquettes et 59 images distinctes**. Le catalogue initial ci-dessous couvre M1–M18 et M33–M70. Le volume 5 ajoute V5-C01 à V5-C10, dont sept doublons exacts et trois nouveaux écrans. Les références bureaux ne sont plus manquantes : fiche V5-C01 et dashboard V5-C05. V5-C08 apporte le détail d’approbation d’un devis syndic.
+
+Les anciens numéros 19 à 32 restent non identifiés ; on ne renumérote pas arbitrairement les dix compléments. Le détail et les questions du nouveau volume sont dans [COMPLEMENT_VOLUME_5](COMPLEMENT_VOLUME_5.md). Les constats d’absence de références bureaux dans la collecte initiale décrivent exclusivement les quatre premiers documents ; ils sont remplacés par la présente mise à jour.
+
+## Sources consultées et méthode — collecte initiale des quatre premiers PDF
+- `SPECIFICATION_COMPLETE_FINALE_PROJET.pdf` : 1 page, texte lu intégralement.
+- `TOUT_EN_UN_MAQUETTES_GRANDES.pdf` : 19 pages ; maquettes 1–18 aux pages1–18, fin du document p19 ; p1 contient aussi le résumé.
+- `MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf` : 17 pages ; couverture p1, maquettes 33–48 pp2–17.
+- `MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf` : 23 pages ; couverture p1, maquettes 49–70 pp2–23.
+- Total : 60 pages,56 maquettes numérotées disponibles ; numéros19–32 ABSENTS.
+- Texte PDF extrait intégralement par PyMuPDF. Les maquettes sont des images intégrées : chaque image a été extraite sans modification des originaux et inspectée visuellement ; planches pour les56images puis zoom des blueprints6/69, onboarding65, admin43 et fiches/tableaux B2B13/16/37/50/56/57/66.
+- Images de revue : `/tmp/courant-audit/pdf-images/`. La plupart des images desktop font1168×784px ; petits textes parfois imprécis/typos dans la source, limites signalées ci-dessous. Pas d'OCR installé ni d'affirmation fondée sur une extraction textuelle inexistante.
+- DESIGN.md et skillPDF lus pour les règles de traitement ; aucun autre document du projet ne remplace les PDF comme source fonctionnelle.
+
+## Hiérarchie et classification
+La spécification finale se déclare référence fonctionnelle unique. Elle dit que les maquettes sont des bases à améliorer. Les pages de benchmark concurrentiel sont des exemples de comparaison (certaines datées demai 2024), PAS des engagements commerciaux actuels. Le refus du style IA du propriétaire prévaut sur l'autorisation générique «design/IA» de la notePDF. Les champs visibles sont des éléments à considérer, mais un exemple de prix, délai oucertification ne devient pas un engagement commercial sans décision explicite.
+
+## Exigences explicites de la spécification finale, p1
+1. Acteurs : particuliers, artisans électriciens, syndics/copropriétés, B2Brestauration/bureaux/ERP.
+2. Parcoursclient : demande→fourchette→matching→suivi→devis→paiement→notation→garantie.
+3. Parcoursartisan : réceptionmission→acceptation→devis→intervention→paiement→performance.
+4. Syndic : multi-immeubles, site, approbations, budgets, rapportsAG.
+5. B2B : tableauparvertical et ficheparsite comportant interventions,budget,contacts,documents,alertes ; SLA/conformité/reportingconsolidé.
+6. Restauration : équipementscritiques cuisine/froid/éclairage, ticketsurgents, SLAexploitation.
+7. Bureaux : maintenanceplanifiée, consommation,budgetparbâtiment,zones.
+8. ERP : conformité,auditsélectriques,signalementssécurité,obligationsréglementaires.
+9. Avancécommun : workflowsconfigurables,contratscadres/grillestarifaires,reporting/export,alertesbudgetSLA,archivageautomatique,matchingintelligent/géolocalisation,chat/notificationsmulticanaux,garantie1anautomatisée,diagnosticphotoIAV3.
+10. Monétisation : commission15–25 %,abonnementsclient/artisan,contratsB2B,premium ; aucunprix/tauxuniqueimposé.
+11. Pages : accueil/demande/suivi/paiement/profils/historique/notation/missions/devis/dashboards/fichessites/recrutement/formulaires/tarifs/garantie/FAQ/contact/admin.
+12. Priorités : MVPclient/artisan/estimation/paiement ; V2tempsréel/chat/B2Bbase/garantie/dashboardsparvertical ; V3approbationsavancées/fichescomplètes/contrats/reporting/IA/conformitéERP.
+
+## Catalogue exhaustif des56 maquettes
+Les descriptions sont des observations de la source. Les nombres, noms, adresses et prix cités sont des exemples d'interface, pas des données réelles.
+
+| Maquette | PDF | PagePDF | Surface / titre | Acteur | Fonctions visibles / annotations |
+| --- | --- | --- | --- | --- | --- |
+| 1 | TOUT_EN_UN_MAQUETTES_GRANDES.pdf | 1 | Parcours artisan-client en 8 étapes | Artisan + client + support | Lead app, contact SMS/appel, RDV, déplacement/diagnostic, devis, réparation, reporting, paiement reçu ; photos avant/après, devis signé, facture ; qualification lead, matching compétences/zone/urgence, support technique, suivi qualité, litiges et encaissement. |
+| 2 | TOUT_EN_UN_MAQUETTES_GRANDES.pdf | 2 | Comparaison parcours et concurrents | Benchmark, pas écran produit | Problème/demande/matching/intervention/clôture ; comparaison MesDépanneurs/Depanneo/HomeServe, majorations, fourchette, abonnements, différenciation ; données explicitement indicatives de mai 2024, à ne pas traiter comme faits actuels. |
+| 3 | TOUT_EN_UN_MAQUETTES_GRANDES.pdf | 3 | Parcours client complet à couches | Client + conseiller + plateforme | 8 étapes ; recherche, formulaire/appel, confirmation RDV, diagnostic, acceptation devis, paiement, avis ; backstage assignation, disponibilité/planning, mise à jour intervention, facture, enquête satisfaction ; base artisans, app mobile, paiement, CRM. |
+| 4 | TOUT_EN_UN_MAQUETTES_GRANDES.pdf | 4 | Interventions en cours, portail Partenaire PRO | Entreprise/partenaire desktop | Navigation Tableau de bord/Interventions/Artisans/Sites/Contrats/Rapports/Paramètres ; filtres site/type/artisan/statut/période ; export, tri date, pagination, liste interventions multisites. |
+| 5 | TOUT_EN_UN_MAQUETTES_GRANDES.pdf | 5 | Créer une demande, mobile | Client | Type de panne, description compteur 500, ajout photos facultatives 0/6, fourchette estimée TTC, promesse exemple aucune majoration 24/7, continuer et confidentialité. |
+| 6 | TOUT_EN_UN_MAQUETTES_GRANDES.pdf | 6 | Service blueprint B2B | Partenaire/syndic/assureur/gestionnaire + artisan + back-office | Demande/affectation/intervention/reporting/facturation/suivi ; contrat/annuaire, notifications email/SMS, bon intervention, photos/preuves/check-list sécurité, rapport/photos horodatées/synthèse incident, facture électronique/avoirs/notes crédit, validation partenaire, signature sur site, escalades, ERP/compta, CRM, actions préventives. |
+| 7 | TOUT_EN_UN_MAQUETTES_GRANDES.pdf | 7 | Suivi intervention client, mobile | Client | Chronologie horodatée demande créée/artisan assigné/en route/sur place/terminé ; carte GPS/itinéraire, ETA, profil artisan photo métier note avis, discuter ; navigation basse Accueil/Intervention/Messages/Profil. |
+| 8 | TOUT_EN_UN_MAQUETTES_GRANDES.pdf | 8 | Nouvelle mission, mobile | Artisan | Adresse, catégorie, distance/proximité, estimation TTC, accepter/refuser, urgence, durée estimée, matériel nécessaire, appel client, favori/enregistrement ; navigation Tableau de bord/Missions. |
+| 9 | TOUT_EN_UN_MAQUETTES_GRANDES.pdf | 9 | Plan parcours client | Client/processus | Détection, questionnaire, fourchette, matching proximité/disponibilité/compétences, créneau et contact ; diagnostic et devis avant travaux, réparation/tests/nettoyage, paiement après travaux, facture et garantie 1 an. |
+| 10 | TOUT_EN_UN_MAQUETTES_GRANDES.pdf | 10 | Comparaison parcours client | Benchmark | Comparaison concurrents sur différenciation, délais, tarifs, points forts et limites ; ne définit pas les engagements contractuels de ce projet. |
+| 11 | TOUT_EN_UN_MAQUETTES_GRANDES.pdf | 11 | Accueil commercial Électricien Pro | Public web | Navigation Accueil/Services/Zones/À propos/Tarifs, téléphone et rappel ; photo artisan, commencer, trois étapes ; exemples de labels qualifié/assuré, sous 24–48 h, national, paiement sans avance. |
+| 12 | TOUT_EN_UN_MAQUETTES_GRANDES.pdf | 12 | Paiement après intervention, mobile | Client | Résumé TTC, détail main œuvre/déplacement/pièces/TVA, CB/Apple Pay/Google Pay/paiement en plusieurs fois, bouton payer, sécurité ; exemple 198 EUR dont TVA 10 EUR affichée 20 %, calcul incohérent à ne pas recopier. |
+| 13 | TOUT_EN_UN_MAQUETTES_GRANDES.pdf | 13 | Dashboard SyndiPro multisites | Syndic desktop | Immeubles, interventions, budget/factures, fournisseurs, copropriétaires, assemblées, documents, alertes, paramètres ; table immeubles/adresse/interventions/budget/alertes/statut ; interventions récentes avec fournisseur/date/priorité ; profil Admin Général Syndic. |
+| 14 | TOUT_EN_UN_MAQUETTES_GRANDES.pdf | 14 | Mes documents obligatoires, mobile | Artisan | RC Pro validée avec date de validité, décennale à renouveler avec expiration, diplôme manquant, ajouter/remplacer, profil complet100 % ; navigation Accueil/Chantiers/Documents/Profil. |
+| 15 | TOUT_EN_UN_MAQUETTES_GRANDES.pdf | 15 | Créer une demande, variante mobile | Client | Catégorie, description300, photo facultative JPG/PNG max10 Mo, fourchette TTC, absence majoration24/7, continuer ; variante incompatible avec certains limites de maquette5. |
+| 16 | TOUT_EN_UN_MAQUETTES_GRANDES.pdf | 16 | Fiche résidence Les Jardins Azur | Syndic desktop | Navigation propriétés/appels de fonds/interventions/fournisseurs/documents/assemblées/communication ; lots, copropriétaires, recouvrement, exercice, budget voté par postes, équilibre budgétaire, interventions, contacts gardien/conseil syndical, archives/PV AG/budget/contrats, export, notifications, dernière synchronisation. |
+| 17 | TOUT_EN_UN_MAQUETTES_GRANDES.pdf | 17 | Comparaison parcours client, variante | Benchmark | Problème/demande/matching/intervention/clôture ; comparaison prix, abonnement et suivi concurrents ; exemples pas engagements actuels. |
+| 18 | TOUT_EN_UN_MAQUETTES_GRANDES.pdf | 18 | Mon profil client, mobile | Client | Identité/email/téléphone éditables, adresses principale et secondaire/voir tout, moyens paiement enregistrés Visa/PayPal, historique commandes, paramètres/déconnexion ; navigation Accueil/Commandes/Favoris/Profil. |
+| 33 | MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf | 2 | Abonnement Sérénité | Public/client | Offre exemple29,90 EUR/mois TTC sans engagement ;8 interventions/an/plafond16 heures/remise20 % au-delà, priorité, résiliation sans frais, souscrire ; support dédié, planning flexible, qualifications ; conditions et viabilité non validées. |
+| 34 | MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf | 3 | Créer un devis, mobile | Artisan | Lignes déplacement80/main œuvre240/pièces120HT, ajouter ligne, sous-total440TVA 20 %88total528TTC ; photos/documents, envoyer devis client. |
+| 35 | MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf | 4 | Vue ensemble artisan, mobile | Artisan | Missions du jour avec lieux/types/horaires, voir tout, notesmoyennes, CAdu mois/tendance, missionsdisponibles ; navigation basse Tableau de bord/Missions/Devis/Messages/Profil. |
+| 36 | MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf | 5 | Profil artisan, mobile | Artisan | Entreprise/nom/photo, note/nombreavis, badgevérifié ; documents/assurances3sur3validés ; satisfaction/qualité/délais/missionsréalisées/ancienneté/notemoyenne ; modifierprofil, statistiquesdétaillées ; navigation dédiée. |
+| 37 | MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf | 6 | Dashboard SafeERP | Gestionnaire ERP desktop | Établissements, interventions, audits, conformité, signalements, rapports, documents, paramètres ; recherche/période ;établissements/conformitéglobale/interventions/auditsàvenir ; table types/conformité/prochain audit/urgence ; alertes, planningaudits, diagrammeurgence, tauxrésolution, courbeconformité. |
+| 38 | MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf | 7 | Tarifs intervention | Public web | Table fourchettesTTC par panne générale/tableau/prise/éclairage ; exemple àpartir150, absence majoration24/7, déplacements/main œuvre inclus, confiance ; fourchettes diffèrent de certains autres écrans. |
+| 39 | MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf | 8 | Notifications, mobile | Client | Flux notifications artisanenroute/devisreçu/interventionterminée/paiementconfirmé, dates/heures, lu / non lu, toutmarquerlu, liens actions, ETA ; navigation basseclient. |
+| 40 | MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf | 9 | Mon parcours client, schéma | Client/processus | Détection/demande/rappelRDV/intervention/clôture/suivi ; fourchette100–300TTC indicative, rappel2–30 min, diagnosticgratuit, devisvalidé, facture/garantie1an/enquêtesatisfaction/retoursi besoin ; exemplesàclarifier. |
+| 41 | MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf | 10 | Accueil Électricien Urgence | Public web | Hero troisétapes illustrationélectricien, commencer, services dépannage/installation/sécurité/chauffageplomberie ; promessesprixconnu/24/7/garantie1an, navtarifsFAQzones ; scopechauffageplomberieàréconcilieravecélectricitéfinale. |
+| 42 | MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf | 11 | Contact et aide | Public web | Formulaire nom/email/téléphone/sujet/message/envoi, mentionconfidentialité ; coordonnées, horaires, zone, FAQaccordéon, CTA devis ; exemplescoordonnéesnonréelles. |
+| 43 | MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf | 12 | Tableau administrateur ArtisanPro | Administration plateforme/super-admin desktop | Navigation Artisans/Interventions/Devis&Factures/Clients/Avis&Notes/Messages/Paramètres ; indicateursinterventionsmensuelles/encours/CA HTmensuelannuel/tendances ; candidaturesavec catégorie/date/email/documents/vérifier/afficherplus ; interventionsencoursclient/artisan/lieu/échéance ; compte explicite Admin Super Admin. |
+| 44 | MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf | 13 | Nouvelle mission variante mobile | Artisan | Adresse/typepanne/description, distanceettempsroute, estimation, accepter/refuser ; disponibilitéclient/matériel/typeintervention, appelerclient. |
+| 45 | MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf | 14 | Garantie un an | Public/client web | Couvertureexemplepièces/mainœuvre/conformité/attestationécrite ; exclusionsmauvaiseutilisation/usuremodification, activercontact/transmissioninfos/diagnostic/résolution ; support, certifications ; modalitésjuridiquesetautomatisationàvalider. |
+| 46 | MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf | 15 | Comment ça marche | Public web | Processus4étapes contact/confirmationintervention/diagnosticréparation/terminé ; appel24/7, qualification, sécurité, suivi ; variante3étapesailleurs. |
+| 47 | MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf | 16 | Notation après intervention, mobile | Client | Étoiles1–5, commentairefacultatifcompteur300, envoyeravis, retour, messageconfiance ; pasdemodérationdéfinie. |
+| 48 | MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf | 17 | Parcours client complet à couches, variante | Client/support/plateforme | Détection/demande/rappel/arrivée/devis/réparation/paiement/suivigarantie ; confirmationemail/devisnumérique/facture/rapport ; chatbot/conseiller, disponibilitéassignation, paiement, enquête, baseartisans/app/CRM. |
+| 49 | MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf | 2 | Connexion Électro Pro | Artisan auth web | Connexionemail/motdepasse, afficher/masquer, oublié, seconnecter, créercompte ; identitéapplicationélectriciens. |
+| 50 | MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf | 3 | Fiche restaurant Le Gourmet | Entreprise restauration desktop | Cuisine/froid/éclairage et dernierscontrôles, étatalerte ; interventionsencours/passées ; budgetannuelHT/engagés/restant/prochainefacture ; SLAcontratniveauOr/délai4 houvrées/disponibilité24/7 ; contactsitehoraires etdocumentsavec téléchargement ; exporterfiche/modifiersite. |
+| 51 | MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf | 4 | Accueil Élec Facile | Public web | Hero photo électricien, connexion/devenirartisan/tarifs/commentçamarche ; CTA besoinélectricien ; services4catégories ; garantiesexemplequalifié/prixfixe/sanssurcoût24/7. |
+| 52 | MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf | 5 | Blueprint entreprise-client/artisan-entreprise | Entreprise/partenaire/artisan/back-office | Demande/affectation/intervention/reporting/facturation/suivi ; partenairesincluent syndic/assureur/gestionnaire ; contrat, bon, rapportphotos, factureélectronique ; validationaffectationetfintravaux, paiementetretourexpérience ; backstagequalification/dispatchmanualauto/géoloc/status, contrôlefacture/archivage, intégrationERP/CRM/BI. |
+| 53 | MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf | 6 | Parcours client complet à couches | Client/support/plateforme | 8étapes et preuvesweb/email/devis/facture/rapport ; actionsclient etconseiller/chatbot ; assignation/disponibilité/paiement/enquête, baseartisans/app/paiement/CRM. |
+| 54 | MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf | 7 | Demande envoyée, mobile | Client | Confirmationenregistrement, prochainesétapes contactartisan etinformationsétapes, suivre demande, retourmenu ; promesserappelrapideàspécifier. |
+| 55 | MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf | 8 | Nouvelle demande syndic | Syndic desktop | Sélecteurimmeuble/site, typeproblème, description1000 ; quatreurgences critique/élevé/moyen/faible etimpact ; alerteimpactbudgétaire/politiquegestioncoûts ; annuler/créerdemande ; navigationgestionnaire. |
+| 56 | MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf | 9 | Dashboard RestauTech | Entreprise restauration desktop | Navigation sites/interventions/tickets/équipements/contratsSLA/rapportsanalytics/alertes/paramètres ; filtrepériode/recherchesites ; KPIinterventions/ticketscritiques/conformitéSLA/sitesimpactés ; tableauétatcuisine/froid/éclairage/SLA/interventions/dernierticket ; délai réponse/résolution/tauxdélais, ticketsrécentsavec criticité. |
+| 57 | MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf | 10 | Fiche suivi ERP hôtel | Gestionnaire ERP desktop | CatégorieERP, conformitédomaines(accessibilité/incendie/électricité/hygiène), prochaincontrôle ; auditsdatesrésultatsréserves ; interventionslocalisées ; alertessécurité/nouveausignalement ; budgetannuelparcatégoriesengagésdisponibleréalisé ; contactsclé, archivesPDF/DWG, planséquipements, rapports, export, accèsniveau3. |
+| 58 | MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf | 11 | Parcours artisan-client, variante | Artisan/support/plateforme | Leadnotification, contact, RDV, déplacementdiagnostic, devisvalidé, réparation, reportingpreuves, paiement ; contrôlequalitérapports, rappelsautomatiques, aide diagnosticressourcestechniques, suiviàdistanceescalades, facturation/litiges. |
+| 59 | MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf | 12 | Zones intervention | Public web | CarteFrancezonescouvertes/ponctuelles, listevilles, CTAdevis ; couverturecommercialeexemplepasdécisionterritorialevalidée. |
+| 60 | MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf | 13 | Recrutement réseau électriciens | Public/artisan web | Rejoindreréseau, missionslocales, prixcommissions, paiementrapide, outilssuivi/planning/facturation, support ; conditionsassurancequalification/confidentialité ; postuler ; exemplecommission5–8 %, sansabonnement, sous48 h règlement etcompteursavisànepasreprendresansvalidation. |
+| 61 | MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf | 14 | Accueil client, mobile | Client | CTAélectricien, actionsrapidescatégories, interventionsrécentes, notifications ; navigationbasseAccueil/Demandes/Messages/Profil. |
+| 62 | MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf | 15 | Conversation artisan-client, mobile | Client/artisan | Profilartisanphoto/métier/disponibilité, appeler, dateconfirmationRDV ; messageshorodatés, piècesjointesphoto, statutsenvoi/lecture, composer/send ; contenuplomberieillustratifnonélectricité. |
+| 63 | MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf | 16 | Mentions légales | Public web | Éditeurraison sociale/adresse/capital/SIREN/TVA/contact, directeurpublication,hébergeur, propriétéintellectuelle,donnéespersonnelles,responsabilité,date ; toutesidentitésdémonstrationàremplacer. |
+| 64 | MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf | 17 | Candidature envoyée | Artisan/public web | Confirmationdossier, étudedossierexemple48 houvrées, contactsiadéquation, confirmationemail, aidecontacthoraires ; paslogiquerefus/revisiondocumentsdéfinie. |
+| 65 | MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf | 18 | Formulaire rejoindre électricien partenaire | Artisan onboarding web | 5étapes perso/société/documents/zones/disponibilités ; prénom/nom/téléphone/email/adresse ; entreprise/SIRET/statutjuridique/effectifs/siteweb/certificationoptionnelle ; Kbis<3mois/RC Pro/diplôme, PDFJPG10 Mo ; régions/zonessélectionmultiples, capacitéimmédiat1–3jours1semaine+, jourshabituels, commentaire500. |
+| 66 | MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf | 19 | Tableau partenaire PartenaRx | Entreprise/partenaire desktop | Navigationinterventions/artisans/sitescontrats/deviscommandes/facturation/rapports/messages ; comptePartnerPremium ; rechercheartisansite,type/statut/site/période/reset ; table siteadresse/typepréventifcuratifinspection/artisandiscipline/statut/date/actions/pagination. |
+| 67 | MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf | 20 | Nouvelle mission, variante mobile | Artisan | Adresse etitinéraire, panneetdescription, distance/ETA, fourchetteTTC, accepter/refuser/appeler, urgence ; pasdenavigationbassevisible. |
+| 68 | MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf | 21 | Parcours artisan-client à couches, variante | Artisan/client/plateforme | 8étapes, notification/SMS/devis/photos/facture ; interactionsconfirmationRDVaccès/devisvalidé/preuves/paiementreçu ; backstagequalificationmatchingcompétencesdisponibilité/supportqualitélitiges ; diagrammeavec libellésdécalés. |
+| 69 | MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf | 22 | Blueprint service B2B détaillé | Entreprise/syndic/assureur/gestionnaire/artisan/back-office | Demandesdescription/site/priorité/documents, validationaffectation, notificationoccupants ; planningdisponibilitéscertifications, accèsconsignes/bon digital, validationtravaux ; rapportconstatsphotosmesurespièces, synthèsesautomatiques/tableauxanalytics ; facturegrillecontractuelle, validationpaiement/relance, ERPcompta, archivesconformes ; garanties/satisfaction/historique, préventif/récurrences/reportingannuel ; scoringartisans/stockpièceslogistique. |
+| 70 | MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf | 23 | FAQ | Public web | Accordéons tarifs/calcul, délais, garantie, urgence, moyenspaiement ; clarificationtarifsforfaits/déplacementmainœuvrepièces, devisavanttravauxécritsurdemande ; contacteréquipe24/7 exemple ; contradictiondevisoral/écritavecautresfluxàtrancher. |
+
+## Distinction des back-offices, étayée par les sources
+
+- **Entreprise cliente / partenaire B2B** : maquettes4,13,16,50,55,56,57,66. Gestion de plusieurs sites, artisans prestataires, interventions, contrats, commandes, budgets, factures, rapports et messages ; variantes métier réelles au-delà d'un simple filtre de type de site.
+- **Artisan opérationnel** : maquettes8,14,34,35,36,44,49,60,64,65,67. Espace propre, navigation mobile basse (tableau, missions, devis, messages, profil), planning, qualification/documents, activité et revenus.
+- **Administration de la plateforme / Super Admin** : explicite dans maquette 43, pas uniquement une suggestion d'agent. Tableaux et menus transverses artisans, clients, interventions, devis/factures, avis/notes, messages et paramètres. Les droits fins, les actions sensibles et la distinction support/finance/super-admin ne sont pas détaillés.
+- **Entreprise prestataire employant des artisans** : les blueprints6,52,69 parlent d'artisan/entreprise, équipe, planning/dispatching, préparation matériel, pièces/logistique, responsable support et back-office. Une organisation prestataire et ses salariés sont suggérés, mais aucun modèle de droits ni tableau distinct n'est spécifié complètement. Ce sens doit être distingué d'une entreprise CLIENTE B2B et de l'entreprise EXPLOITANTE de la plateforme.
+
+## Informations réelles à compléter dans les spécifications
+
+Ces lignes sont des **décisions manquantes dans les documents**, pas des exigences déjà approuvées ni une preuve que chaque fonction doit être dans le MVP.
+
+| IDsource | Domaine | Lacune / décision nécessaire | Preuves déclenchant la question |
+| --- | --- | --- | --- |
+| Q-PDF-01 | Identité | Nom, logo, exploitant, coordonnées, territoire, langues/devise et juridiction commerciale finaux ; plusieurs identités incompatibles. | Maquettes11/33/41/43/49/51/60/63/65/66/70 ; spécificationp1 ne fixe pas de marque. |
+| Q-PDF-02 | Plateformes | Web responsive vs applications natives client/artisan, distribution/stores, offline et notifications push ; appmobile évoquée, aucun engagement technique déterminé. | Maquettes7/35/61 et blueprints3/6/48/69. |
+| Q-PDF-03 | Acteurs | Rôles et responsabilités entre client particulier, B2B, syndic, occupant/locataire, assureur, artisan indépendant, entreprise prestataire et personnel plateforme ; qui demande, approuve, paie, reçoit le rapport. | Spécification§1–3 ; blueprints6/52/69. |
+| Q-PDF-04 | Organisations | Hiérarchie groupe/organisation/site/bâtiment/zone/lot, membres/invitations/délégation, multi-rôle et portée des permissions ; différence owner/adminorganisation/superadminplateforme. | Maquettes13/16/43/50/56/57/66. |
+| Q-PDF-05 | Onboarding artisan | Pièces obligatoires selon statut, validation/expiration/renouvellement/refus/correction/suspension ; SIRET, entreprise, qualifications, salariés et vérificateur. | Maquettes14/36/43/60/64/65. |
+| Q-PDF-06 | Disponibilité | Planning, capacité simultanée, horaires/jours, disponibilité immédiate et indicateurs occupé/absent ; fonctionnement de l'équipe prestataire. | Maquettes35/65 et blueprints1/6/69. |
+| Q-PDF-07 | Demandes/urgence | Catalogue exact de pannes/prestations, quatre niveaux B2B vs urgence simple, qualification initiale/triage, lieu/accès/contacts requis ; politique de demande incomplète ou dangereuse à définir. | Maquettes5/15/55/61 ; spécification§2–3. |
+| Q-PDF-08 | Matching | Score, filtres compétences/certification/zone/disponibilité, rayon et fournisseur carte, géolocalisation consentement/fréquence/rétention, délais acceptation/refus/expiration, absence d'artisan et réaffectation manuelle. | Spécification§4 ; maquettes7/8/44/67 ; blueprints1/6/52/69. |
+| Q-PDF-09 | Vie privée | Adresse/téléphone client visibles avant ou après attribution, appels directs ou masqués, partage aux occupants/partenaires, droits des documents. | Maquettes8/44/67 montrent adresse/appeler avant acceptation ; besoin de contrôle d'accès explicite. |
+| Q-PDF-10 | RDV/déplacement | Proposition/créneau/confirmation/replanification/no-show/annulation ; statut enroute/surplace, ETA, preuve arrivée et suivi itinéraire, qui déclenche chaque étape. | Maquettes1/3/7/9/40/48/58/68. |
+| Q-PDF-11 | Estimation/prix | Barème, unités et quantités, déplacement/diagnostic/pièces/mainœuvre, taxes, urgence/majorations, zone, abonnement/contrat ; bornes d'estimation et variations après diagnostic. | Spécification§2/4 ; maquettes5/12/15/34/38/60. |
+| Q-PDF-12 | Devis | Identité de l'émetteur, mentions, numérotation, validité, version, acceptation/signature, preuve d'accord, refus, supplément et devis modifié ; moment exact avant/après déplacement. | Maquettes1/3/9/12/34/48/69. |
+| Q-PDF-13 | Intervention | Statuts, acteurs autorisés, check-list sécurité, tests/remise enservice, rapport obligatoire, mesures/pièces, photos avant/après/horodatage, signature client, clôture/validation partenaire, reprise après échec ou litige. | Blueprints1/6/52/58/68/69 ; maquette7. |
+| Q-PDF-14 | Paiement | Après travaux vs acompte/préautorisation, payeur B2B/assureur/occupant, CB/wallets/PayPal/fractionné, statuts, réconciliation, échec/reprise/remboursements/chargebacks. | Maquettes12/18, spécification§2/5 ; Stripe imposé par propriétaire, modalités non définies dansPDF. |
+| Q-PDF-15 | Reversement/commission | Commission exacte et assiette HT/TTC, qui paie frais, calendrier de reversement, retenues/litiges, pièces bancaires ; volume d'affaires vs revenu plateforme pour KPI. | Spécification§5 (15–25 %) ; maquette 60 (5–8 % exemple), maquette 43 CA HT, blueprints1/69. |
+| Q-PDF-16 | Facturation | Émetteur/facturier, numérotation, taxes, B2Bélectronique, échéances/relances, avoirs/notesdecrédit, export/comptabilité, distinction factureartisan/facturecommission. | Maquettes4/12/16/43/50/66 ; blueprints6/52/69. |
+| Q-PDF-17 | Garantie | Date de départ, bénéficiaire, travaux/pièces inclus/exclus, justificatif, récurrence, réclamation et décision, délai d'intervention, coût de retour, automatisation exacte et notification échéance. | Spécification§4/7 ; maquettes9/40/45/54/69. |
+| Q-PDF-18 | Notes/performance | Éligibilité avis, modération/contestation/réponse artisan, calcul moyenne/satisfaction/qualité/délais/ancienneté/CA et périodes ; distinction noteartisan et noteplateforme. | Maquettes35/36/43/47/60 ; spécification§2. |
+| Q-PDF-19 | Documents | Types, nombre/taille/formats, version/remplacement/expiration, validation, visibilité, propriété, recherche, pièces jointes de chat, politique archivage/rétention/suppression et format rapport/signature. | Maquettes5/14/15/34/50/57/62/65 ; spécification§4. |
+| Q-PDF-20 | Messagerie | Conversations autorisées, piècesjointes, statutslu / non lu, historique/fermeture, appel, signalement d'abus et accès support. | Maquettes7/35/39/62/66 ; spécification§4. |
+| Q-PDF-21 | Notifications | Événements, destinataires, préférences/consentements, canaux/providers, templates, horaires, retries/doublons/délivrabilité et désabonnement ; flux enpage lu / non lu. | Maquettes39/54/64, blueprints6/52/69 ; spécification§4. |
+| Q-PDF-22 | B2B sites/contacts | Fiche métier, équipements et état/criticité, zones, consignes d'accès, contacts et horaires, prestataires autorisés, documents/contrats applicables. | Spécification§3 ; maquettes 16/50/56/57/66. |
+| Q-PDF-23 | Workflows | Approbation affectation/devis/réceptiontravaux/facture distinctes, seuils, niveauxséquentiels/parallèles, délégation/absence, budgetdépassé, refus/escalade et journal ; aucun graphe d'état exhaustif. | Spécification§2/4/7 ; blueprints6/52/69. |
+| Q-PDF-24 | Budgets | Année/exercice, HT/TTC, engagé vs réalisé vs prévu, montant par site/catégorie/zone, dépassement bloquant ou informatif, droits de modification et alertes. | Maquettes13/16/50/57 ; spécification§2–4. |
+| Q-PDF-25 | SLA/contrats | Niveaucontractuel, horloges ouvrées/calendaires, début/pause/fin et événements, criticités, seuils, pénalités, escalade, renouvellement/rupture, version grille tarifaire et règles de priorité. | Maquettes50/56, blueprints6/69 ; spécification§3–4. |
+| Q-PDF-26 | Restaurant | Inventaire/identifiants cuisinefroidéclairage, état et derniercontrôle, tickets/exploitation, lienéquipement/site, maintenance et collecte SLA / KPI. | Spécification§3 ; maquettes50/56. |
+| Q-PDF-27 | Bureaux | Tableau et fiche bureaux fournis par V5-C01/C05 ; restent à définir modèle zones/bâtiments, calendrier de maintenance, source de consommation/compteurs/unités/fréquence et budgets. | Spécification §3 ; V5-C01 p2, V5-C05 p6 et M66. |
+| Q-PDF-28 | Syndic | Lots/propriétaires/occupants, assemblées et rapportsAG, appelsdefonds/recouvrement/budgetvoté, conseilsyndical/gardien ; définir si vrai module syndic ou contexte importé d'un outil tiers, et exclure hors-métier assumé. | Spécification§2 ; maquettes 13/16/55. |
+| Q-PDF-29 | ERP | Catégories, référentiels applicables et qui attesteconforme, audits/rapports/réserves/levée, fréquences, preuves, plans/équipements, sécurité/alertes ; imagecouvre aussi incendie/accessibilité/hygiène au-delà électricité. | Spécification§3/7 ; maquettes37/57. |
+| Q-PDF-30 | Reporting | Définitions KPI/dénominateurs/périodes, consolidé vs parsite, frais/HT/TTC/encaissé, filtres/exports/pagination, rapportannuel/AG, seuils de conformité et sources mesures. | Maquettes4/13/16/35/36/37/43/50/56/57/66 ; spécification§2–4. |
+| Q-PDF-31 | Back-office plateforme | Actions et portées par rôle support/finance/admin/superadmin ; annuaireclients/entreprises/artisans, dispatch et réaffectation, vérificationdocuments, revenus/commissions, devisfactures/avoirs, modérationavis, litiges, paramètres, traçabilité. | Maquette43 ; blueprints1/6/58/69. |
+| Q-PDF-32 | Entreprise prestataire | Dirigeant/dispatch/techniciens salariés, attribution interne, disponibilités/équipe, stockpièces/logistique, rapport et facture émis pour l'entreprise ; granularité/multiteam non spécifiées. | Maquette65 effectifs/entreprise ; blueprints6/69. |
+| Q-PDF-33 | Intégrations | CRM/ERP/comptabilité/BI : fournisseurs, interfaces, formats, sensdesflux, identifiants/synchronisation, traitementerreurs et responsabilités ; webhook/API non décrits réellement. | Blueprints3/6/48/52/53/69 ; le résumégrand formatp1 évoque endpoints/modèle sans livrer un contrat détaillé. |
+| Q-PDF-34 | Abonnements/premium | Offresdistinctesclient/artisan/B2B, prix/périodicité/quotas/avantages/remises/priorité, activationrésiliationrenouvellementremboursements, paiement récurrent et relationcommission. | Spécification§5 ; maquette33 vs60 etcomparateurs2/10/17. |
+| Q-PDF-35 | Diagnostic IA | Fournisseur/modèle, photos/données envoyées, consentement, sécurité du résultat, limites d'usage, protocole d'évaluation, validation humaine, coût et échec/fallback ; simple mentionV3 seulement. | Spécification§4/7. |
+| Q-PDF-36 | Sécurité/exploitation | Authentification renforcée admin, gestion sessions, journaux et supervision, antiabus, sauvegarde/restauration, disponibilité/capacité, droits d'accès/export/suppression et conservation. | Mention sécurité/confidentialité récurrente mais objectifs mesurables/processus absents. |
+| Q-PDF-37 | Serviceclient | Canaux/horaires/rôlessupport, créationtickets, escalades/assistance technique/réclamations/litiges, rappel téléphonique et avisatisfaction ; règles de responsabilité et délais non spécifiés. | Maquettes11/42/60/64/70 etblueprints1/6/58/69. |
+| Q-PDF-38 | Fidélité visuelle | Écranchoisi parmi variantes, typographies/couleurs/tokenscohérents, navigationnativebasse/desktoplatérale, cohérenceclient/artisan/B2B, étatsvideerreurchargementresponsive ; DESIGN.md fournit une proposition, pas des mesures exactes desPDF. | Ensemble des56 maquettes ; note basesàaméliorer ; refusstyle IA du propriétaire. |
+
+## Contradictions, variantes et exemples à ne pas transformer en règles
+
+1. **Commission** : spécification finale15–25 % ; recrutementmaquette 60 propose5–8 %. La spécification finale prévaut comme orientation, mais le tauxcontractuel doit être fixé, pas copié au hasard.
+2. **Abonnement artisan** : spécification finale prévoit abonnementsclient/artisan ; recrutement60 dit zéroabonnement, comparateurs parlent aussi nonobligatoire. Choisir modèlecohérent et distinguer offreoptionnelle d'obligation.
+3. **Prix** : panne tableau maquette8/44/67 à120–180TTC, pageTarifs38 tableau120–200 ; demande5/15 à150–250 ; plan40 à100–300. Ce sont des exemples, pas un barème complet exploitable.
+4. **TVA** : paiement12 affiche20 % et10EUR sur des lignes90+40+58HT ;10necorrespondpas20 %de188. Les futurs calculs doivent être définis et testés, pas recopier l'image.
+5. **Limites formulaire/fichiers** : description500sur5,300sur15,1000sur55 ; photos0/6sur5, fichierJPG/PNG10 Mo sur15, PDF/JPG10 Mo sur65. Aucun contrat de validation unique.
+6. **Devis et paiement** : certains diagrammes montrent «devis signé» lorsduRDV avantdiagnostic, d'autres devis établi sursite avanttravaux ; FAQ70 parle de devisverbal avanttravaux et écritsurdemande alors que lesparcours affichent validationnumérique/signée. Paiementaprèsfin évoqué, pas défini pour touscasB2B.
+7. **Délais** : moins15 min de réactivitéblueprint6, rappel2–30 min/parcours40, intervention24–48 h/home11, «quelquesminutes»51, SLA4 houvrées50, candidature48 houvrées64, règlement48 h60. Les événements et garanties diffèrent ; aucun délai global ne doit être promis.
+8. **24/7, prixfixe et absence majoration** : beaucoup de pages commerciales/exemples le proclament ; la spécification finale ne fixe pas d'engagement nationalni horairesni surcharge. Nécessite décisioncommerciale.
+9. **Périmètre métiers** : spécification finaleélectricité ; quelques images/diagrams montrent plomberie/chauffage, multitechnique, peinture/maçonnerie, incendie/accessibilité/hygiène/ascenseurs/espacesverts. Reprendre structure métier, pas élargir silencieusement le produit.
+10. **Zone** : maquette59 Franceentière, contact42 Île-de-France, exemples partoutFrance. Aucun territoiredefourniture validé par la spécification finale.
+11. **Marques** : MesDépanneurs.fr est utilisé dans nombreuxschémascomparatifs ; autres identités incluentÉlecPro/ÉlectroPro/ÉlecFacile/Sérénité/Voltéo/ArtisanPro/PartenaRx/SyndiPro/SafeERP/RestauTech/MonService. Aucune n'est implicitement identitéfinaleautorisée à copier.
+12. **Contacts et chiffres** : numéros, emails, adresses, notes, avis, CA etcompteurs sontdesexemplesvisuels. Ne pas créer de faussespreuvescommerciales.
+13. **Statuts** : client7 comporte enroute/surplace ; artisans35 montrent àréaliser/dépannage/préventif ; B2B différentsencours/planifié/attente/clos etniveauxpriorité ; modèletransitionetmapping non exhaustifs.
+14. **Documents professionnels** : maquette 14 exigeRC Pro/décennale/diplôme ;65 Kbis/RC Pro/diplôme etlabelsoptionnels ; typesetconditions d'éligibilité à réconcilier selonprofil.
+15. **Fidélité** : maquettes sontdesbasesàaméliorer mais le propriétaire rejette le style IA et demande reconnaissancevisuelle. Les adaptations doivent être explicitement tracées ; reprendre seulement bleu/blanc ne constitue pas fidélité.
+16. **Nom «spécificationcomplète»** : documentfinal d'unepage décritlepérimètre etlespriorités ; le résumégrand format évoque modèle/endpoints mais aucun schéma complet ni API détaillée n'est présent danscesPDF. Le titre ne signifie pas que touteslesrèglesnécessairesaucodage existent.
+
+## Réutilisation pour le parent / copy-ready source locations
+
+- Exigencesglobales/versions/monétisation : SPECIFICATION_COMPLETE_FINALE_PROJET.pdf p1 §1–7.
+- Back-officeB2Btransverse : grand formatp4maquette4 ; volume 4p19maquette 66.
+- Admin/SuperAdmin : volume 3p12maquette 43.
+- Artisanonboardingmétier : volume 4p18maquette 65 ; documentsvalidité : grand formatp14maquette 14 ; dashboard/profil/devis : volume 3pp3–5maquettes34–36.
+- Différenciationverticale : syndicgrand formatpp13/16 ; ERPvolume 3p6 etvolume 4p10 ; restaurationvolume 4pp3/9.
+- Processusbackendnonvisiblesdansunécran : grand formatp6maquette 6 etvolume 4p22maquette 69 (rapports, preuves, signatures, facturation, ERP/CRM, SLA, dispatch, escalades, planning etannuairequalifié).
+
+## Confiance et limites
+
+Collecte initiale : confiance élevée sur les 56 numéros initiaux, leurs mappings PDF/page, titres et grandes fonctions inspectées. État consolidé : 93 occurrences et 63 images distinctes, intégrité recontrôlée dans REAUDIT_SOURCES.md. Les images sources contiennent parfois du texte imprécis, des fautes ou des libellés multi-métiers ; les petitslabels non lisibles ne sont pas inventés. Aucune conclusion sur conformité juridique, efficacité d'un prestataire ou état réel descomptescloud ; aucun fournisseur externe n'a été vérifié pour cet audit documentaire. La présence dans le code est examinée séparément dans les annexes backend/frontend ; les fonctions observées dans les PDF ne sont pas présumées implémentées.
+
+## Catalogue des dix écrans complémentaires
+
+| Référence stable | Page PDF | Acteur et surface | Fonctions visibles | Rapport aux sources précédentes |
+| --- | --- | --- | --- | --- |
+| V5-C01 | 2 | Entreprise cliente bureaux / facility management, fiche de site « Tour Horizon » | Navigation Vue d'ensemble, Bâtiment, Étages & Zones, Interventions, Maintenance, Budget, Documents, Contacts, Rapports ; identité bâtiment/photo/adresse/surface/année/type/nombre étages/occupant ; conformité et certification ; tableau étages/usages/surfaces/zones et lien plan ; historique électrique ; maintenance planifiée/calendrier/prochaine intervention ; budget électrique annuel, consommé, engagé, restant, projection fin d'année ; contacts avec fonctions et appel/email ; documents PDF/DWG et bibliothèque ; site actif, date et version. | **NOUVEAU** : première fiche explicitement dédiée à un bâtiment de bureaux dans les sources reçues. |
+| V5-C02 | 3 | Entreprise cliente ERP, fiche hôtel Le Régent | Conformité par domaines, audits, alertes/sécurité, interventions, budget détaillé, contacts clés, archive de documents et export. | **DOUBLON STRICT** de maquette 57, volume 4 p10, image identique par SHA-256. |
+| V5-C03 | 4 | Entreprise cliente restauration, fiche Restaurant Le Gourmet | Cuisine/froid/éclairage, derniers contrôles, interventions, budget HT et prochaine facture, contrat/SLA, contact et documents. | **DOUBLON STRICT** de maquette 50, volume 4 p3. |
+| V5-C04 | 5 | Entreprise cliente restauration, dashboard RestauTech | Sites, interventions, tickets, équipements, contrats/SLA, rapports, alertes ; KPI et état des restaurants ; indicateurs SLA et tickets récents. | **DOUBLON STRICT** de maquette 56, volume 4 p9. |
+| V5-C05 | 6 | Entreprise cliente bureaux, dashboard « BUREAUX360 » | Navigation Sites & Bâtiments, Interventions, Maintenance, Budgets & Factures, Énergie & Environnement, Alertes & Notifications, Rapports & Analytics, Documents ; date et site ; KPI sites gérés, consommation électrique mensuelle MWh et tendance, interventions/urgences, maintenances à 30 jours, budget total engagé ; liste bâtiments/ville/surface/taux d'occupation/état/actions ; budget par bâtiment engagé/restant ; interventions en cours avec impact par étage ou ETA/équipe sur place ; calendrier maintenance ; alertes de surconsommation, équipement à remplacer et rapport disponible. | **NOUVEAU** : premier dashboard explicitement consacré aux bureaux dans les sources reçues. |
+| V5-C06 | 7 | Entreprise cliente ERP, dashboard SafeERP | Établissements, conformité, interventions, audits, signalements, documents, rapports, KPI et courbes. | **DOUBLON STRICT** de maquette 37, volume 3 p6. |
+| V5-C07 | 8 | Syndic, dashboard SyndiPro | Immeubles, budget, alertes, interventions, fournisseurs, copropriétaires, assemblées, documents et paramètres. | **DOUBLON STRICT** de maquette 13, grand format p13. |
+| V5-C08 | 9 | Syndic / approbateur entreprise, détail d'approbation d'un devis | Navigation propriétés, fournisseurs, devis, appels de fonds, assemblées, documents, communications ; retour liste ; référence, propriété/adresse, fournisseur et lien fiche, réception, description, validité, pièces jointes, montant TTC/TVA ; choix Approuver/Refuser ; commentaire facultatif compteur 500 ; bouton Enregistrer ma décision ; historique daté/horodaté avec statut, acteur, rôle et commentaire ; mention de traçabilité et sécurité. | **NOUVEAU** : écran de décision détaillé qui précise le workflow au-delà du simple seuil et bouton. Le titre imprimé « Approvision d'un devis » semble une erreur textuelle, l'intention d'approbation est étayée par les boutons et la navigation ; ne pas en déduire un module d'approvisionnement distinct. |
+| V5-C09 | 10 | Syndic, fiche résidence Jardins d'Azur | Lots, copropriétaires, recouvrement, exercice/budget, interventions, contacts, archives/PV AG, export et notifications. | **DOUBLON STRICT** de maquette 16, grand format p16. |
+| V5-C10 | 11 | Syndic, nouvelle demande | Sélecteur immeuble/site, type de problème, description, quatre urgences, impact budgétaire/politique de coûts, annuler/créer. | **DOUBLON STRICT** de maquette 55, volume 4 p8. |
+
+
+Les questions détaillées et les correspondances de doublons sont conservées dans le complément associé.
+
+## Index des 27 occurrences reçues dans les volumes 6 à 9
+
+| ID d’audit | Libellé imprimé | PDF | Page | Image déjà cataloguée ou apport nouveau |
+| --- | --- | --- | --- | --- |
+| V6-C01 | Maquette complémentaire 1 | MAQUETTES_UNE_PAR_PAGE_VOLUME_6.pdf | 2 | V5-C01 |
+| V6-C02 | Maquette complémentaire 2 | MAQUETTES_UNE_PAR_PAGE_VOLUME_6.pdf | 3 | M57, V5-C02 |
+| V6-C03 | Maquette complémentaire 3 | MAQUETTES_UNE_PAR_PAGE_VOLUME_6.pdf | 4 | M50, V5-C03 |
+| V6-C04 | Maquette complémentaire 4 | MAQUETTES_UNE_PAR_PAGE_VOLUME_6.pdf | 5 | M56, V5-C04 |
+| V6-C05 | Maquette complémentaire 5 | MAQUETTES_UNE_PAR_PAGE_VOLUME_6.pdf | 6 | V5-C05 |
+| V6-C06 | Maquette complémentaire 6 | MAQUETTES_UNE_PAR_PAGE_VOLUME_6.pdf | 7 | M37, V5-C06 |
+| V7-C01 | Maquette 1 | MAQUETTES_UNE_PAR_PAGE_VOLUME_7.pdf | 2 | V5-C01 |
+| V7-C02 | Maquette 2 | MAQUETTES_UNE_PAR_PAGE_VOLUME_7.pdf | 3 | M57, V5-C02 |
+| V7-C03 | Maquette 3 | MAQUETTES_UNE_PAR_PAGE_VOLUME_7.pdf | 4 | M50, V5-C03 |
+| V7-C04 | Maquette 4 | MAQUETTES_UNE_PAR_PAGE_VOLUME_7.pdf | 5 | M56, V5-C04 |
+| V7-C05 | Maquette 5 | MAQUETTES_UNE_PAR_PAGE_VOLUME_7.pdf | 6 | V5-C05 |
+| V7-C06 | Maquette 6 | MAQUETTES_UNE_PAR_PAGE_VOLUME_7.pdf | 7 | M37, V5-C06 |
+| V7-C07 | Maquette 7 | MAQUETTES_UNE_PAR_PAGE_VOLUME_7.pdf | 8 | V5-C07, M13 |
+| V7-C08 | Maquette 8 | MAQUETTES_UNE_PAR_PAGE_VOLUME_7.pdf | 9 | V5-C08 |
+| V8-C01 | Maquette 1 | MAQUETTES_UNE_PAR_PAGE_VOLUME_8.pdf | 2 | V5-C09, M16 |
+| V8-C02 | Maquette 2 | MAQUETTES_UNE_PAR_PAGE_VOLUME_8.pdf | 3 | M55, V5-C10 |
+| V8-C03 | Maquette 3 | MAQUETTES_UNE_PAR_PAGE_VOLUME_8.pdf | 4 | Nouveau : À propos |
+| V8-C04 | Maquette 4 | MAQUETTES_UNE_PAR_PAGE_VOLUME_8.pdf | 5 | M65 |
+| V8-C05 | Maquette 5 | MAQUETTES_UNE_PAR_PAGE_VOLUME_8.pdf | 6 | Nouveau : confidentialité |
+| V8-C06 | Maquette 6 | MAQUETTES_UNE_PAR_PAGE_VOLUME_8.pdf | 7 | Nouveau : devis client |
+| V8-C07 | Maquette 7 | MAQUETTES_UNE_PAR_PAGE_VOLUME_8.pdf | 8 | Nouveau : détail intervention |
+| V8-C08 | Maquette 8 | MAQUETTES_UNE_PAR_PAGE_VOLUME_8.pdf | 9 | M14 |
+| V9-C01 | Maquette finale 1 | MAQUETTES_UNE_PAR_PAGE_VOLUME_9_FINAL.pdf | 2 | V5-C01 |
+| V9-C02 | Maquette finale 2 | MAQUETTES_UNE_PAR_PAGE_VOLUME_9_FINAL.pdf | 3 | M57, V5-C02 |
+| V9-C03 | Maquette finale 3 | MAQUETTES_UNE_PAR_PAGE_VOLUME_9_FINAL.pdf | 4 | M50, V5-C03 |
+| V9-C04 | Maquette finale 4 | MAQUETTES_UNE_PAR_PAGE_VOLUME_9_FINAL.pdf | 5 | M56, V5-C04 |
+| V9-C05 | Maquette finale 5 | MAQUETTES_UNE_PAR_PAGE_VOLUME_9_FINAL.pdf | 6 | V5-C05 |

@@ -4,9 +4,12 @@
 - Lire ce fichier et `DESIGN.md` avant tout travail.
 - Référence fonctionnelle : `SPECIFICATION_COMPLETE_FINALE_PROJET.pdf` (une page).
 - Références de parcours et d'interface : `TOUT_EN_UN_MAQUETTES_GRANDES.pdf`, `MAQUETTES_UNE_PAR_PAGE_VOLUME_3.pdf` et `MAQUETTES_UNE_PAR_PAGE_VOLUME_4.pdf`.
+- Référence complémentaire reçue pendant l’audit : `MAQUETTES_UNE_PAR_PAGE_VOLUME_5_MANQUANTES.pdf` ; identifier ses écrans V5-C01 à V5-C10, sans les confondre avec les numéros initiaux.
+- Références complémentaires suivantes : `MAQUETTES_UNE_PAR_PAGE_VOLUME_6.pdf`, `MAQUETTES_UNE_PAR_PAGE_VOLUME_7.pdf`, `MAQUETTES_UNE_PAR_PAGE_VOLUME_8.pdf`, `MAQUETTES_UNE_PAR_PAGE_VOLUME_9_FINAL.pdf`. Qualifier les identifiants par volume ; le manifeste `docs/audit/INVENTAIRE_SOURCES.json` conserve les libellés imprimés et les doublons. Le mot FINAL du volume 9 ne constitue pas une nouvelle spécification fonctionnelle.
 - La spécification finale prévaut pour le périmètre et les priorités. Les maquettes sont des bases à améliorer, pas des écrans à reproduire aveuglément.
 - À l'initialisation, le dossier contient uniquement ces quatre PDF : aucune stack, application ou infrastructure existante. Ne pas présenter une proposition technique comme une décision validée.
-- Les maquettes 19 à 32 ne figurent pas dans les documents fournis ; ne pas inventer leur contenu.
+- Les numéros 19 à 32 ne sont pas établis dans les documents fournis ; les volumes 5 à 9 emploient des numérotations locales complémentaires. Ne pas lui attribuer arbitrairement les numéros manquants.
+- Audit de référence avant reprise : `docs/AUDIT_COMPLET_SPECIFICATIONS.md`, catalogue et annexes dans `docs/audit/`, décisions manquantes dans `docs/SPECIFICATIONS_A_COMPLETER.md`. Lire ces documents avec le plan de reprise ; distinguer les back-offices artisan, entreprise cliente, administration de plateforme et éventuelle entreprise prestataire.
 
 ## Produit et périmètre
 Plateforme de dépannage électrique pour particuliers, artisans électriciens, syndics/copropriétés et organisations B2B (restauration, bureaux, ERP).
@@ -54,3 +57,11 @@ Approbations avancées, fiches de site complètes, contrats cadres, reporting co
 
 ## Stack retenue
 Décision du 30 octobre 2026, prise dans le cadre de la réalisation autonome autorisée : application web responsive Next.js App Router / React, TypeScript strict, Supabase Postgres/Auth sous RLS, Stripe Checkout/Connect, hébergement Vercel. Versions épinglées dans package.json et package-lock.json.
+
+## Archives de code complémentaires
+Quatre archives sources sont conservées sans modification dans `references/code-archives/`. Lire `docs/audit/ARCHIVES_CODE.md` et son manifeste avant toute reprise. Elles contiennent 12 composants de base et des styles, aucun backend ni Super Admin. Ne pas exécuter ou intégrer leur code sur la seule base de leur réception pendant l’audit.
+
+Cinquième archive : `1-CODES_CSS_ANIMATIONS.tar.gz`, variante visuelle décrite dans la même annexe. Ne pas écraser les versions précédentes ; respecter l’interdiction des animations décoratives permanentes et prévoir la réduction du mouvement.
+
+## Réaudit courant et plan révisé
+Point d’entrée consolidé : `docs/audit/REAUDIT_CONSOLIDE.md`. Le plan `docs/PLAN_REPRISE.md` remplace l’ordre précédent ; `docs/audit/COUVERTURE_PLAN.csv` affecte les 76 capacités. Les contrôles fournisseur antérieurs ne valent pas état actuel. Toute reprise préserve les règles de session/isolation et distingue suspension, refus d’offre, rejet d’approbation, refus de devis et annulation.

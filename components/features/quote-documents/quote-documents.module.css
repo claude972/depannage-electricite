@@ -1,0 +1,390 @@
+/* Quote documents leaf (contract ADV-DOCUMENTS-001 / WEB-SHARED-001). Rendered inside a role
+   space; shared primitives (button, alert, tag, field, unavailable) come from globals. Tokens
+   fall back to the DESIGN.md values when the component is used outside a themed space. */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px 16px;
+}
+.head h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+  color: var(--navy, #102a43);
+}
+.lead {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted, #526178);
+}
+.readOnly {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid var(--line, #d8e0eb);
+  border-radius: 8px;
+  background: var(--bg, #f5f7fb);
+  font-size: 13px;
+  color: var(--text, #172b4d);
+}
+.quote {
+  border: 1px solid var(--line, #d8e0eb);
+  border-radius: 10px;
+  background: var(--surface, #fff);
+}
+.quoteHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line, #d8e0eb);
+}
+.quoteHead h3 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--navy, #102a43);
+}
+.quoteHead .amount {
+  margin-left: auto;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--navy, #102a43);
+}
+.section {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line, #d8e0eb);
+}
+.section:last-child {
+  border-bottom: 0;
+}
+.section h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted, #526178);
+}
+.meta {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted, #526178);
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.row + .row {
+  margin-top: 8px;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line, #d8e0eb);
+  border-radius: 8px;
+}
+.item strong {
+  color: var(--navy, #102a43);
+}
+.item .grow {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.item .links {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+.amendment {
+  border: 1px solid var(--line, #d8e0eb);
+  border-radius: 8px;
+  padding: 12px;
+}
+.amendment + .amendment {
+  margin-top: 8px;
+}
+.amendment header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 6px;
+}
+.amendment header strong {
+  color: var(--navy, #102a43);
+}
+.amendment header .amount {
+  margin-left: auto;
+  font-weight: 700;
+  color: var(--navy, #102a43);
+}
+.reason {
+  margin: 0 0 6px;
+  font-size: 14px;
+  white-space: pre-wrap;
+}
+.linesScroll {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+}
+.linesScroll:focus-visible {
+  outline: 2px solid var(--navy, #102a43);
+  outline-offset: 2px;
+}
+.lines {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin: 6px 0;
+}
+.lines th,
+.lines td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line, #d8e0eb);
+  text-align: left;
+  vertical-align: top;
+}
+.lines th:last-child,
+.lines td:last-child,
+.lines .num {
+  text-align: right;
+  white-space: nowrap;
+}
+.lines tfoot td {
+  border-bottom: 0;
+  font-weight: 600;
+}
+.lines tfoot .total td {
+  font-weight: 700;
+  color: var(--navy, #102a43);
+}
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--line, #d8e0eb);
+  border-radius: 8px;
+  background: var(--bg, #f5f7fb);
+}
+.form fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.form legend {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--navy, #102a43);
+  margin-bottom: 8px;
+}
+.inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: flex-end;
+}
+.inline > * {
+  flex: 1 1 180px;
+}
+.lineGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(80px, 1fr) minmax(110px, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+}
+.lineGrid .remove {
+  align-self: end;
+}
+.preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 13px;
+  color: var(--muted, #526178);
+}
+.preview strong {
+  color: var(--navy, #102a43);
+}
+.note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted, #526178);
+}
+.history {
+  font-size: 13px;
+}
+.history summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  color: var(--navy, #102a43);
+}
+.history ol {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+.history li {
+  padding: 3px 0;
+}
+.history time {
+  color: var(--muted, #526178);
+  margin-right: 6px;
+}
+.loader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+  font-size: 14px;
+  color: var(--muted, #526178);
+}
+.empty {
+  padding: 24px 16px;
+  text-align: center;
+  border: 1px dashed var(--line, #d8e0eb);
+  border-radius: 10px;
+}
+.empty h3 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  color: var(--navy, #102a43);
+}
+.empty p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted, #526178);
+}
+.demoTag {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--amber, #925c00);
+}
+@media (max-width: 640px) {
+  .lineGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .lineGrid > :first-child {
+    grid-column: 1 / -1;
+  }
+  .quoteHead .amount,
+  .amendment header .amount {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .panel * {
+    transition: none !important;
+  }
+}
+
+/* ---- Opt-in theme (FASTSPLIT-DOCUMENTS-PLANNING-THEME-001) -----------------------------------
+   Active only under the parent ThemeSurface (`.ui-v2`): --ui-* tokens, light and dark, same
+   selectors +1 class so they win over the rules above. Outside a themed space nothing changes.
+   Acceptance (devis / avenant accepté, global tags) and online payment (note under the list)
+   keep their distinct treatments; read-only, loading and empty states keep their own frames. */
+:global(.ui-v2) .head h2,
+:global(.ui-v2) .quoteHead h3,
+:global(.ui-v2) .quoteHead .amount,
+:global(.ui-v2) .item strong,
+:global(.ui-v2) .amendment header strong,
+:global(.ui-v2) .amendment header .amount,
+:global(.ui-v2) .lines tfoot .total td,
+:global(.ui-v2) .form legend,
+:global(.ui-v2) .preview strong,
+:global(.ui-v2) .history summary,
+:global(.ui-v2) .empty h3 {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .lead,
+:global(.ui-v2) .section h4,
+:global(.ui-v2) .meta,
+:global(.ui-v2) .preview,
+:global(.ui-v2) .note,
+:global(.ui-v2) .history time,
+:global(.ui-v2) .loader,
+:global(.ui-v2) .empty p {
+  color: var(--ui-text-muted);
+}
+:global(.ui-v2) .reason,
+:global(.ui-v2) .lines,
+:global(.ui-v2) .history {
+  color: var(--ui-text);
+}
+:global(.ui-v2) .readOnly {
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+:global(.ui-v2) .quote {
+  border-color: var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-card);
+}
+:global(.ui-v2) .quoteHead,
+:global(.ui-v2) .section,
+:global(.ui-v2) .lines th,
+:global(.ui-v2) .lines td {
+  border-bottom-color: var(--ui-border);
+}
+:global(.ui-v2) .section:last-child,
+:global(.ui-v2) .lines tfoot td {
+  border-bottom: 0;
+}
+:global(.ui-v2) .item,
+:global(.ui-v2) .amendment {
+  border-color: var(--ui-border);
+  background: var(--ui-card);
+}
+:global(.ui-v2) .form {
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+}
+:global(.ui-v2) .empty {
+  border-color: var(--ui-border);
+  border-radius: var(--ui-radius-md);
+}
+:global(.ui-v2) .demoTag {
+  color: var(--ui-warning);
+}
+:global(.ui-v2) .history summary:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}

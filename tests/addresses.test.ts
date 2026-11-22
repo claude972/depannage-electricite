@@ -1,0 +1,149 @@
+import test, { type TestContext } from "node:test";
+import assert from "node:assert/strict";
+import { addressResponse } from "../lib/features/addresses/server";
+const feature = { type: "Feature", geometry: { type: "Point", coordinates: [-61.0694, 14.6037] }, properties: { id: "97209_qa", name: "Rue Victor Hugo", label: "Rue Victor Hugo 97200 Fort-de-France", postcode: "97200", city: "Fort-de-France", private_extra: "never" } };
+const data = (features: unknown[] = [feature]) => ({ type: "FeatureCollection", features });
+const req = (params: string) => new Request(`https://app.example.test/api/addresses/search?${params}`);
+let tick = 2000000000000;
+const budget = (t: TestContext) => t.mock.method(Date, "now", () => tick += 1000);
+const check = (r: Response, status: number) => { assert.equal(r.status, status); assert.equal(r.headers.get("Cache-Control"), "private, no-store"); };
+
+test("search/reverse project IGN address fields only, fix endpoint/index/limit and disable cache/redirect", async t => {
+  budget(t);
+  for (const mode of ["search", "reverse"] as const) {
+    const r = await addressResponse(req(mode === "search" ? "q=Rue%20Victor%20Hugo" : "lat=14.6037&lon=-61.0694"), mode, async (input, init) => {
+      const u = new URL(String(input)); assert.equal(u.origin, "https://data.geopf.fr"); assert.equal(u.pathname, `/geocodage/${mode}`);
+      assert.equal(u.searchParams.get("index"), "address"); assert.equal(u.searchParams.get("limit"), "5");
+      assert.equal(init?.cache, "no-store"); assert.equal(init?.redirect, "error"); assert.ok(init?.signal);
+      return Response.json(data());
+    });
+    check(r, 200); const body = await r.json(); assert.equal(body.source, "IGN / BAN"); assert.ok(body.attribution.includes("BAN"));
+    assert.deepEqual(body.candidates, [{ id: "97209_qa", label: feature.properties.label, address: feature.properties.name, postal_code: "97200", city: "Fort-de-France", latitude: 14.6037, longitude: -61.0694 }]);
+    assert.ok(!JSON.stringify(body).includes("private_extra"));
+  }
+});
+
+test("invalid/duplicate/unknown parameters are rejected before any provider request", async () => {
+  const cases = [["search", "q=ab"], ["search", `q=${"a".repeat(201)}`], ["search", "q=abc%00"], ["search", "q=abc&q=def"], ["search", "q=abc&url=https://evil.example"], ["reverse", "lat=&lon=1"], ["reverse", "lat=91&lon=1"], ["reverse", "lat=1&lon=-181"], ["reverse", "lat=NaN&lon=0"], ["reverse", "lat=Infinity&lon=0"], ["reverse", "lat=0&lon=0&lon=1"]] as const;
+  for (const [mode, params] of cases) {
+    const r = await addressResponse(req(params), mode, async () => { assert.fail("must not fetch"); });
+    check(r, 400); assert.equal((await r.json()).retryable, false);
+  }
+});
+
+test("empty is successful; five candidates maximum; malformed provider data never becomes empty success", async t => {
+  budget(t);
+  check(await addressResponse(req("q=abc"), "search", async () => Response.json(data([]))), 200);
+  const five = await addressResponse(req("q=abc"), "search", async () => Response.json(data(Array(5).fill(feature))));
+  assert.equal((await five.json()).candidates.length, 5);
+  for (const invalid of [null, {}, data(Array(6).fill(feature)), data([{ ...feature, geometry: { type: "Point", coordinates: [181, 1] } }]), data([{ ...feature, properties: { ...feature.properties, postcode: "972" } }]), data([{ ...feature, properties: { ...feature.properties, name: null } }])]) {
+    const r = await addressResponse(req("q=abc"), "search", async () => Response.json(invalid)); check(r, 503); assert.equal((await r.json()).retryable, true);
+  }
+});
+
+test("quota, failure, non-JSON, overlarge body and timeout are retryable without upstream content leakage", async t => {
+  budget(t);
+  for (const status of [429, 403, 500]) {
+    const r = await addressResponse(req("q=abc"), "search", async () => new Response("private upstream", { status })); check(r, status === 429 ? 429 : 503);
+    assert.equal(r.headers.get("Retry-After"), "2"); assert.ok(!(await r.text()).includes("private upstream"));
+  }
+  for (const body of ["not JSON", "a".repeat(128001)]) check(await addressResponse(req("q=abc"), "search", async () => new Response(body)), 503);
+  const r = await addressResponse(req("q=abc"), "search", (_url, init) => new Promise((_resolve, reject) => init!.signal!.addEventListener("abort", () => reject(init!.signal!.reason), { once: true })));
+  check(r, 503); assert.equal((await r.json()).retryable, true);
+});
+
+test("warm-instance budget bounds traffic without claiming a distributed quota", async t => {
+  t.mock.method(Date, "now", () => 3000000000000);
+  let calls = 0;
+  for (let i = 0; i < 11; i++) {
+    const r = await addressResponse(req("q=abc"), "search", async () => { calls++; return Response.json(data([])); });
+    check(r, i < 10 ? 200 : 429);
+  }
+  assert.equal(calls, 10);
+});
+
+test("reverse falls back to nearby BAN points when the geocoder times out", async t => {
+  budget(t);
+  const point = (id: string, number: string, lon: number) => ({
+    geometry: { type: "Point", coordinates: [lon, 14.6049] },
+    properties: { id, numero: number, rep: "", nom_voie: "Rue Perrinon", code_postal: "97200", nom_commune: "Fort-de-France", extra: "not returned" },
+  });
+  const paths: string[] = [];
+  const response = await addressResponse(req("lat=14.6049&lon=-61.0685"), "reverse", async input => {
+    const url = new URL(String(input));
+    assert.equal(url.hostname, "data.geopf.fr");
+    paths.push(url.pathname);
+    if (url.pathname === "/geocodage/reverse") return new Response(null, { status: 504 });
+    assert.equal(url.searchParams.get("typeNames"), "BAN.DATA.GOUV:ban");
+    const [south, west, north, east] = url.searchParams.get("bbox")!.split(",").map(Number);
+    assert.ok(south < 14.6049 && 14.6049 < north && west < -61.0685 && -61.0685 < east);
+    return Response.json(data([point("far", "50", -61.04), point("second", "8", -61.0680), point("closest", "4", -61.06852)]));
+  });
+  check(response, 200);
+  assert.deepEqual(paths, ["/geocodage/reverse", "/wfs"]);
+  const body = await response.json();
+  assert.deepEqual(body.candidates.map((entry: typeof body.candidates[number]) => entry.id), ["closest", "second"]);
+  assert.deepEqual(body.candidates[0], { id: "closest", address: "4 Rue Perrinon", postal_code: "97200", city: "Fort-de-France", label: "4 Rue Perrinon, 97200 Fort-de-France", latitude: 14.6049, longitude: -61.06852 });
+});
+
+test("search uses the distinct IGN completion operation on upstream failure and keeps the house number", async t => {
+  budget(t);
+  const paths: string[] = [];
+  const response = await addressResponse(req("q=8+rue+Victor+Hugo+97200"), "search", async (input, init) => {
+    const url = new URL(String(input));
+    paths.push(url.pathname);
+    if (paths.length === 1) return new Response(null, { status: 503 });
+    assert.equal(url.origin, "https://data.geopf.fr");
+    assert.equal(url.searchParams.get("text"), "8 rue Victor Hugo 97200");
+    assert.equal(url.searchParams.get("type"), "StreetAddress");
+    assert.equal(url.searchParams.get("maximumResponses"), "5");
+    assert.equal(init?.cache, "no-store");
+    assert.equal(init?.redirect, "error");
+    return Response.json({ status: "OK", results: [{
+      country: "StreetAddress", x: -61.069056, y: 14.603291,
+      city: "Fort-de-France", zipcode: "97200", fulltext: "8 Rue Victor Hugo, 97200 Fort-de-France",
+      internal: "ignored",
+    }] });
+  });
+  check(response, 200);
+  assert.deepEqual(paths, ["/geocodage/search", "/geocodage/completion"]);
+  const result = await response.json();
+  assert.deepEqual(result.candidates.map(({ id: _id, ...candidate }: (typeof result.candidates)[number]) => candidate), [{
+    address: "8 Rue Victor Hugo", label: "8 Rue Victor Hugo, 97200 Fort-de-France",
+    postal_code: "97200", city: "Fort-de-France", latitude: 14.603291, longitude: -61.069056,
+  }]);
+});
+
+test("search does not query the fallback after a quota refusal or a user abort", async t => {
+  budget(t);
+  let count = 0;
+  const rate = await addressResponse(req("q=Fort-de-France"), "search", async () => {
+    count++;
+    return new Response(null, { status: 429 });
+  });
+  check(rate, 429);
+  assert.equal(count, 1);
+
+  const controller = new AbortController();
+  const cancelled = await addressResponse(new Request(req("q=Fort-de-France"), { signal: controller.signal }), "search", async () => {
+    count++;
+    controller.abort();
+    throw controller.signal.reason;
+  });
+  check(cancelled, 503);
+  assert.equal(count, 2);
+});
+
+test("the completion fallback preserves a valid empty answer, retryable errors and its quota", async t => {
+  budget(t);
+  const responses = [
+    [Response.json({ status: "OK", results: [] }), 200],
+    [Response.json({ status: "ERR", results: [] }), 503],
+    [new Response(null, { status: 429 }), 429],
+  ] as const;
+  for (const [fallback, code] of responses) {
+    const r = await addressResponse(req("q=Fort-de-France"), "search", async input =>
+      new URL(String(input)).pathname === "/geocodage/search" ? new Response(null, { status: 503 }) : fallback);
+    check(r, code);
+  }
+});

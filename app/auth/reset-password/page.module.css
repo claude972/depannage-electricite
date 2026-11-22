@@ -1,93 +1,139 @@
-.screen {
+/* Reset password page (FASTSPLIT-AUTH-RESET-THEME-001): ThemeSurface (.ui-v2) + --ui-* tokens,
+   light and dark, Plus Jakarta Sans, one green accent, 1px borders, 44 px targets, visible focus.
+   Same structure as app/error-pages.module.css. No legacy blue background or hard-coded colour. */
+.page {
   min-height: 100dvh;
-  background: #f5f7fb;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  color: #172b4d;
+  display: flex;
+  flex-direction: column;
+  background: var(--ui-surface);
+  color: var(--ui-text);
 }
-.panel {
-  width: min(100%, 460px);
+.main {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 64px 24px;
+}
+.card {
+  width: 100%;
+  max-width: 480px;
   padding: 32px;
-  background: #fff;
-  border: 1px solid #d8e0eb;
-  border-radius: 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-card);
 }
-.brand {
-  font-size: 24px;
-  font-weight: 750;
-  color: #102a43;
-  text-decoration: none;
-  display: block;
-  margin-bottom: 32px;
-}
-.brand span {
-  display: block;
+.eyebrow {
+  margin: 0 0 8px;
+  color: var(--ui-text-muted);
   font-size: 13px;
-  font-weight: 400;
-  margin-top: 4px;
-  color: #526178;
+  font-weight: 600;
 }
-.panel h1 {
+.card h1 {
+  margin: 0 0 12px;
+  color: var(--ui-text);
   font-size: 26px;
   line-height: 1.2;
+  letter-spacing: -0.4px;
+}
+.lead,
+.status {
   margin: 0 0 16px;
-}
-.panel p {
+  color: var(--ui-text-muted);
+  font-size: 15px;
   line-height: 1.6;
-  margin-bottom: 20px;
 }
-.panel form {
-  display: grid;
-  gap: 10px;
-}
-.panel label {
-  font-weight: 600;
-  margin-top: 6px;
-}
-.panel input {
-  font: inherit;
-  border: 1px solid #a8b4c5;
-  border-radius: 6px;
-  min-height: 46px;
-  padding: 10px 12px;
-  width: 100%;
-  box-sizing: border-box;
-}
-.panel button,
-.button {
-  font: inherit;
-  min-height: 46px;
-  padding: 12px 16px;
-  border: 0;
-  border-radius: 6px;
-  color: #fff;
-  background: #1457d9;
-  font-weight: 600;
-  cursor: pointer;
-  margin-top: 14px;
-  text-decoration: none;
-  display: inline-block;
-}
-.panel button:disabled {
-  opacity: 0.6;
-  cursor: wait;
-}
-.panel :focus-visible {
-  outline: 3px solid #1457d9;
-  outline-offset: 3px;
+.success {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--ui-success);
+  border-radius: var(--ui-radius-sm);
+  color: var(--ui-text);
+  line-height: 1.6;
 }
 .error {
-  padding: 12px;
-  background: #fff2f1;
-  color: #9d1e16;
-  border-left: 3px solid #b42318;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--ui-danger);
+  border-radius: var(--ui-radius-sm);
+  color: var(--ui-text);
+  line-height: 1.6;
 }
-@media (max-width: 420px) {
-  .panel {
-    padding: 24px;
+.form {
+  display: grid;
+  gap: 8px;
+}
+.form label {
+  margin-top: 8px;
+  color: var(--ui-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+.form input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  font: inherit;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 20px;
+}
+.primary,
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 20px;
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-sm);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.primary {
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+.primary:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+.secondary {
+  border-color: var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-text);
+}
+.secondary:hover {
+  background: var(--ui-surface);
+}
+.primary:focus-visible,
+.secondary:focus-visible,
+.form input:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+@media (max-width: 640px) {
+  .main {
+    padding: 32px 16px;
   }
-  .screen {
-    padding: 16px;
+  .card {
+    padding: 24px 16px;
+  }
+  .card h1 {
+    font-size: 23px;
+  }
+  .actions > * {
+    flex: 1 1 100%;
   }
 }

@@ -8,21 +8,19 @@ import {
   dbError,
 } from "@/lib/supabase/server";
 import { uuid } from "@/lib/supabase/validation";
+import {
+  MAX_DOCUMENT_BYTES,
+  MAX_REQUEST_BYTES,
+  documentNameFor,
+  validateDocumentUpload,
+} from "@/lib/shared/document-policy";
+import { storeWebDocument, WebUploadError } from "@/lib/features/documents/web-upload";
+import { signPrivateDocument, unavailableDownload } from "@/lib/features/documents/signed-url";
 export const runtime = "nodejs";
-const bucket = "intervention-documents";
-function detectType(bytes: Uint8Array): string | null {
-  const text = Buffer.from(bytes.subarray(0, 12)).toString("ascii");
-  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff)
-    return "image/jpeg";
-  if (bytes[0] === 0x89 && text.slice(1, 4) === "PNG") return "image/png";
-  if (text.startsWith("%PDF-")) return "application/pdf";
-  if (text.startsWith("RIFF") && text.slice(8, 12) === "WEBP")
-    return "image/webp";
-  return null;
-}
-export async function GET(request: Request) {
+async function readDocuments(request: Request) {
+  let signedRequest = false;
   try {
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     const id = new URL(request.url).searchParams.get("id");
     if (!id) {
       const { data, error } = await db
@@ -33,35 +31,43 @@ export async function GET(request: Request) {
       dbError(error);
       return Response.json({ documents: data });
     }
+    signedRequest = true;
     if (!uuid.safeParse(id).success)
       throw new ApiError(422, "Document invalide.");
     const { data, error } = await db
       .from("documents")
       .select("path")
       .eq("id", id)
-      .single();
-    dbError(error);
-    if (!data) throw new ApiError(404, "Ce document est introuvable.");
-    const signed = await db.storage.from(bucket).createSignedUrl(data.path, 60);
-    dbError(signed.error);
-    return Response.json(
-      { url: signed.data?.signedUrl },
-      { headers: { "Cache-Control": "private, no-store" } },
-    );
+      .maybeSingle();
+    if (error) unavailableDownload();
+    if (data === null) throw new ApiError(404, "Ce document est introuvable.");
+    return Response.json({ url: await signPrivateDocument(db, data?.path) });
   } catch (error) {
-    return apiError(error);
+    if (!signedRequest) return apiError(error);
+    if (error instanceof ApiError && [401, 422, 404].includes(error.status)) return apiError(error);
+    return Response.json({ error: "Le lien du document est momentanément indisponible. Réessayez." }, { status: 503 });
   }
+}
+export async function GET(request: Request) {
+  const response = await readDocuments(request);
+  response.headers.set("Cache-Control", "private, no-store");
+  if (response.status === 503) response.headers.set("Retry-After", "2");
+  return response;
 }
 export async function POST(request: Request) {
   try {
     assertOrigin(request);
-    const { db, user } = await authenticatedClient();
-    if (Number(request.headers.get("content-length") || 0) > 4400000)
+    const { db, user } = await authenticatedClient(request);
+    if (Number(request.headers.get("content-length") || 0) > MAX_REQUEST_BYTES)
       throw new ApiError(413, "Le fichier doit faire moins de 4 Mo.");
     const form = await request.formData();
     const file = form.get("file");
     const interventionId = form.get("intervention_id");
-    if (!(file instanceof File) || file.size < 1 || file.size > 4194304)
+    if (
+      !(file instanceof File) ||
+      file.size < 1 ||
+      file.size > MAX_DOCUMENT_BYTES
+    )
       throw new ApiError(
         422,
         "Choisissez un fichier PDF, JPEG, PNG ou WebP de moins de 4 Mo.",
@@ -98,37 +104,36 @@ export async function POST(request: Request) {
     const throttle = await db.rpc("check_upload_limit");
     dbError(throttle.error);
     const buffer = new Uint8Array(await file.arrayBuffer());
-    const mime = detectType(buffer);
-    if (!mime || mime !== file.type)
+    // Shared policy with the native gateway: magic bytes must match the declared MIME.
+    const verdict = validateDocumentUpload({
+      size: file.size,
+      declaredType: file.type,
+      bytes: buffer,
+    });
+    if (!verdict.ok)
       throw new ApiError(
         422,
         "Le contenu du fichier ne correspond pas à un format autorisé.",
       );
+    const mime = verdict.mime;
     const id = randomUUID();
     const path = `${user.id}/${id}`;
     const admin = adminClient();
-    const upload = await admin.storage
-      .from(bucket)
-      .upload(path, buffer, { contentType: mime, upsert: false });
-    dbError(upload.error);
-    const inserted = await admin
-      .from("documents")
-      .insert({
-        id,
-        intervention_id: interventionId || null,
-        owner_id: user.id,
-        name: file.name.slice(0, 160),
-        path,
-        mime_type: mime,
-      })
-      .select("id,name,mime_type,created_at")
-      .single();
-    if (inserted.error) {
-      await admin.storage.from(bucket).remove([path]);
-      dbError(inserted.error);
-    }
-    return Response.json({ document: inserted.data }, { status: 201 });
+    const document = await storeWebDocument(db, admin, {
+      id,
+      path,
+      ownerId: user.id,
+      interventionId: typeof interventionId === "string" && interventionId ? interventionId : null,
+      name: documentNameFor(file.name),
+      mime,
+    }, buffer);
+    return Response.json({ document }, { status: 201, headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
-    return apiError(error);
+    const response = error instanceof WebUploadError
+      ? Response.json({ error: error.message, ...error.details }, { status: error.status })
+      : apiError(error);
+    response.headers.set("Cache-Control", "private, no-store");
+    if (response.status === 503) response.headers.set("Retry-After", "2");
+    return response;
   }
 }

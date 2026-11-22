@@ -1,0 +1,129 @@
+.main {
+  padding: 12px 0 40px;
+}
+.wrap {
+  display: grid;
+  gap: 20px;
+  width: min(100%, var(--public-width));
+  margin-inline: auto;
+  padding-inline: var(--public-gutter);
+}
+.cataloguePage > h1 {
+  margin: 0;
+  color: var(--ui-text);
+}
+.cataloguePage > p {
+  margin: 0;
+  color: var(--ui-text-muted);
+}
+.ivc > svg {
+  color: var(--ui-accent);
+  flex: none;
+}
+.eyebrow {
+  color: var(--ui-text-muted);
+  font-size: .6875rem;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: .025em;
+  text-transform: uppercase;
+}
+.textLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  border: 0;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.textLink {
+  justify-self: start;
+  padding: 4px 0;
+  background: none;
+  color: var(--ui-accent);
+  text-decoration: none;
+}
+.textLink:hover {
+  text-decoration: underline;
+}
+.ivGrid {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ivGrid > li {
+  display: flex;
+  min-width: 0;
+}
+.ivc {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: 18px;
+  background: var(--ui-card);
+  color: var(--ui-text);
+  text-decoration: none;
+}
+.ivc:hover {
+  border-color: var(--ui-accent);
+}
+.ivc img {
+  width: 64px;
+  height: 60px;
+  border-radius: 12px;
+  background: var(--ui-surface);
+  object-fit: cover;
+}
+.ivcBody {
+  display: grid;
+  gap: 3px;
+  font-size: .875rem;
+  line-height: 1.4;
+}
+.ivcPrice {
+  color: var(--ui-text-muted);
+  font-size: .75rem;
+}
+.cataloguePage {
+  gap: 14px;
+  padding-top: 12px;
+}
+.cataloguePage h1 {
+  font-size: clamp(1.75rem, 5vw, 2.5rem);
+  line-height: 1.2;
+  letter-spacing: -0.035em;
+}
+.cataloguePage .ivGrid {
+  margin-top: 8px;
+}
+@media (max-width: 359px) {
+  .ivc {
+    gap: 8px;
+    padding: 10px;
+  }
+}
+@media (min-width: 768px) {
+  .main {
+    padding: 28px 0 64px;
+  }
+  .wrap {
+    gap: 24px;
+  }
+  .ivGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1024px) {
+  .ivGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

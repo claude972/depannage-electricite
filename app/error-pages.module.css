@@ -1,0 +1,98 @@
+/* Error and not-found pages (app/error.tsx, app/not-found.tsx). Rendered inside ThemeSurface
+   (`.ui-v2`, provided by the root layout's ThemeProvider): --ui-* tokens, light and dark, Plus
+   Jakarta Sans, one green accent, 1px borders, 44 px targets, visible focus. */
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+.main {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  padding: 64px 24px;
+}
+.card {
+  width: 100%;
+  max-width: 560px;
+  padding: 32px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-card);
+}
+.card .code {
+  display: inline-block;
+  margin: 0 0 16px;
+  padding: 2px 8px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-pill);
+  color: var(--ui-text-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.card h1 {
+  margin: 0 0 8px;
+  color: var(--ui-text);
+  font-size: 28px;
+  line-height: 1.2;
+  letter-spacing: -0.4px;
+}
+.card p {
+  margin: 0;
+  color: var(--ui-text-muted);
+  font-size: 16px;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 24px;
+}
+.primary,
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 20px;
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-sm);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.primary {
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+.secondary {
+  border-color: var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-text);
+}
+.secondary:hover {
+  background: var(--ui-surface);
+}
+.primary:focus-visible,
+.secondary:focus-visible {
+  outline: 3px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+@media (max-width: 640px) {
+  .main {
+    padding: 32px 16px;
+  }
+  .card {
+    padding: 24px 16px;
+  }
+  .card h1 {
+    font-size: 24px;
+  }
+  .actions > * {
+    flex: 1 1 100%;
+  }
+}

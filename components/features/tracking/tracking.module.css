@@ -1,0 +1,512 @@
+/* Suivi (WEB-TRACKING-UI-006). DESIGN.md : une couleur d’accent, bordures 1 px, cibles ≥ 44 px, pas d’animation. */
+.panel {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  flex-wrap: wrap;
+}
+.head h2 {
+  font-size: 18px;
+  margin: 0;
+}
+.demo,
+.note,
+.muted,
+.small {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #526178;
+}
+.demo {
+  color: #925c00;
+  font-weight: 600;
+}
+.small {
+  font-size: 12px;
+}
+.warn {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #f1d9a6;
+  border-radius: 8px;
+  background: #fffaf0;
+  color: #6b4a00;
+  font-size: 13px;
+}
+.error {
+  margin: 0;
+  color: #b42318;
+  font-size: 14px;
+  font-weight: 550;
+}
+.ok {
+  margin: 0;
+  color: #167344;
+  font-size: 14px;
+  font-weight: 550;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.actions :global(.button) {
+  min-height: 44px;
+}
+.consent {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #c9d8f2;
+  border-radius: 10px;
+  background: #f6f9ff;
+}
+.consent h3 {
+  margin: 0;
+  font-size: 15px;
+}
+.consent ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #172b4d;
+}
+.facts {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.facts > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #edf0f4;
+  font-size: 14px;
+}
+.facts dt {
+  color: #526178;
+}
+.facts dd {
+  margin: 0;
+  color: #102a43;
+  text-align: right;
+  font-weight: 550;
+}
+
+/* Étapes de déplacement (M7) */
+.stages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.stages li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid #dce4ee;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #526178;
+}
+.stages li > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid #dce4ee;
+  font-size: 12px;
+  font-weight: 650;
+  flex-shrink: 0;
+}
+.stageDone > span {
+  background: #eaf6ee;
+  border-color: #c4e5d0 !important;
+  color: #167344;
+}
+.stageCurrent {
+  border-color: #1457d9 !important;
+  color: #1457d9 !important;
+  font-weight: 650;
+}
+.stageCurrent > span {
+  background: #1457d9;
+  border-color: #1457d9 !important;
+  color: #fff;
+}
+
+/* Disposition : 1280 carte à droite (≈ 60 %) ; < 1024 carte sous l’état. */
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+@media (min-width: 1024px) {
+  .layout {
+    grid-template-columns: minmax(300px, 2fr) minmax(0, 3fr);
+  }
+  /* The map is first in the DOM; on wide screens it stays drawn on the right. */
+  .layout > .map {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .layout > .status {
+    grid-column: 1;
+    grid-row: 1;
+  }
+}
+.status {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.eta {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px;
+  border: 1px solid #dce4ee;
+  border-radius: 10px;
+  background: #fff;
+}
+.eta > svg {
+  color: #1457d9;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.eta span {
+  display: block;
+  font-size: 13px;
+  color: #526178;
+}
+.eta strong {
+  display: block;
+  font-size: 22px;
+  color: #102a43;
+  letter-spacing: -0.4px;
+}
+.eta small {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #526178;
+}
+
+/* Carte sans dépendance */
+.map {
+  position: relative;
+  margin: 0;
+  min-width: 0;
+}
+.mapFrame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  min-height: 200px;
+  overflow: hidden;
+  border: 1px solid #dce4ee;
+  border-radius: 10px;
+  background: #eef2f6;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+.mapPickable {
+  cursor: crosshair;
+}
+.tiles img {
+  position: absolute;
+  width: 256px;
+  height: 256px;
+  max-width: none;
+  pointer-events: none;
+}
+.overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.routeCasing {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.routeLine {
+  fill: none;
+  stroke: #1457d9;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.accuracyHalo {
+  fill: rgba(20, 87, 217, 0.12);
+  stroke: rgba(20, 87, 217, 0.45);
+  stroke-width: 1;
+}
+.positionMarker {
+  fill: #1457d9;
+  stroke: #fff;
+  stroke-width: 3;
+}
+.destMarker {
+  fill: #102a43;
+  stroke: #fff;
+  stroke-width: 1.5;
+}
+.draftMarker {
+  fill: #fff;
+  stroke: #102a43;
+  stroke-width: 2;
+  stroke-dasharray: 3 2;
+}
+.snapMarker {
+  fill: #fff;
+  stroke: #1457d9;
+  stroke-width: 2;
+}
+.mapNotice {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.94);
+  font-size: 12px;
+  color: #172b4d;
+}
+.mapControls {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mapControls button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #dce4ee;
+  border-radius: 8px;
+  background: #fff;
+  color: #102a43;
+}
+.mapControls button:disabled {
+  opacity: 0.45;
+}
+.minus {
+  font-size: 22px;
+  line-height: 1;
+}
+.attribution {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #526178;
+}
+.attribution a {
+  /* 44 px hit area around the 12 px credit: the text keeps its size and stays visible. */
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: #1457d9;
+  text-decoration: underline;
+}
+
+/* Destination */
+.dest {
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid #edf0f4;
+}
+.dest h3 {
+  margin: 0;
+  font-size: 15px;
+}
+.destCurrent {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0;
+  font-size: 14px;
+}
+.destCurrent svg {
+  color: #102a43;
+  margin-top: 2px;
+}
+.destCurrent strong,
+.destCurrent small {
+  display: block;
+}
+.destCurrent small {
+  font-size: 12px;
+  color: #526178;
+}
+.searchRow {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.searchRow :global(.field) {
+  flex: 1 1 220px;
+  margin-bottom: 0;
+}
+.searchRow :global(.button) {
+  min-height: 44px;
+}
+.candidates {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.candidates li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid #dce4ee;
+  border-radius: 8px;
+}
+.candidates strong,
+.candidates small {
+  display: block;
+}
+.candidates small {
+  font-size: 12px;
+  color: #526178;
+}
+.candidates :global(.button) {
+  min-height: 44px;
+}
+.draft {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px dashed #9fb3cf;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.manual summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1457d9;
+}
+.manual form {
+  display: grid;
+  gap: 8px;
+}
+.coordRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.card .actions :global(a.button) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+}
+@media (max-width: 480px) {
+  .actions :global(.button) {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+  .stages li {
+    padding: 0 6px;
+    font-size: 12px;
+  }
+}
+/* < 1024 px : carte directement sous l’état et l’arrivée, avant les détails et la destination —
+   c’est l’ordre du DOM (aucun `order`), donc aussi l’ordre de tabulation. */
+
+/* FASTSPLIT site/tracking theme — opt-in Delivo theme. Applies only inside a ThemeSurface
+   (`.ui-v2`, --ui-* tokens for light and dark); unthemed consumers keep the rules above.
+   The map frame stays a LIGHT area in both themes (tiles, markers, casing and the schematic
+   fallback were designed for it, so it stays readable); only its accent (route, position,
+   snap) becomes the primary green. Stage colours keep their meaning, always with text. */
+:global(.ui-v2) .panel { border-color: var(--ui-border); background: var(--ui-card); color: var(--ui-text); font-family: var(--ui-font); }
+:global(.ui-v2) .head h2,
+:global(.ui-v2) .consent h3,
+:global(.ui-v2) .dest h3,
+:global(.ui-v2) .consent ul,
+:global(.ui-v2) .facts dd,
+:global(.ui-v2) .eta strong,
+:global(.ui-v2) .destCurrent,
+:global(.ui-v2) .destCurrent svg,
+:global(.ui-v2) .candidates li,
+:global(.ui-v2) .draft { color: var(--ui-text); }
+:global(.ui-v2) .note,
+:global(.ui-v2) .muted,
+:global(.ui-v2) .small,
+:global(.ui-v2) .facts dt,
+:global(.ui-v2) .eta span,
+:global(.ui-v2) .eta small,
+:global(.ui-v2) .attribution,
+:global(.ui-v2) .destCurrent small,
+:global(.ui-v2) .candidates small { color: var(--ui-text-muted); }
+:global(.ui-v2) .demo { color: var(--ui-warning); }
+:global(.ui-v2) .warn { border-color: var(--ui-warning); background: var(--ui-surface); color: var(--ui-text); }
+:global(.ui-v2) .error { color: var(--ui-danger); }
+:global(.ui-v2) .ok { color: var(--ui-success); }
+:global(.ui-v2) .consent { border-color: var(--ui-border); background: var(--ui-surface); }
+:global(.ui-v2) .facts > div,
+:global(.ui-v2) .dest { border-color: var(--ui-border); }
+:global(.ui-v2) .stages li { border-color: var(--ui-border); background: var(--ui-card); color: var(--ui-text-muted); }
+:global(.ui-v2) .stages li > span { border-color: var(--ui-border); }
+:global(.ui-v2) .stageDone { color: var(--ui-text); }
+:global(.ui-v2) .stageDone > span { background: var(--ui-surface); border-color: var(--ui-success) !important; color: var(--ui-success); }
+:global(.ui-v2) .stageCurrent { border-color: var(--ui-accent) !important; color: var(--ui-accent) !important; }
+:global(.ui-v2) .stageCurrent > span { background: var(--ui-primary); border-color: var(--ui-primary) !important; color: var(--ui-on-primary); }
+:global(.ui-v2) .eta { border-color: var(--ui-border); background: var(--ui-card); }
+:global(.ui-v2) .eta > svg { color: var(--ui-accent); }
+:global(.ui-v2) .mapFrame { border-color: var(--ui-border); }
+:global(.ui-v2) .routeLine { stroke: var(--ui-primary); }
+:global(.ui-v2) .positionMarker { fill: var(--ui-primary); }
+:global(.ui-v2) .snapMarker { stroke: var(--ui-primary); }
+:global(.ui-v2) .accuracyHalo { fill: color-mix(in srgb, var(--ui-primary) 12%, transparent); stroke: color-mix(in srgb, var(--ui-primary) 45%, transparent); }
+:global(.ui-v2) .mapControls button { border-color: var(--ui-border); background: var(--ui-card); color: var(--ui-text); }
+:global(.ui-v2) .mapControls button:focus-visible,
+:global(.ui-v2) .attribution a:focus-visible,
+:global(.ui-v2) .manual summary:focus-visible { outline: 3px solid var(--ui-focus); outline-offset: 2px; }
+:global(.ui-v2) .attribution a,
+:global(.ui-v2) .manual summary { color: var(--ui-accent); }
+:global(.ui-v2) .candidates li { border-color: var(--ui-border); }
+:global(.ui-v2) .draft { border-color: var(--ui-accent); }
+/* Global primitives rendered by the tracking panels, scoped to their root. */
+:global(.ui-v2) .panel :global(.button.primary) { border-color: var(--ui-primary); background: var(--ui-primary); color: var(--ui-on-primary); }
+:global(.ui-v2) .panel :global(.button.primary):hover:not(:disabled) { background: var(--ui-primary-hover); }
+:global(.ui-v2) .panel :global(.button.outline) { border-color: var(--ui-border); background: transparent; color: var(--ui-text); }
+:global(.ui-v2) .panel :global(.button.outline):hover:not(:disabled) { border-color: var(--ui-accent); background: var(--ui-surface); }
+:global(.ui-v2) .panel :global(.field) input,
+:global(.ui-v2) .panel :global(.field) select { border: 1px solid var(--ui-border); background: var(--ui-bg); color: var(--ui-text); color-scheme: var(--ui-scheme); }

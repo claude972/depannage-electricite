@@ -1,7 +1,43 @@
 # Direction de design
 
+## Décisions prioritaires du 14 novembre 2026 — finition et références de livraison
+
+Cette section formalise les demandes récentes du propriétaire et prévaut sur les prescriptions historiques contradictoires ci-dessous. Les maquettes doivent être finalisées et vérifiées avant leur transposition au Web/PWA puis à l’application mobile. Une modification de version déployée ne remplace pas la livraison de maquettes éditables.
+
+- Conserver l’identité, les compositions et les contenus utiles de l’application de référence `https://domdepannage-recette-20261112.vercel.app/`. Moderniser la finesse et la cohérence, sans refonte générique ni changement arbitraire de direction graphique.
+- Harmoniser particulier, artisan, entreprise et administration. Le fichier Figma de travail courant est `3t2Y0JsAdBll5PAIHOs5H7` ; ses anciennes variantes ne sont pas toutes des références d’intégration. Utiliser les racines canoniques et leurs preuves de recette dans le dossier de livraison.
+- Conserver le menu flottant de l’accueil dans les parcours mobiles. Préserver l’action « Appelez-nous » et WhatsApp sur l’accueil ; WhatsApp reste disponible dans les parcours particulier. Tenir compte des zones sûres et réserver l’espace nécessaire pour que ces commandes ne masquent pas le contenu ou les actions.
+- Retirer le sélecteur clair/sombre visible demandé par le propriétaire. Ne pas le réintroduire sur la base des anciennes règles de thème ci-dessous. Le retrait du contrôle ne justifie pas, à lui seul, une modification des contrats techniques de stockage du thème.
+- Ne pas afficher de logo supérieur dans les espaces connectés mobiles, y compris l’entreprise. Ne pas réintroduire le cartouche noir rejeté.
+- Affiner titres, textes et icônes : Plus Jakarta Sans, titres de page généralement 23 px sur téléphone/tablette et 28 px sur desktop, graisse Medium ; titres de section 18 px, textes Regular ou Medium selon leur fonction. Ces repères viennent des finitions Figma et ne constituent pas un remplacement global aveugle : conserver la lisibilité des corps de texte, la hiérarchie des montants et les cibles tactiles d’au moins 44 px.
+- Vérifier chaque composition aux formats téléphone, tablette et desktop, puis le comportement continu lors de l’intégration. Les maquettes à quatre largeurs ne prouvent pas à elles seules le responsive, le clavier, le zoom ou l’accessibilité de l’application.
+
+Les commandes de simulation et de recette restent hors des écrans produit. Les données d’exemple et résultats serveur illustratifs d’un prototype ne sont pas des preuves de fonctionnement connecté. La livraison finale exige des contrôles distincts du Web/PWA et de l’application iOS/Android.
+
+## Décision du 13 novembre 2026 — logo sans cartouche noir
+
+Le propriétaire demande de retirer le logo sur fond noir. La référence approuvée est le sigle DD noir et bleu avec le nom DomDépannage noir, empilé sur fond blanc. La ressource `apps/mobile/assets/images/splash.png` correspond à l’image fournie ; sa copie web est `public/brand/domdepannage-logo.png`. Sur mobile, les en-têtes des espaces connectés particulier, artisan et administration ne portent aucun logo : titre ou contexte, retour/menu et notifications priment. Le logo reste autorisé sur l’accueil public et au lancement natif. Cette décision prévaut sur les anciennes prescriptions de logo horizontal noir. Ne pas recréer un cartouche noir dans les maquettes ou les en-têtes.
+
+## Décisions courantes — palette B et encaissement plateforme
+
+La version du 10 novembre 2026 sert de référence pour l’accueil et le blog Web/PWA. L’accueil reprend la recherche, les cartes bleues, le menu à droite, les engagements avant le catalogue et la navigation basse sur téléphone. Les bannières urgence et candidature utilisent le jaune `#F4D649` avec des actions bleu nuit. Les pages publiques partagent les surfaces claires, les marges, l’en-tête et le pied de page bleu nuit. Les résumés, cartes et messages d’état utilisent des contours réguliers. Les états et sélections sont identifiés par leur libellé, une surface ou un contour complet. Le focus clavier reste visible. Les tarifs viennent du catalogue publié et l’entrée par l’adresse utilise le formulaire de demande existant. [Fichier Figma](https://www.figma.com/design/yHq46klgSoXkIXvG3dQBB1/accueil-web-pwa-bannieres-jaunes)
+
+L’application iPhone et Android reprend la composition mobile du Web pour l’accueil, le catalogue, la réservation publique, le suivi, le compte et le blog. Les écrans connectés utilisent la même palette et une navigation adaptée aux actions de chaque rôle. La candidature et les demandes d’installation s’ouvrent dans le portail configuré.
+
+DomDépannage est le nom visible sur le site, la PWA et l’application mobile. Sur le Web et la PWA, le logo horizontal noir sert à l’en-tête, le logo horizontal bleu au pied de page et le carré noir à l’icône d’installation. Dans l’application iPhone et Android, le logo empilé noir et bleu sur fond blanc est utilisé à l’accueil, à l’ouverture et sur l’icône d’installation.
+
+Les dernières décisions du propriétaire priment sur les sections historiques ci-dessous. Référence historique Figma : `hec6XdQ7IbOFVeFhq6KPDw`, pages MOBILE B. Palette B validée : cobalt `#2246E5`, accent orange `#FF6B35`, surfaces blanches en clair et anthracite en sombre, Plus Jakarta Sans. Préserver la structure métier et les états accessibles ; pas de simple remplacement global de couleurs aux usages contradictoires. Mobile puis déclinaisons web complètes.
+
+Le devis et la facture de prestation sont émis au nom de l’entreprise de l’artisan, via son dossier professionnel. Accord sur une version avant travaux ; supplément soumis à un nouvel accord. Tous les paiements doivent être encaissés par la plateforme : espace client, lien sécurisé ou QR associé au dossier. Aucun règlement espèces, TPE personnel, virement personnel ou déclaration artisan « reçu » n’est accepté pour les nouvelles opérations. Les anciennes opérations restent dans l’historique, sans les renommer en confirmations bancaires. Le choix après intervention signifie paiement sur la plateforme après travaux, jamais encaissement direct. Les codes internes historiques `on_site` peuvent rester transitoirement compatibles s’ils sont strictement interprétés comme paiement plateforme différé et ne donnent aucun droit de déclarer un encaissement.
+
+Sur le Web et la PWA, le client peut préparer sa demande avant de se connecter. L’envoi et le suivi passent par un compte e-mail et mot de passe, confirmé par lien. Le téléphone est une coordonnée obligatoire de contact. Après une connexion ordinaire, « Votre espace » affiche les coordonnées, les adresses et les demandes en cours et passées. À l’étape du lieu d’intervention, le client peut confirmer un point sur la carte ou saisir son adresse manuellement. La vérification par SMS des anciens binaires natifs reste couverte par leur contrat existant. Commission et conditions commerciales sans valeurs inventées.
+
+---
+
 ## Statut et références
-Ce document fixe une direction initiale issue des PDF fournis et des règles de qualité du projet. Les valeurs de tokens ci-dessous sont des propositions de normalisation, pas des couleurs extraites exactement des maquettes.
+Le 31 octobre 2026, le propriétaire a retenu la maquette Delivo adaptée comme nouvelle direction UI/UX : « Je pense qu’on tient une partie de nos maquettes ça sera la nouvelle direction UI/ux ». La référence visuelle retenue à cette date était le prototype `6bc0cab3a9eabcc52ac62802b5ddfb953a5cb78e`, `prototypes/delivo-test/web-network.html`, consultable sur https://depannage-electricite-mgyxn7dsb-brafas-projects.vercel.app/web-network.html. Voir `docs/DIRECTION_UI_UX_VALIDEE.md` pour les décisions et leur adoption progressive.
+
+Cette décision remplace la proposition initiale bleu/blanc pour la direction graphique. Les PDF restent les références fonctionnelles et de structure propres à chaque rôle. Le prototype valide une direction et une partie des compositions ; il ne prouve ni la migration de l’application, ni la validation de tous ses écrans.
 
 Les maquettes couvrent interfaces mobiles client/artisan, pages web publiques, portails professionnels et administration. Elles peuvent être améliorées tout en conservant leurs intentions métier. Plusieurs noms et logos y coexistent : le nom final, le logo, les coordonnées et la zone de couverture restent à décider. Ne pas adopter une marque concurrente visible dans les schémas de comparaison.
 
@@ -9,36 +45,47 @@ Les maquettes couvrent interfaces mobiles client/artisan, pages web publiques, p
 Une interface de service claire, rassurante et opérationnelle : comprendre la prochaine action, son coût estimé et l'état de la demande. Donner la priorité à la lisibilité et à la transparence, particulièrement en situation urgente.
 
 ## Langage visuel
-- Base claire, surfaces blanches, fond gris très pâle, titres bleu nuit et action principale bleue.
-- Vert réservé aux réussites, validations et disponibilités ; orange aux alertes et rouge aux erreurs ou urgences qui le justifient.
+- Identité verte : vert forêt pour les actions, noir en mode sombre, blanc et gris pâle en mode clair ; famille Plus Jakarta Sans. Conserver les boutons, cartes, arrondis et espacements de la maquette retenue.
+- Thème clair/sombre avec choix système initial et choix utilisateur mémorisé. Le jaune distingue le bloc « Conseils et formation » ; il ne constitue pas un état de validation ou d’alerte à lui seul.
+- Accueil web : grand diaporama photographique manuel, bord à bord, premier écran complet sous la navigation, sans publicité. Les photos restent lisibles, avec texte contrasté, commandes clavier et réduction du mouvement.
+- Interventions en cartes compactes avec photos pertinentes, services par onglets, conseils en grand article + vignettes et bannière verte pour rejoindre le réseau professionnel. La composition et les règles de ces blocs viennent du prototype retenu.
+- Réserver les couleurs de statut aux besoins métier et les accompagner de libellés. Ne pas utiliser la seule couleur verte de marque pour signifier qu’une information a été vérifiée.
 - Icônes simples et cohérentes, accompagnées de libellés lorsque leur sens n'est pas évident.
 - Bordures discrètes, arrondis modérés, ombres légères ; hiérarchie par espacement et typographie.
 - Photographies pertinentes d'interventions et d'artisans pour les pages publiques ; aucune fausse preuve de qualification.
 
-### Tokens initiaux proposés
+### Tokens de la direction retenue
 | Usage | Valeur |
 | --- | --- |
-| Action principale | `#1457D9` |
-| Titres / navigation sombre | `#102A43` |
-| Texte principal | `#172B4D` |
-| Texte secondaire | `#526178` |
-| Fond | `#F5F7FB` |
-| Surface | `#FFFFFF` |
-| Bordure | `#D8E0EB` |
-| Succès | `#167344` |
-| Alerte | `#925C00` |
-| Erreur | `#B42318` |
+| Action principale | `#18794E` |
+| Accent sur fond sombre | `#5BD49A` |
+| Fond sombre / surface / carte | `#000000` / `#141414` / `#1A1A1A` |
+| Texte sombre principal / secondaire | `#FFFFFF` / `#B5B5B5` |
+| Fond clair / surface / carte | `#FFFFFF` / `#F4F6F5` / `#FFFFFF` |
+| Texte clair principal / secondaire | `#111111` / `#4B5563` |
+| Accent sur fond clair | `#0F5C3A` |
+| Conseils et formation | fond `#F4D649`, texte `#141414`, secondaire `#343434` |
+| Bordure sombre / claire | `#2A2A2A` / `#D9DFDC` |
+| Erreur | `#B42318` (adapter le contraste à la surface) |
 
 Vérifier le contraste des combinaisons réellement utilisées avant livraison. Centraliser couleurs, espacements, typographie, rayons et états dans le thème de la stack retenue.
 
 ## Typographie et disposition
-- Police sans empattement lisible ; retenir une famille commune avant implémentation et utiliser les conventions natives si une application mobile est choisie.
+- Plus Jakarta Sans pour le web/PWA, conformément à la maquette retenue ; conserver une hiérarchie de titres et un texte courant lisibles. Toute adaptation native ultérieure suit les règles de sa plateforme.
 - Texte courant web autour de 16 px ; ne pas réduire les textes pour faire entrer un tableau.
 - Échelle d'espacement initiale : 4, 8, 12, 16, 24, 32, 48 et 64.
 - Mobile : une colonne, action principale visible, progression explicite pour les demandes et devis.
 - Desktop professionnel : navigation latérale, titre et filtres, indicateurs utiles puis liste opérationnelle.
 - Adapter les tableaux sur petits écrans avec cartes ou défilement identifié ; ne pas comprimer toutes les colonnes.
 - Ne pas afficher les cadres de téléphone, barres système simulées ou cadres de navigateur des maquettes dans le produit.
+
+## Parcours client retenu — complément du 1 novembre 2026
+
+- Après l’adresse : choix du paiement (empreinte bancaire sans débit immédiat ou règlement sur place), récapitulatif puis confirmation. Une création de compte email/mot de passe est facultative ; elle ne doit plus être la suite imposée du formulaire particulier.
+- Le suivi permet de retrouver ses interventions à partir du téléphone et des coordonnées. Nom, prénom et téléphone ne sont pas des secrets : une vérification du numéro précède l’affichage privé. Le fournisseur SMS étant explicitement différé par le propriétaire, le suivi téléphone reste désactivé tant qu’il n’est pas configuré, avec un état honnête.
+- Les clients déjà connectés par un email confirmé gardent leur accès ; aucun rattachement de dossiers entre comptes n’est fait sur la seule égalité d’un téléphone non vérifié. Artisans et organisations conservent leurs parcours d’authentification.
+- Paiement sur place reste un règlement à effectuer, jamais un paiement confirmé. L’empreinte doit être autorisée par le fournisseur ; retour navigateur ou choix de radio ne prouvent ni autorisation ni débit. Débit limité au devis accepté, après intervention et contrôles fournisseur.
+- MesDépanneurs sert de référence de structure ; ses garanties, moyens de règlement précis, CGU, coordonnées et délais ne deviennent pas nos engagements.
 
 ## Parcours et composants
 - Client : problème, adresse/zone, description et photos, estimation, confirmation et état de la demande. Distinguer informations obligatoires et facultatives.
@@ -65,3 +112,20 @@ Ces règles sont établies pour la suite du projet ; elles ne sont pas présent�
 
 ## Vérification après chaque fonctionnalité
 Contrôler cohérence des composants, responsive, lisibilité, clavier/focus, validations, chargement/erreur/vide, transparence tarifaire et permissions. Comparer aux intentions des PDF et vérifier le résultat sur la preview en ligne adaptée à la plateforme.
+
+
+## Fidélité aux références après audit
+
+La structure des écrans, la navigation et la hiérarchie métier font partie des références à respecter ; reprendre seulement les couleurs ne suffit pas. Les espaces artisan, entreprise cliente et Super Admin ne doivent pas être une simple vue client renommée. Pour chaque écran, choisir et noter une référence maîtresse parmi les variantes avant reprise visuelle.
+
+- Artisan : M14, M34–M36, M44, M65 et M67, dont navigation basse mobile, profil métier, justificatifs et mission.
+- Entreprise/partenaire : M4/M66, fiches et tableaux propres au syndic, à la restauration, aux bureaux et aux ERP.
+- Super-administration de plateforme : M43 avec ses menus et indicateurs transverses ; ne pas confondre avec l’owner d’une organisation cliente.
+- Nouveau volume 5 : V5-C01 fiche bureaux, V5-C05 dashboard Bureaux360, V5-C08 détail d’approbation syndic. Les autres images complémentaires dupliquent des références déjà présentes.
+
+Les chiffres, certifications, dates, identités et promesses des images restent des exemples. Le périmètre électrique de la spécification finale prévaut sur les lignes multi-métiers/facility management des maquettes. Les adaptations d’accessibilité et de responsive doivent être documentées ; aucun style IA générique n’est autorisé.
+
+
+### Références complémentaires des volumes 6 à 9
+
+Le volume 8 ajoute V8-C03 À propos, V8-C05 confidentialité, V8-C06 devis client et V8-C07 détail intervention. Les volumes 6/7/9 reprennent des vues déjà cataloguées ; ne pas les compter comme de nouvelles interfaces à créer plusieurs fois. La structure des pages est une référence, pas une autorisation de publier des équipes fictives, une histoire inventée, un texte YourCompany non adapté ou les promesses d’annulation/satisfaction d’exemple. Le périmètre électrique et la chronologie métier cohérente prévalent sur les exemples peinture/plomberie et l’ordre discutable d’une timeline.

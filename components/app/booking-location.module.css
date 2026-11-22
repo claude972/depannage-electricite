@@ -1,0 +1,13 @@
+.location { display: grid; gap: 16px; min-width: 0; }
+.access { display: grid; gap: 8px; }
+.search { display: flex; gap: 8px; align-items: end; }
+.search label { flex: 1; display: grid; gap: 8px; min-width: 0; }
+.location input, .location textarea { width: 100%; min-height: 44px; padding: 12px; border: 1px solid var(--ui-border, #cbd5e1); border-radius: 10px; background: var(--ui-surface, white); color: inherit; font: inherit; }
+.location button { min-height: 44px; padding: 10px 16px; border-radius: 10px; border: 1px solid #2246e5; background: var(--ui-surface, white); color: #2246e5; font: inherit; cursor: pointer; }
+.location button:disabled { opacity: .6; cursor: wait; }
+.location :focus-visible { outline: 3px solid #2246e5; outline-offset: 3px; }
+.results { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.results button { width: 100%; text-align: left; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.help { margin: 0; font-size: .9rem; line-height: 1.5; }
+@media (max-width: 480px) { .search { flex-wrap: wrap; } .search label { flex-basis: 100%; } }

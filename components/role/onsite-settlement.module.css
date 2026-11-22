@@ -1,0 +1,54 @@
+/* On-site settlement leaf (booking « règlement sur place »). Rendered inside a themed role space
+   (ThemeSurface, `.ui-v2`): --ui-* tokens only, 1px borders, 8px grid, 44 px targets. Buttons are
+   the shared `.button` primitives repainted by the role skin. */
+.root {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 16px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-card);
+  color: var(--ui-text);
+}
+.root p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.text {
+  color: var(--ui-text);
+}
+.muted {
+  color: var(--ui-text-muted);
+}
+.declared {
+  padding: 8px 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+.error {
+  color: var(--ui-danger);
+}
+.warning {
+  color: var(--ui-warning);
+}
+.confirm {
+  display: grid;
+  gap: 8px;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.actions :global(.button) {
+  min-height: 44px;
+}
+@media (max-width: 640px) {
+  .actions :global(.button) {
+    flex: 1 1 100%;
+  }
+}

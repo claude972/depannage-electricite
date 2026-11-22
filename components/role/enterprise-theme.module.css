@@ -1,0 +1,690 @@
+/* Enterprise space theme (FASTSPLIT-ARTISAN-ENTERPRISE-THEME-001). Exported `.enterpriseSkin` is
+   put on the enterprise root together with ThemeSurface (`.ui-v2`), same contract as
+   client-theme.module.css. Every rule is scoped under `.enterpriseSkin` and uses --ui-* tokens
+   only; legacy variables (--navy, --blue, --text…) are never redefined, globals.css is not edited.
+   This file repaints the shared global primitives (panels, buttons, tags, alerts, fields, Empty /
+   Unavailable / Loader, upload queue…) rendered in the enterprise space. Module classes of
+   enterprise.module.css are themed in that module itself (`:global(.ui-v2) .x` overrides at its
+   end): no selector here depends on the generated class-name format. Leaf modules owned by other
+   slices are rendered as light islands (end of file). */
+.enterpriseSkin {
+  min-height: 100vh;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+:where(.enterpriseSkin) h1,
+:where(.enterpriseSkin) h2,
+:where(.enterpriseSkin) h3,
+:where(.enterpriseSkin) h4 {
+  color: inherit;
+}
+:where(.enterpriseSkin) p {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin input,
+.enterpriseSkin select,
+.enterpriseSkin textarea {
+  color-scheme: var(--ui-scheme);
+}
+.enterpriseSkin a {
+  color: var(--ui-accent);
+}
+.enterpriseSkin input::placeholder,
+.enterpriseSkin textarea::placeholder {
+  color: var(--ui-text-muted);
+  opacity: 1;
+}
+/* ---- Generated: shared primitives (app/globals.css rules reachable from the enterprise space) */
+.enterpriseSkin :global(.button) {
+  border-color: transparent;
+}
+.enterpriseSkin :global(.primary) {
+  background-color: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+.enterpriseSkin :global(.primary):hover {
+  background-color: var(--ui-primary);
+}
+.enterpriseSkin :global(.outline) {
+  border-color: var(--ui-border);
+  background-color: var(--ui-card);
+  color: var(--ui-text);
+}
+.enterpriseSkin :global(.outline):hover {
+  border-color: var(--ui-accent);
+  background-color: var(--ui-surface);
+}
+.enterpriseSkin :global(.text-button) {
+  color: var(--ui-accent);
+}
+.enterpriseSkin :global(.danger) {
+  color: var(--ui-danger);
+}
+.enterpriseSkin :global(.brand) {
+  color: var(--ui-text);
+}
+.enterpriseSkin :global(.brand) small {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.brand-mark) {
+  background-color: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+.enterpriseSkin :global(.brand-dot) {
+  color: var(--ui-accent);
+}
+.enterpriseSkin :global(.spinner) {
+  border-color: var(--ui-border);
+  border-top-color: var(--ui-accent);
+}
+.enterpriseSkin :global(.avatar) {
+  background-color: var(--ui-surface);
+  color: var(--ui-text);
+}
+.enterpriseSkin :global(.hello-dot) {
+  color: var(--ui-accent);
+}
+.enterpriseSkin :global(.stats-strip) {
+  border-color: var(--ui-border);
+  background-color: var(--ui-card);
+}
+.enterpriseSkin :global(.stats-strip) > div {
+  border-right-color: var(--ui-border);
+}
+.enterpriseSkin :global(.stat-icon):global(.blue) {
+  background-color: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.enterpriseSkin :global(.stat-icon):global(.amber) {
+  background-color: var(--ui-surface);
+  color: var(--ui-warning);
+}
+.enterpriseSkin :global(.stat-icon):global(.green) {
+  background-color: var(--ui-surface);
+  color: var(--ui-success);
+}
+.enterpriseSkin :global(.stats-strip) section > span {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.stats-strip) strong {
+  color: var(--ui-text);
+}
+.enterpriseSkin :global(.panel) {
+  background-color: var(--ui-card);
+  border-color: var(--ui-border);
+}
+.enterpriseSkin :global(.attention-panel) {
+  background-color: var(--ui-card);
+  border-color: var(--ui-border);
+}
+.enterpriseSkin :global(.attention-title) {
+  background-color: var(--ui-surface);
+  border-bottom-color: var(--ui-border);
+  color: var(--ui-accent);
+}
+.enterpriseSkin :global(.attention-body) section > span {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.request-row) {
+  border-top-color: var(--ui-border);
+}
+.enterpriseSkin :global(.request-row):hover {
+  background-color: var(--ui-surface);
+}
+.enterpriseSkin :global(.service-icon) {
+  background-color: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.enterpriseSkin :global(.request-title) {
+  color: var(--ui-text);
+}
+.enterpriseSkin :global(.request-address) {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.request-ref) {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.request-price) {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.request-price) > :global(.urgent-text) {
+  color: var(--ui-warning);
+}
+.enterpriseSkin :global(.request-row) > svg {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.badge) {
+  background-color: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.status-quoted),
+.enterpriseSkin :global(.status-completed) {
+  background-color: var(--ui-surface);
+  color: var(--ui-warning);
+}
+.enterpriseSkin :global(.status-paid) {
+  background-color: var(--ui-surface);
+  color: var(--ui-success);
+}
+.enterpriseSkin :global(.status-assigned),
+.enterpriseSkin :global(.status-accepted),
+.enterpriseSkin :global(.status-in_progress) {
+  background-color: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.enterpriseSkin :global(.status-cancelled) {
+  background-color: var(--ui-surface);
+  color: var(--ui-danger);
+}
+.enterpriseSkin :global(.quick-categories) {
+  background-color: var(--ui-card);
+  border-color: var(--ui-border);
+}
+.enterpriseSkin :global(.quick-categories) > button {
+  border-right-color: var(--ui-border);
+  color: var(--ui-accent);
+}
+.enterpriseSkin :global(.quick-categories) > button:hover {
+  background-color: var(--ui-surface);
+}
+.enterpriseSkin :global(.quick-categories) span {
+  color: var(--ui-text);
+}
+.enterpriseSkin :global(.help-panel) {
+  background-color: var(--ui-surface);
+  border-color: var(--ui-border);
+}
+.enterpriseSkin :global(.help-symbol) {
+  background-color: var(--ui-card);
+  border-color: var(--ui-border);
+  color: var(--ui-accent);
+}
+.enterpriseSkin :global(.sidebar-note) {
+  border-color: var(--ui-border);
+  background-color: var(--ui-card);
+}
+.enterpriseSkin :global(.sidebar-note) > svg {
+  color: var(--ui-accent);
+}
+.enterpriseSkin :global(.support-link) > span {
+  background-color: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.support-link) button {
+  color: var(--ui-accent);
+}
+.enterpriseSkin :global(.alert):global(.error) {
+  background-color: var(--ui-surface);
+  color: var(--ui-danger);
+  border-color: var(--ui-danger);
+}
+.enterpriseSkin :global(.alert):global(.success) {
+  background-color: var(--ui-surface);
+  color: var(--ui-success);
+  border-color: var(--ui-success);
+}
+.enterpriseSkin :global(.alert):global(.warning) {
+  background-color: var(--ui-surface);
+  color: var(--ui-warning);
+  border-color: var(--ui-warning);
+}
+.enterpriseSkin :global(.empty-icon) {
+  background-color: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.tabs) > button {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.tabs) > button:global(.active) {
+  color: var(--ui-accent);
+  background-color: var(--ui-surface);
+}
+.enterpriseSkin :global(.subtle) {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.back-link) {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.back-link):hover {
+  color: var(--ui-accent);
+}
+.enterpriseSkin :global(.stepper) li {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.stepper) li > span {
+  border-color: var(--ui-border);
+  background-color: var(--ui-card);
+}
+.enterpriseSkin :global(.stepper) li:global(.current) {
+  color: var(--ui-accent);
+}
+.enterpriseSkin :global(.stepper) li:global(.current) > span {
+  background-color: var(--ui-primary);
+  border-color: var(--ui-accent);
+  color: var(--ui-on-primary);
+}
+.enterpriseSkin :global(.field) > span,
+.enterpriseSkin :global(.urgency-options) legend {
+  color: var(--ui-text);
+}
+.enterpriseSkin :global(.field) input,
+.enterpriseSkin :global(.field) select,
+.enterpriseSkin :global(.field) textarea {
+  border-color: var(--ui-border);
+  background-color: var(--ui-card);
+  color: var(--ui-text);
+}
+.enterpriseSkin :global(.field) small {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.category-grid) > button {
+  border-color: var(--ui-border);
+}
+.enterpriseSkin :global(.category-grid) > button > svg {
+  color: var(--ui-accent);
+}
+.enterpriseSkin :global(.category-grid) small {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.category-grid) > button:global(.selected) {
+  background-color: var(--ui-surface);
+  border-color: var(--ui-accent);
+}
+.enterpriseSkin :global(.radio-dot) {
+  border-color: var(--ui-accent);
+}
+.enterpriseSkin :global(.selected) > :global(.radio-dot) {
+  background-color: var(--ui-primary);
+  border-color: var(--ui-border);
+  outline-color: var(--ui-focus);
+}
+.enterpriseSkin :global(.form-actions) {
+  border-top-color: var(--ui-border);
+}
+.enterpriseSkin :global(.inline-note) {
+  background-color: var(--ui-surface);
+}
+.enterpriseSkin :global(.inline-note) svg {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.urgency-options) > label {
+  border-color: var(--ui-border);
+}
+.enterpriseSkin :global(.urgency-options) > label:global(.selected) {
+  border-color: var(--ui-accent);
+  background-color: var(--ui-surface);
+}
+.enterpriseSkin :global(.urgency-options) input {
+  accent-color: var(--ui-accent);
+}
+.enterpriseSkin :global(.urgency-options) small {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.form-note) {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.recap-service) {
+  background-color: var(--ui-surface);
+  border-color: var(--ui-border);
+}
+.enterpriseSkin :global(.recap-service) div > span {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.recap-address) {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.estimate-box) {
+  border-color: var(--ui-border);
+  background-color: var(--ui-surface);
+}
+.enterpriseSkin :global(.estimate-box) > span {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.estimate-box) > strong {
+  color: var(--ui-text);
+}
+.enterpriseSkin :global(.timeline) li:not(:last-child):before {
+  background-color: var(--ui-surface);
+}
+.enterpriseSkin :global(.timeline) li:global(.reached):not(:last-child):before {
+  background-color: var(--ui-primary);
+}
+.enterpriseSkin :global(.timeline) li > span {
+  background-color: var(--ui-surface);
+  border-color: var(--ui-border);
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.timeline) li:global(.reached) > span {
+  background-color: var(--ui-surface);
+  border-color: var(--ui-border);
+  color: var(--ui-accent);
+}
+.enterpriseSkin :global(.timeline) strong {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.timeline) :global(.reached) strong {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.timeline) small {
+  color: var(--ui-accent);
+}
+.enterpriseSkin :global(.quote-totals) :global(.total) {
+  border-top-color: var(--ui-border);
+  color: var(--ui-text);
+}
+.enterpriseSkin :global(.document-list) > div {
+  border-bottom-color: var(--ui-border);
+}
+.enterpriseSkin :global(.site-form) form {
+  border-top-color: var(--ui-border);
+}
+.enterpriseSkin :global(.message-threads) {
+  border-right-color: var(--ui-border);
+  background-color: var(--ui-surface);
+}
+.enterpriseSkin :global(.message-threads) > button {
+  border-bottom-color: var(--ui-border);
+}
+.enterpriseSkin :global(.message-threads) > button:global(.selected) {
+  background-color: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.enterpriseSkin :global(.message-threads) small {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.conversation-header) {
+  border-bottom-color: var(--ui-border);
+}
+.enterpriseSkin :global(.conversation-header) > span {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.message-bubble) {
+  background-color: var(--ui-surface);
+  border-color: var(--ui-border);
+}
+.enterpriseSkin :global(.message-bubble) > span {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.message-bubble) > p {
+  color: var(--ui-text);
+}
+.enterpriseSkin :global(.message-bubble) small {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.message-compose) {
+  border-top-color: var(--ui-border);
+}
+.enterpriseSkin :global(.message-compose) textarea {
+  border-color: var(--ui-border);
+}
+.enterpriseSkin :global(.profile-intro) {
+  border-bottom-color: var(--ui-border);
+}
+.enterpriseSkin :global(.auth-mark) {
+  background-color: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.enterpriseSkin :global(.forgot-link) {
+  color: var(--ui-accent);
+}
+.enterpriseSkin :global(.auth-switch) button {
+  color: var(--ui-accent);
+}
+@media (max-width: 950px) {
+  .enterpriseSkin :global(.message-threads) {
+    border-bottom-color: var(--ui-border);
+  }
+  .enterpriseSkin :global(.message-threads) > button {
+    border-color: var(--ui-border);
+    background-color: var(--ui-card);
+  }
+}
+@media (max-width: 760px) {
+  .enterpriseSkin :global(.quick-categories) > button {
+    border-bottom-color: var(--ui-border);
+  }
+}
+.enterpriseSkin :global(.review-stars) {
+  color: var(--ui-warning);
+}
+.enterpriseSkin :global(.rating-options) legend {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.rating-options) span {
+  border-color: var(--ui-border);
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.rating-options) input:checked + span {
+  color: var(--ui-warning);
+  border-color: var(--ui-warning);
+  background-color: var(--ui-surface);
+}
+.enterpriseSkin :global(.rating-options) input:focus-visible + span {
+  outline-color: var(--ui-focus);
+}
+.enterpriseSkin :global(.document-manager) form {
+  border-top-color: var(--ui-border);
+}
+.enterpriseSkin :global(.operations-tabs) {
+  border-bottom-color: var(--ui-border);
+}
+.enterpriseSkin :global(.operations-form) {
+  border-left-color: var(--ui-border);
+}
+.enterpriseSkin :global(.approval-list) > div {
+  border-bottom-color: var(--ui-border);
+}
+.enterpriseSkin :global(.rule-row) {
+  border-bottom-color: var(--ui-border);
+}
+.enterpriseSkin :global(.rule-row) > svg {
+  color: var(--ui-accent);
+}
+.enterpriseSkin :global(.rule-row) small {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.checkbox-field) input {
+  accent-color: var(--ui-accent);
+}
+.enterpriseSkin :global(.contract-list) details {
+  border-bottom-color: var(--ui-border);
+}
+.enterpriseSkin :global(.contract-list) small {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.compliance-list) > div {
+  border-bottom-color: var(--ui-border);
+}
+.enterpriseSkin :global(.record-icon) {
+  background-color: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.operation-empty) {
+  color: var(--ui-text-muted);
+}
+@media (max-width: 1050px) {
+  .enterpriseSkin :global(.operations-form) {
+    border-top-color: var(--ui-border);
+  }
+}
+.enterpriseSkin :global(.warranty-list) > div {
+  border-top-color: var(--ui-border);
+}
+.enterpriseSkin :global(.warranty-list) small {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.warranty-panel) form {
+  border-top-color: var(--ui-border);
+}
+.enterpriseSkin :global(.confirmation-review) {
+  border-color: var(--ui-border);
+  background-color: var(--ui-card);
+}
+.enterpriseSkin :global(.destructive-button) {
+  color: var(--ui-on-primary);
+  background-color: var(--ui-danger);
+}
+.enterpriseSkin :global(.destructive-button):hover {
+  background-color: var(--ui-danger);
+}
+.enterpriseSkin :global(.inline-editor) {
+  border-top-color: var(--ui-border);
+}
+.enterpriseSkin :global(.inline-validation) {
+  color: var(--ui-danger);
+}
+.enterpriseSkin :global(.tag) {
+  background-color: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.tag-blue) {
+  background-color: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.enterpriseSkin :global(.tag-green) {
+  background-color: var(--ui-surface);
+  color: var(--ui-success);
+}
+.enterpriseSkin :global(.tag-amber) {
+  background-color: var(--ui-surface);
+  color: var(--ui-warning);
+}
+.enterpriseSkin :global(.tag-red) {
+  background-color: var(--ui-surface);
+  color: var(--ui-danger);
+}
+.enterpriseSkin :global(.tag-violet) {
+  background-color: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.enterpriseSkin :global(.stat) {
+  background-color: var(--ui-card);
+  border-color: var(--ui-border);
+}
+.enterpriseSkin :global(.stat) section > span {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.stat) strong {
+  color: var(--ui-text);
+}
+.enterpriseSkin :global(.stat) small {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.stat-icon):global(.violet) {
+  background-color: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.enterpriseSkin :global(.stat-icon):global(.navy) {
+  background-color: var(--ui-surface);
+  color: var(--ui-text);
+}
+.enterpriseSkin :global(.unavailable) {
+  border-color: var(--ui-accent);
+  background-color: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.unavailable-icon) {
+  background-color: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.unavailable) strong {
+  color: var(--ui-text);
+}
+.enterpriseSkin :global(.unavailable) small {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.field) label {
+  color: var(--ui-text);
+}
+.enterpriseSkin :global(.field-error) {
+  color: var(--ui-danger);
+}
+.enterpriseSkin :global(.field-invalid) input,
+.enterpriseSkin :global(.field-invalid) select,
+.enterpriseSkin :global(.field-invalid) textarea {
+  border-color: var(--ui-danger);
+}
+.enterpriseSkin :global(.demo-note) {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.tabs) > button[aria-pressed="true"] {
+  color: var(--ui-accent);
+  background-color: var(--ui-surface);
+}
+.enterpriseSkin :global(.install-icon) {
+  background-color: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.enterpriseSkin :global(.photo-list) li {
+  color: var(--ui-text);
+  border-color: var(--ui-border);
+  background-color: var(--ui-card);
+}
+.enterpriseSkin :global(.upload-queue) li {
+  border-color: var(--ui-border);
+}
+.enterpriseSkin :global(.upload-queue) li[data-status="failed"] {
+  border-color: var(--ui-danger);
+  background-color: var(--ui-surface);
+}
+.enterpriseSkin :global(.upload-queue) li[data-status="done"] {
+  border-color: var(--ui-success);
+  background-color: var(--ui-surface);
+}
+.enterpriseSkin :global(.upload-queue) li small {
+  color: var(--ui-text-muted);
+}
+.enterpriseSkin :global(.upload-queue) li[data-status="uncertain"] {
+  border-color: var(--ui-warning);
+  background-color: var(--ui-surface);
+}
+.enterpriseSkin :global(.upload-candidates) li {
+  background-color: transparent;
+}
+.enterpriseSkin :global(.upload-open) small {
+  color: var(--ui-danger);
+}
+/* ---- Manual corrections ------------------------------------------------------------------- */
+.enterpriseSkin :global(.checkbox-field) input,
+.enterpriseSkin :global(.urgency-options) input {
+  accent-color: var(--ui-primary);
+}
+/* Shared primitives, aligned with the client skin. */
+.enterpriseSkin :global(.primary):hover:not(:disabled),
+.enterpriseSkin :global(.button.primary):hover:not(:disabled) {
+  background: var(--ui-primary);
+}
+.enterpriseSkin :global(.destructive-button),
+.enterpriseSkin :global(.destructive-button):hover {
+  border: 1px solid var(--ui-danger);
+  background: transparent;
+  color: var(--ui-danger);
+}
+.enterpriseSkin :global(.tabs) > button {
+  min-height: 44px;
+}
+.enterpriseSkin :global(.timeline) li:not(:last-child):before {
+  background: var(--ui-border);
+}
+.enterpriseSkin :global(.timeline) li:global(.reached):not(:last-child):before {
+  background: var(--ui-accent);
+}
+.enterpriseSkin :global(.timeline) li:global(.reached) > span {
+  border-color: var(--ui-accent);
+}
+.enterpriseSkin :global(.timeline) :global(.reached) strong {
+  color: var(--ui-text);
+}
+.enterpriseSkin :global(.timeline) small {
+  color: var(--ui-text-muted);
+}
+/* Install note: inline legacy colour in the shared PWA panel. */
+.enterpriseSkin :global(.install-panel) p[style] {
+  color: var(--ui-text-muted) !important;
+}
+
+/* Support centre honesty note (leaf module, legacy #52627a): the paragraph right under the page
+   title, reached through the shared global class only. */
+.enterpriseSkin :global(.page-title) + p {
+  color: var(--ui-text-muted);
+}

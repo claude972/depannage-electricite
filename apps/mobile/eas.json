@@ -1,0 +1,40 @@
+{
+  "cli": {
+    "version": ">= 27.2.0",
+    "requireCommit": true,
+    "appVersionSource": "local"
+  },
+  "build": {
+    "preview": {
+      "distribution": "internal",
+      "environment": "preview",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://domdepannage-recette-20261112.vercel.app"
+      },
+      "android": {
+        "buildType": "apk",
+        "credentialsSource": "local"
+      },
+      "ios": {
+        "simulator": true,
+        "scheme": "DomDepannage"
+      }
+    },
+    "simulator": {
+      "extends": "preview",
+      "env": {
+        "EXPO_PUBLIC_HOME_SUPPORT_PREVIEW": "false"
+      }
+    },
+    "device": {
+      "extends": "preview",
+      "ios": {
+        "simulator": false,
+        "credentialsSource": "remote"
+      },
+      "env": {
+        "EXPO_PUBLIC_HOME_SUPPORT_PREVIEW": "false"
+      }
+    }
+  }
+}

@@ -1,0 +1,951 @@
+/* Client space theme (FASTSPLIT-CLIENT-THEME-001). Exported `.clientSkin` is put by the lead on
+   the client root together with ThemeSurface (`.ui-v2`). Every rule below is scoped under
+   `.clientSkin`; global primitives rendered in the client space (panels, buttons, tags, alerts,
+   fields, Empty / Unavailable / Loader, shared forms, request rows, stats…) are repainted with
+   --ui-* tokens only. Legacy variables (--navy, --blue, --text…) are never redefined.
+   Generated section: one override per colour declaration of the matching app/globals.css rule
+   (same selector, +1 class), mapped to tokens; then manual corrections. Layout is unchanged, so
+   the M61 / V8-C06 / V8-C07 structure is preserved. */
+.clientSkin {
+  min-height: 100vh;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+}
+/* Legacy element colours (h1–h3 navy, p muted) re-pointed inside the skin only, at element
+   specificity (:where) so that leaf modules keep their own class colours. */
+:where(.clientSkin) h1,
+:where(.clientSkin) h2,
+:where(.clientSkin) h3 {
+  color: inherit;
+}
+:where(.clientSkin) p {
+  color: var(--ui-text-muted);
+}
+.clientSkin input,
+.clientSkin select,
+.clientSkin textarea {
+  color-scheme: var(--ui-scheme);
+}
+
+.clientSkin :global(.primary) {
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+.clientSkin :global(.primary):hover {
+  background: var(--ui-primary);
+}
+.clientSkin :global(.outline) {
+  border-color: var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-text);
+}
+.clientSkin :global(.outline):hover {
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+}
+.clientSkin :global(.text-button) {
+  color: var(--ui-accent);
+}
+.clientSkin :global(.brand) {
+  color: var(--ui-text);
+}
+.clientSkin :global(.brand) small {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.brand-mark) {
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+.clientSkin :global(.brand-dot) {
+  color: var(--ui-accent);
+}
+.clientSkin :global(.spinner) {
+  border: 3px solid var(--ui-border);
+  border-top-color: var(--ui-accent);
+}
+.clientSkin :global(.avatar) {
+  background: var(--ui-surface);
+  color: var(--ui-text);
+}
+.clientSkin :global(.hello-dot) {
+  color: var(--ui-accent);
+}
+.clientSkin :global(.stats-strip) {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+}
+.clientSkin :global(.stats-strip) > div {
+  border-right: 1px solid var(--ui-border);
+}
+.clientSkin :global(.stat-icon):global(.blue) {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.clientSkin :global(.stat-icon):global(.amber) {
+  background: var(--ui-surface);
+  color: var(--ui-warning);
+}
+.clientSkin :global(.stat-icon):global(.green) {
+  background: var(--ui-surface);
+  color: var(--ui-success);
+}
+.clientSkin :global(.stats-strip) section > span {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.stats-strip) strong {
+  color: var(--ui-text);
+}
+.clientSkin :global(.panel) {
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+}
+.clientSkin :global(.attention-panel) {
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+}
+.clientSkin :global(.attention-title) {
+  background: var(--ui-surface);
+  border-bottom: 1px solid var(--ui-border);
+  color: var(--ui-accent);
+}
+.clientSkin :global(.attention-body) section > span {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.request-row) {
+  border-top: 1px solid var(--ui-border);
+}
+.clientSkin :global(.request-row):hover {
+  background: var(--ui-surface);
+}
+.clientSkin :global(.service-icon) {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.clientSkin :global(.request-title) {
+  color: var(--ui-text);
+}
+.clientSkin :global(.request-address) {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.request-ref) {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.request-price) {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.request-price) > :global(.urgent-text) {
+  color: var(--ui-warning);
+}
+.clientSkin :global(.request-row) > svg {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.badge) {
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.status-quoted),
+.clientSkin :global(.status-completed) {
+  background: var(--ui-surface);
+  color: var(--ui-warning);
+}
+.clientSkin :global(.status-paid) {
+  background: var(--ui-surface);
+  color: var(--ui-success);
+}
+.clientSkin :global(.status-assigned),
+.clientSkin :global(.status-accepted),
+.clientSkin :global(.status-in_progress) {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.clientSkin :global(.status-cancelled) {
+  background: var(--ui-surface);
+  color: var(--ui-danger);
+}
+.clientSkin :global(.quick-categories) {
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+}
+.clientSkin :global(.quick-categories) > button {
+  border-right: 1px solid var(--ui-border);
+  color: var(--ui-accent);
+}
+.clientSkin :global(.quick-categories) > button:hover {
+  background: var(--ui-surface);
+}
+.clientSkin :global(.quick-categories) span {
+  color: var(--ui-text);
+}
+.clientSkin :global(.help-panel) {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+}
+.clientSkin :global(.help-symbol) {
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+  color: var(--ui-accent);
+}
+.clientSkin :global(.sidebar-note) {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+}
+.clientSkin :global(.sidebar-note) > svg {
+  color: var(--ui-accent);
+}
+.clientSkin :global(.support-link) > span {
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.support-link) button {
+  color: var(--ui-accent);
+}
+.clientSkin :global(.alert):global(.error) {
+  background: var(--ui-surface);
+  color: var(--ui-danger);
+  border-color: var(--ui-border);
+}
+.clientSkin :global(.alert):global(.success) {
+  background: var(--ui-surface);
+  color: var(--ui-success);
+  border-color: var(--ui-border);
+}
+.clientSkin :global(.alert):global(.warning) {
+  background: var(--ui-surface);
+  color: var(--ui-warning);
+  border-color: var(--ui-border);
+}
+.clientSkin :global(.empty-icon) {
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.tabs) > button {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.tabs) > button:global(.active) {
+  color: var(--ui-accent);
+  background: var(--ui-surface);
+}
+.clientSkin :global(.subtle) {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.back-link) {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.back-link):hover {
+  color: var(--ui-accent);
+}
+.clientSkin :global(.stepper) li {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.stepper) li > span {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+}
+.clientSkin :global(.stepper) li:global(.current) {
+  color: var(--ui-accent);
+}
+.clientSkin :global(.stepper) li:global(.current) > span {
+  background: var(--ui-primary);
+  border-color: var(--ui-accent);
+  color: var(--ui-on-primary);
+}
+.clientSkin :global(.field) > span,
+.clientSkin :global(.urgency-options) legend {
+  color: var(--ui-text);
+}
+.clientSkin :global(.field) input,
+.clientSkin :global(.field) select,
+.clientSkin :global(.field) textarea {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-text);
+}
+.clientSkin :global(.field) small {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.category-grid) > button {
+  border: 1px solid var(--ui-border);
+}
+.clientSkin :global(.category-grid) > button > svg {
+  color: var(--ui-accent);
+}
+.clientSkin :global(.category-grid) small {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.category-grid) > button:global(.selected) {
+  background: var(--ui-surface);
+  border-color: var(--ui-accent);
+}
+.clientSkin :global(.radio-dot) {
+  border: 1px solid var(--ui-border);
+}
+.clientSkin :global(.selected) > :global(.radio-dot) {
+  background: var(--ui-primary);
+  border: 4px solid var(--ui-border);
+}
+.clientSkin :global(.form-actions) {
+  border-top: 1px solid var(--ui-border);
+}
+.clientSkin :global(.inline-note) {
+  background: var(--ui-surface);
+}
+.clientSkin :global(.inline-note) svg {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.urgency-options) > label {
+  border: 1px solid var(--ui-border);
+}
+.clientSkin :global(.urgency-options) > label:global(.selected) {
+  border-color: var(--ui-accent);
+  background: var(--ui-surface);
+}
+.clientSkin :global(.urgency-options) input {
+  accent-color: var(--ui-primary);
+}
+.clientSkin :global(.urgency-options) small {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.form-note) {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.recap-service) {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+}
+.clientSkin :global(.recap-service) div > span {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.recap-address) {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.estimate-box) {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+}
+.clientSkin :global(.estimate-box) > span {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.estimate-box) > strong {
+  color: var(--ui-text);
+}
+.clientSkin :global(.quote-totals) :global(.total) {
+  border-top: 1px solid var(--ui-border);
+  color: var(--ui-text);
+}
+.clientSkin :global(.document-list) > div {
+  border-bottom: 1px solid var(--ui-border);
+}
+.clientSkin :global(.site-form) form {
+  border-top: 1px solid var(--ui-border);
+}
+.clientSkin :global(.message-threads) {
+  border-right: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+}
+.clientSkin :global(.message-threads) > button {
+  border-bottom: 1px solid var(--ui-border);
+}
+.clientSkin :global(.message-threads) > button:global(.selected) {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.clientSkin :global(.message-threads) small {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.conversation-header) {
+  border-bottom: 1px solid var(--ui-border);
+}
+.clientSkin :global(.conversation-header) > span {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.message-bubble) {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+}
+.clientSkin :global(.message-bubble) > span {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.message-bubble) > p {
+  color: var(--ui-text);
+}
+.clientSkin :global(.message-bubble) small {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.message-compose) {
+  border-top: 1px solid var(--ui-border);
+}
+.clientSkin :global(.message-compose) textarea {
+  border: 1px solid var(--ui-border);
+}
+.clientSkin :global(.profile-intro) {
+  border-bottom: 1px solid var(--ui-border);
+}
+.clientSkin :global(.auth-mark) {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.clientSkin :global(.forgot-link) {
+  color: var(--ui-accent);
+}
+.clientSkin :global(.auth-switch) button {
+  color: var(--ui-accent);
+}
+@media (max-width: 950px) {
+  .clientSkin :global(.message-threads) {
+    border-bottom: 1px solid var(--ui-border);
+  }
+  .clientSkin :global(.message-threads) > button {
+    border: 1px solid var(--ui-border);
+    background: var(--ui-card);
+  }
+}
+@media (max-width: 760px) {
+  .clientSkin :global(.quick-categories) > button {
+    border-bottom: 1px solid var(--ui-border);
+  }
+}
+.clientSkin :global(.review-stars) {
+  color: var(--ui-warning);
+}
+.clientSkin :global(.rating-options) legend {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.rating-options) span {
+  border: 1px solid var(--ui-border);
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.rating-options) input:checked + span {
+  color: var(--ui-warning);
+  border-color: var(--ui-warning);
+  background: var(--ui-surface);
+}
+.clientSkin :global(.document-manager) form {
+  border-top: 1px solid var(--ui-border);
+}
+.clientSkin :global(.operations-tabs) {
+  border-bottom: 1px solid var(--ui-border);
+}
+.clientSkin :global(.operations-form) {
+  border-left: 1px solid var(--ui-border);
+}
+.clientSkin :global(.approval-list) > div {
+  border-bottom: 1px solid var(--ui-border);
+}
+.clientSkin :global(.rule-row) {
+  border-bottom: 1px solid var(--ui-border);
+}
+.clientSkin :global(.rule-row) > svg {
+  color: var(--ui-accent);
+}
+.clientSkin :global(.rule-row) small {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.checkbox-field) input {
+  accent-color: var(--ui-primary);
+}
+.clientSkin :global(.contract-list) details {
+  border-bottom: 1px solid var(--ui-border);
+}
+.clientSkin :global(.contract-list) small {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.compliance-list) > div {
+  border-bottom: 1px solid var(--ui-border);
+}
+.clientSkin :global(.record-icon) {
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.operation-empty) {
+  color: var(--ui-text-muted);
+}
+@media (max-width: 1050px) {
+  .clientSkin :global(.operations-form) {
+    border-top: 1px solid var(--ui-border);
+  }
+}
+.clientSkin :global(.warranty-list) > div {
+  border-top: 1px solid var(--ui-border);
+}
+.clientSkin :global(.warranty-list) small {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.warranty-panel) form {
+  border-top: 1px solid var(--ui-border);
+}
+.clientSkin :global(.confirmation-review) {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+}
+.clientSkin :global(.destructive-button) {
+  color: var(--ui-on-primary);
+  background: var(--ui-danger);
+}
+.clientSkin :global(.destructive-button):hover {
+  background: var(--ui-danger);
+}
+.clientSkin :global(.inline-editor) {
+  border-top: 1px solid var(--ui-border);
+}
+.clientSkin :global(.inline-validation) {
+  color: var(--ui-danger);
+}
+.clientSkin :global(.tag) {
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.tag-blue) {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.clientSkin :global(.tag-green) {
+  background: var(--ui-surface);
+  color: var(--ui-success);
+}
+.clientSkin :global(.tag-amber) {
+  background: var(--ui-surface);
+  color: var(--ui-warning);
+}
+.clientSkin :global(.tag-red) {
+  background: var(--ui-surface);
+  color: var(--ui-danger);
+}
+.clientSkin :global(.tag-violet) {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.clientSkin :global(.stat) {
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+}
+.clientSkin :global(.stat) section > span {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.stat) strong {
+  color: var(--ui-text);
+}
+.clientSkin :global(.stat) small {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.unavailable) {
+  border: 1px dashed var(--ui-border);
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.unavailable-icon) {
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.unavailable) strong {
+  color: var(--ui-text);
+}
+.clientSkin :global(.unavailable) small {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.field) label {
+  color: var(--ui-text);
+}
+.clientSkin :global(.field-error) {
+  color: var(--ui-danger);
+}
+.clientSkin :global(.demo-note) {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.tabs) > button[aria-pressed="true"] {
+  color: var(--ui-accent);
+  background: var(--ui-surface);
+}
+.clientSkin :global(.install-icon) {
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+.clientSkin :global(.photo-list) li {
+  color: var(--ui-text);
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+}
+.clientSkin :global(.upload-queue) li {
+  border: 1px solid var(--ui-border);
+}
+.clientSkin :global(.upload-queue) li[data-status="failed"] {
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+}
+.clientSkin :global(.upload-queue) li[data-status="done"] {
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+}
+.clientSkin :global(.upload-queue) li small {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.upload-queue) li[data-status="uncertain"] {
+  border-color: var(--ui-border);
+  background: var(--ui-surface);
+}
+.clientSkin :global(.upload-open) small {
+  color: var(--ui-danger);
+}
+
+/* ---- Manual corrections ----------------------------------------------------------------- */
+.clientSkin :global(.primary):hover:not(:disabled) {
+  background: var(--ui-primary-hover);
+}
+/* Destructive: outlined in the danger token (a filled --ui-danger would fail AA with white). */
+.clientSkin :global(.destructive-button),
+.clientSkin :global(.destructive-button):hover {
+  border: 1px solid var(--ui-danger);
+  background: transparent;
+  color: var(--ui-danger);
+}
+
+/* Links (global `a` is legacy blue). */
+.clientSkin a {
+  color: var(--ui-accent);
+}
+/* Segments (status filters) reach 44 px. */
+.clientSkin :global(.tabs) > button {
+  min-height: 44px;
+}
+
+/* ---- Shared RequestForm (« Nouvelle demande »): same skin as the public request view --------- */
+.clientSkin :global(.panel) {
+  margin: 0;
+  border: 1px solid var(--ui-border);
+  border-radius: 16px;
+  background: var(--ui-card);
+  color: var(--ui-text);
+}
+.clientSkin h1 {
+  color: var(--ui-text);
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1.12;
+  letter-spacing: -0.8px;
+}
+.clientSkin h2 {
+  color: var(--ui-text);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.4px;
+}
+.clientSkin p {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.field) label,
+.clientSkin :global(.urgency-options) legend {
+  color: var(--ui-text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.clientSkin :global(.field) small {
+  color: var(--ui-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.clientSkin :global(.field) :global(.field-error) {
+  color: var(--ui-danger);
+  font-weight: 600;
+}
+.clientSkin :global(.field) input,
+.clientSkin :global(.field) select,
+.clientSkin :global(.field) textarea {
+  min-height: 48px;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  font-size: 16px;
+  color-scheme: var(--ui-scheme);
+}
+.clientSkin :global(.field) textarea::placeholder,
+.clientSkin :global(.field) input::placeholder {
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.field-invalid) input,
+.clientSkin :global(.field-invalid) textarea {
+  border-color: var(--ui-danger);
+}
+.clientSkin :global(.field) input[type="file"] {
+  padding: 8px;
+  font-size: 15px;
+}
+.clientSkin :global(.field) input[type="file"]::file-selector-button {
+  min-height: 36px;
+  margin-right: 12px;
+  padding: 0 14px;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.clientSkin :global(.alert) {
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font-size: 14px;
+}
+.clientSkin :global(.alert.error) {
+  border-color: var(--ui-danger);
+  color: var(--ui-danger);
+}
+.clientSkin :global(.alert.warning) {
+  border-color: var(--ui-warning);
+}
+.clientSkin :global(.alert.warning) > svg {
+  color: var(--ui-warning);
+}
+.clientSkin :global(.inline-note) {
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-surface);
+}
+.clientSkin :global(.inline-note) svg {
+  color: var(--ui-accent);
+}
+.clientSkin :global(.inline-note) p {
+  color: var(--ui-text-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.clientSkin :global(.form-note) {
+  color: var(--ui-text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.clientSkin :global(.button) {
+  min-height: 48px;
+  padding: 0 20px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.clientSkin :global(.button.primary) {
+  border-color: var(--ui-primary);
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+.clientSkin :global(.button.primary):hover:not(:disabled) {
+  background: var(--ui-primary-hover);
+}
+.clientSkin :global(.button.primary):disabled {
+  opacity: 0.6;
+}
+.clientSkin :global(.button.outline) {
+  border-color: var(--ui-border);
+  background: transparent;
+  color: var(--ui-text);
+}
+.clientSkin :global(.button.outline):hover {
+  border-color: var(--ui-accent);
+}
+.clientSkin :global(.text-button) {
+  color: var(--ui-accent);
+  font-size: 15px;
+  font-weight: 600;
+}
+.clientSkin :global(.back-link) {
+  color: var(--ui-text-muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+.clientSkin :global(.back-link):hover {
+  color: var(--ui-accent);
+}
+.clientSkin :global(.form-heading) p {
+  margin-top: 8px;
+  font-size: 16px;
+}
+.clientSkin :global(.stepper) li {
+  color: var(--ui-text-muted);
+  font-size: 14px;
+}
+.clientSkin :global(.stepper) li > span {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+.clientSkin :global(.stepper) li:global(.current) {
+  color: var(--ui-text);
+}
+.clientSkin :global(.stepper) li:global(.current) > span {
+  border-color: var(--ui-primary);
+  background: var(--ui-primary);
+  color: var(--ui-on-primary);
+}
+.clientSkin :global(.stepper) strong {
+  font-weight: 600;
+}
+.clientSkin :global(.request-form) {
+  padding: 32px;
+}
+.clientSkin :global(.request-form) h2 {
+  margin-bottom: 24px;
+}
+.clientSkin :global(.category-grid) > button {
+  min-height: 88px;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+}
+.clientSkin :global(.category-grid) > button:hover {
+  border-color: var(--ui-accent);
+}
+.clientSkin :global(.category-grid) > button > svg {
+  color: var(--ui-accent);
+}
+.clientSkin :global(.category-grid) strong {
+  font-size: 16px;
+  font-weight: 700;
+}
+.clientSkin :global(.category-grid) small {
+  color: var(--ui-text-muted);
+  font-size: 14px;
+}
+.clientSkin :global(.category-grid) > button:global(.selected) {
+  border-color: var(--ui-accent);
+  background: var(--ui-surface);
+  box-shadow: inset 0 0 0 1px var(--ui-accent);
+}
+.clientSkin :global(.radio-dot) {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border: 1px solid var(--ui-text-muted);
+}
+.clientSkin :global(.selected) > :global(.radio-dot) {
+  border: 5px solid var(--ui-accent);
+  outline: 0;
+  background: var(--ui-bg);
+}
+.clientSkin :global(.photo-list) li {
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  font-size: 14px;
+}
+.clientSkin :global(.photo-list) :global(.icon-button) {
+  min-width: 44px;
+  min-height: 44px;
+  margin: -6px -10px -6px 0;
+  color: var(--ui-text-muted);
+}
+.clientSkin :global(.urgency-options) > label {
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-bg);
+}
+.clientSkin :global(.urgency-options) > label:global(.selected) {
+  border-color: var(--ui-accent);
+  background: var(--ui-surface);
+  box-shadow: inset 0 0 0 1px var(--ui-accent);
+}
+.clientSkin :global(.urgency-options) input {
+  accent-color: var(--ui-primary);
+}
+.clientSkin :global(.urgency-options) strong {
+  font-size: 16px;
+}
+.clientSkin :global(.urgency-options) small {
+  color: var(--ui-text-muted);
+  font-size: 14px;
+}
+.clientSkin :global(.recap-service) {
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-surface);
+}
+.clientSkin :global(.recap-service) strong {
+  font-size: 17px;
+}
+.clientSkin :global(.recap-service) div > span {
+  color: var(--ui-text-muted);
+  font-size: 14px;
+}
+.clientSkin :global(.service-icon) {
+  border-radius: 10px;
+  background: var(--ui-bg);
+  color: var(--ui-accent);
+}
+.clientSkin :global(.request-form) > p:not(:global(.form-note)) {
+  color: var(--ui-text);
+  font-size: 16px;
+}
+.clientSkin :global(.recap-address) {
+  color: var(--ui-text-muted);
+  font-size: 15px;
+}
+.clientSkin :global(.recap-address) svg {
+  color: var(--ui-accent);
+}
+.clientSkin :global(.estimate-box) {
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-surface);
+}
+.clientSkin :global(.estimate-box) > span {
+  color: var(--ui-text-muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+.clientSkin :global(.estimate-box) > strong {
+  color: var(--ui-text);
+  font-size: 28px;
+}
+.clientSkin :global(.estimate-box) p {
+  font-size: 14px;
+  line-height: 1.6;
+}
+.clientSkin :global(.form-actions) {
+  border-top: 1px solid var(--ui-border);
+}
+@media (max-width: 760px) {
+  .clientSkin :global(.stepper) li {
+    font-size: 13px;
+  }
+  .clientSkin :global(.request-form) {
+    padding: 20px 16px;
+  }
+  .clientSkin :global(.category-grid) strong {
+    font-size: 15px;
+  }
+  .clientSkin :global(.category-grid) small {
+    font-size: 13px;
+  }
+  .clientSkin :global(.form-actions) :global(.button) {
+    font-size: 15px;
+    padding: 0 16px;
+  }
+}
+@media (max-width: 640px) {
+  .clientSkin h1 {
+    font-size: 28px;
+  }
+  .clientSkin h2 {
+    font-size: 21px;
+  }
+}
+@media (max-width: 430px) {
+  .clientSkin :global(.stepper) li {
+    font-size: 12px;
+  }
+  .clientSkin :global(.stepper) li > span {
+    width: 28px;
+    height: 28px;
+    font-size: 13px;
+  }
+}
+/* Install note: inline legacy colour (#526178) in the shared PWA panel. */
+.clientSkin :global(.install-panel) p[style] {
+  color: var(--ui-text-muted) !important;
+}
