@@ -3244,7 +3244,10 @@ function ApplicationForm({
   const missing = missingItems(values);
   const dirty = appKey(values) !== appKey(appValuesFrom(profile));
   const busy = session.busy;
-  const canSubmit = status === "draft" || status === "changes_requested";
+  // ADM-02: a definitive refusal keeps the status "changes_requested" but the server refuses any new
+  // submission (409) until the operator reopens the application; the decisions notice reports it.
+  const [refused, setRefused] = useState(false);
+  const canSubmit = (status === "draft" || status === "changes_requested") && !refused;
   // Dossier edits are refused by the platform while work is active or completed but unpaid
   // (contract CL-BE-001): count them from the loaded dossiers to explain the rule up front.
   const mine = session.data.interventions.filter((i) => i.artisan_id === session.profileId);
@@ -3319,7 +3322,7 @@ function ApplicationForm({
         </p>
       </div>
       {/* ADM-02: reasons of the administration's decisions on this application (own account only). */}
-      <ApplicationDecisionsNotice demo={session.mode !== "live"} refreshKey={`${status}|${profile?.updated_at ?? ""}`} />
+      <ApplicationDecisionsNotice demo={session.mode !== "live"} refreshKey={`${status}|${profile?.updated_at ?? ""}`} onRefusedChange={setRefused} />
       {editBlocked && (
         <div className="alert warning" role="note">
           <Icon name="info" />
@@ -3605,7 +3608,9 @@ function ApplicationForm({
               ? "Candidature déjà soumise : l’opérateur l’examine."
               : status === "approved"
                 ? "Candidature déjà approuvée. Une modification enregistrée la repassera en brouillon."
-                : "Dossier suspendu : la soumission n’est pas possible."}
+                : refused
+                  ? "Candidature refusée par l’exploitant : elle ne peut pas être soumise à nouveau tant qu’il ne l’a pas rouverte."
+                  : "Dossier suspendu : la soumission n’est pas possible."}
           </p>
         ) : missing.length ? (
           <>

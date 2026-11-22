@@ -19,21 +19,24 @@ const LABELS: Record<Kind, string> = {
 const NEGATIVE: readonly Kind[] = ["request_changes", "reject", "suspend"];
 const when = (value: string) => new Intl.DateTimeFormat("fr-FR", { dateStyle: "long", timeStyle: "short" }).format(new Date(value));
 
-export function ApplicationDecisionsNotice({ refreshKey, demo = false }: { refreshKey?: string | number; demo?: boolean }) {
+/** `onRefusedChange` reports the server's `refused` flag (definitive refusal not reopened), so the
+ *  application form can stop offering a submission the server would refuse (409). */
+export function ApplicationDecisionsNotice({ refreshKey, demo = false, onRefusedChange }: { refreshKey?: string | number; demo?: boolean; onRefusedChange?: (refused: boolean) => void }) {
   const [state, setState] = useState<{ status: "loading" | "ready" | "error"; decisions: Decision[] }>({ status: "loading", decisions: [] });
   const load = useCallback(async (signal?: AbortSignal) => {
     if (demo) return setState({ status: "ready", decisions: [] });
     try {
       const response = await fetch("/api/artisan/application-decisions", { cache: "no-store", credentials: "same-origin", signal });
-      const body = (await response.json().catch(() => null)) as { decisions?: unknown } | null;
+      const body = (await response.json().catch(() => null)) as { decisions?: unknown; refused?: unknown } | null;
       if (!response.ok || !body || !Array.isArray(body.decisions)) throw new Error("unavailable");
+      onRefusedChange?.(body.refused === true);
       const decisions = (body.decisions as Decision[]).filter((d) => d && typeof d.id === "string" && typeof d.reason === "string" && typeof d.decided_at === "string" && Object.hasOwn(LABELS, d.kind));
       setState({ status: "ready", decisions });
     } catch (error) {
       if ((error as Error).name === "AbortError") return;
       setState((previous) => ({ status: "error", decisions: previous.decisions }));
     }
-  }, [demo]);
+  }, [demo, onRefusedChange]);
   useEffect(() => {
     const controller = new AbortController();
     void load(controller.signal);
