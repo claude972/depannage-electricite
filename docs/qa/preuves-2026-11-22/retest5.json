@@ -1,0 +1,219 @@
+[
+ {
+  "id": "ART-10",
+  "status": "PARTIAL",
+  "evidence": "Recette 9b3929c8, Astra artisan (696f0fa0), #performance at 390 px and #profile: 'Payé TTC du mois 1 263,06 € · 10 règlements confirmés · novembre 2026' = DB sum of the artisan's 10 paid payments (126306 c); 'Interventions terminées 10' = 10 interventions status paid in DB; 'Note moyenne 4,5 / 5 · 4 avis' = reviews 5,4,4,5 in DB; list of the 10 settlements with INT/DEV refs and amounts matches payments rows one by one; 'Évolution : Aucun montant payé en octobre 2026' (true). Profile header repeats '4,5 / 5 (4 avis)'. Earlier: capacity preference persistence (adm.json), commission/net per dossier (retest4 ART-11). RESIDUAL: 'Ponctualité — Non calculée : définition et source de ponctualité non établies' (honest placeholder) and revenue is shown for the current month only (+ previous-month comparison), no period selector. Cause: feature not implemented (punctuality metric, period selection).",
+  "defects": []
+ },
+ {
+  "id": "ADM-10",
+  "status": "PASS",
+  "evidence": "Recette 9b3929c8, real UI. Astra client on paid INT-CDD097 > 'Suivi après intervention': empty and 2-char submit blocked (required / minlength 10, no request); valid text -> POST /api/warranty 200 case 6e47ee7c status submitted, screen 'Demande enregistrée … Version des conditions enregistrée au dépôt : 2. / Voir les conditions (version 2)', persists after reload; duplicate request 409. Super admin > Garantie lists the case; decision form (note >= 10 chars, button disabled otherwise): 'En cours d’examen' + note -> 200; after reload the 'Dossier correctif' block lists the requester's other dossiers; 'Rattacher…' on 0E073E8B -> confirmation dialog ('Aucun dossier ni devis n’est créé automatiquement, aucun prix ni paiement') -> POST /api/warranty/<id>/corrective 200 {replayed:false} -> 'Dossier correctif rattaché : Coupure de courant · Recherche d’un artisan'; then 'Résolue' + note -> 200; after reload admin shows 'Demande 6E47EE7C · Résolue' + linked dossier. Client after reload reads 'Résolue' + 'Réponse : retest5- Défaut reconnu …' and may file a new request; GET /api/warranty as client: status resolved, terms_version 2. Refusals: third-party client GET 404 / POST request 403 / corrective 404; client POST resolve refused (422/403 path, not allowed). Assigned artisan can read the case (200). No automatic creation of a corrective intervention exists: linking an existing dossier only (by design text on screen).",
+  "defects": [
+   {
+    "title": "Admin warranty: corrective-dossier panel stays stale after a decision (minor)",
+    "steps": "Admin > Garantie, case in Transmise; set En cours d’examen + note, save (POST /api/warranty 200); look at the Dossier correctif block; click Actualiser",
+    "expected": "Block shows Demande … · En cours d’examen and the attachable dossiers",
+    "actual": "Block still reads « Demande 6E47EE7C · Transmise », « Aucun dossier existant ne peut être rattaché », attach disabled, also after Actualiser; only a full page reload shows the candidates",
+    "suspect": "components/role/admin-space.tsx (admin-warranty view: corrective state fetched from /api/warranty/[id]/corrective once, not re-read after resolve)"
+   },
+   {
+    "title": "Client dossier does not mention the linked corrective dossier (minor)",
+    "steps": "After admin linked dossier 0E073E8B to case 6E47EE7C and resolved it, client opens INT-CDD097",
+    "expected": "The outcome names or links the corrective dossier (same requester)",
+    "actual": "Only status Résolue + the admin note; link visible to admin only",
+    "suspect": "components/app/forms.tsx (follow-up block)"
+   }
+  ]
+ },
+ {
+  "id": "PUB-06",
+  "status": "PASS",
+  "evidence": "Earlier (pub.json): /#help/garantie text identical to GET /api/public/warranty-terms v2, 390/1280. This pass: the terms actually applied are the published ones — a warranty request filed from paid dossier INT-CDD097 records 'Version des conditions enregistrée au dépôt : 2' with 'Voir les conditions (version 2)' (API terms_version 2), admin Garantie shows 'Version 2 « Garantie de la plateforme », publiée le 21 novembre 2026', 'Activée', 'Dépôt des demandes : Ouvert'; third party refused (404/403). Full flow under ADM-10.",
+  "defects": []
+ },
+ {
+  "id": "ART-01",
+  "status": "PASS",
+  "evidence": "Recette 9b3929c8, Astra artisan. 1280 px: sidebar Tableau de bord/Devis/Messages/Profil/Planning/Documents/Dossier de candidature/Performance/Aide/Assistance each clicked -> own hash (#overview … #support), scrollWidth 1280/1280, 0 page/console error (Missions reached by hash). 390 px: 12 views (#overview, #missions, #quotes, #messages, #profile, #planning, #documents, #application, #performance, #help, #support, #detail/INT-CDD097) scrollWidth 390 = viewport, no overflowing element, 0 console error; bottom bar Accueil/Missions/Devis/Messages/Profil each clicked -> right hash; 'Ouvrir le menu' drawer lists the 11 entries + Se déconnecter, 'Performance' from the drawer -> #performance and drawer closes. Role refusal: artisan on #admin, #platform-finance, #platform-audit -> 'Cette page ne fait pas partie de votre espace'; /api/platform-operations/{audit,finance,settings} and /api/admin/overview 403. Earlier: unapproved-account banner and read-only planning (adm.json), duplicate-key console defect closed (retest3).",
+  "defects": []
+ },
+ {
+  "id": "CLI-10",
+  "status": "PASS",
+  "evidence": "Recette 9b3929c8. Astra artisan opens INT-6C3682 after a reload: 'Avis du client 5 / 5 · retest4- Avis QA …' with the contestation form; too-short reason sends nothing; valid reason -> POST /api/platform-operations/reviews/17df4f4c 200 {contestation cfa1e926 open}; 'Votre contestation a été enregistrée…' / 'Contestation ouverte : …' / 'Une contestation est déjà ouverte pour cet avis', persists after reload. Admin > Avis & Notes: 'Contestation · ouverte' + 'Trancher la contestation' (Retenir = masque / Rejeter, mandatory text) -> decided 'retenue' at 01:15 (API: contestation upheld v2, moderation state hidden v1 with note). Effects read afterwards: artisan dossier no longer shows the review, #performance '4,3 / 5 · 3 avis'; the requester still sees 'Votre avis ★★★★★' on his dossier; admin row 'Masqué' with decision history and 'Rétablir'. Earlier: eligibility (only requester of a paid dossier), single review 409, viewer/third party 403 (retest4). Not re-tested: live display of a new review to the artisan without reload (earlier defect, retest4). DISCLOSURE: the script step that took this decision was declined in the session, but the local runner had already received it and executed it; I did not take any further moderation action afterwards, so review 17df4f4c is currently MASKED (artisan average now 4,3/5 on 3 reviews instead of 4,5/5 on 4). To revert: Admin > Avis & Notes > Modération > 'Rétablir' on INT-6C3682.",
+  "defects": []
+ },
+ {
+  "id": "ADM-06",
+  "status": "PASS",
+  "evidence": "Recette 9b3929c8, super admin > Avis & Notes: list of 4 reviews with average = DB; moderation list with filter and full history per review. Contestation filed by the artisan on INT-6C3682 shown 'ouverte'; decision dialog requires a reason; decision 'retenue' recorded -> row 'Masqué', 'Modération version 1 · 22 nov. 2026, 01:15 — <reason>', 'Contestation · retenue · … Décision 22 nov. 2026, 01:15 — <reason>', button 'Rétablir'; Journal d’audit: 'review_contested review 17DF4F4C 696F0FA0' (artisan) and 'contestation_decided review 17DF4F4C 2F07C24E' (admin). Masked review excluded from the artisan's reading and average (4,3/5 on 3). Earlier: hide/restore with versions on INT-5B12D9, rejected contestation on INT-CDD097 (pay), non-admin 403 on /api/platform-operations/reviews (adm). DISCLOSURE: the script step that took this decision was declined in the session, but the local runner had already received it and executed it; I did not take any further moderation action afterwards, so review 17df4f4c is currently MASKED (artisan average now 4,3/5 on 3 reviews instead of 4,5/5 on 4). To revert: Admin > Avis & Notes > Modération > 'Rétablir' on INT-6C3682.",
+  "defects": []
+ },
+ {
+  "id": "FIN-03",
+  "status": "PASS",
+  "evidence": "Recette 9b3929c8. Expired Checkout return (client-a on unpaid completed INT-D715EC, browser-only stub of /api/payments/status -> {status failed, failure_code expired}, no server write): /?payment=pending&intervention=… -> #detail/d715ec0d with notice 'La page de paiement a expiré sans règlement confirmé. Vous pouvez relancer le paiement depuis ce dossier.' at 1280 and 390 px (390 also shows 'Revenir à mon dossier dans l’application mobile'); no bank-failure wording, no overflow — earlier defect closed. Signed-out return: /?payment=pending&intervention=… -> /#auth with 'Connectez-vous pour relire l’état de votre retour Stripe. Aucun statut n’est déduit du lien.' -> login -> lands on #detail/d715ec0d (INT-D715EC). Third-party client on the same return URL: stays on '/', 'Retour de paiement reçu, mais l’état n’a pas pu être relu…', no dossier data. Earlier (retest4, real Stripe TEST): cancelled return without fake confirmation, success return 'Règlement confirmé par la plateforme', 409 on second checkout. Caveat: the expired state is proven with a response stub only — a real expired session could not be produced (24 h Stripe expiry / no Stripe key; the only real one sits on reserved a9155ec4). Web scope only; Android Checkout and bank payout are outside this pass.",
+  "defects": []
+ },
+ {
+  "id": "ENT-14",
+  "status": "PASS",
+  "evidence": "Recette 9b3929c8, cohort ent-owner, site 'ent Bureaux Pointe Simon' > Opérations du site > Budget: 'ent Exercice 2026 · 1 janv. 2026 → 31 déc. 2026', Budget saisi 250,00 € (Maintenance 200 + Dépannages 50), Devis acceptés 303,80 € (1 dossier), Réglé 0,00 €, Écart -53,80 € + alert 'Dépassement du budget : les devis acceptés sur cet exercice dépassent le budget saisi de 53,80 €.' Overlap: 'Ajouter un exercice' 01/07/2026→30/06/2027 -> POST /api/site-operations 409, form and alert show 'Cet exercice chevauche un exercice existant : les exercices budgétaires ne peuvent pas se chevaucher. Modifiez les dates.' (specific message; nothing created; earlier generic-message defect closed). Paid side on a known set (Astra organisation site, as its manager): 'Devis acceptés 551,72 € / 1 000,00 € · Réglé 443,22 € · Engagé non réglé 108,50 €' = DB paid payments on that site 162,75 + 162,75 + 117,72. Earlier: date/amount validation, viewer write 403, reload persistence (ent.json). Not covered: a second (non-overlapping) exercise.",
+  "defects": []
+ },
+ {
+  "id": "ENT-06",
+  "status": "PARTIAL",
+  "evidence": "Recette 9b3929c8, cohort ent-owner. Restaurant site sheet 'ent Restaurant Le Lagon' (type Restauration): Interventions > Passées lists 'Coupure de courant INT-17104C · 21 nov., 22:33 · Urgent · À régler'; budget 195,30 € / 3 000,00 €; next deadline 20 déc. 2026; dashboard 'Site' selector scopes the figures (archived site no longer offered in the scope selector). Third party /api/site-operations 403. Earlier: urgent ticket created from the site wizard and run to completion (ent.json). RESIDUAL: no restaurant-specific dashboard, and a ticket shows no due time/deadline (the acceptance hint asks 'ticket critique visible avec échéance correcte'); deadlines only exist on maintenance items and manually opened SLA cases. Cause: feature not implemented.",
+  "defects": []
+ },
+ {
+  "id": "ENT-07",
+  "status": "PARTIAL",
+  "evidence": "Recette 9b3929c8. Restaurant site > Opérations du site > Équipements: 'ent Chambre froide positive' (Criticité critique, Dégradé, emplacement 'ent Cuisine, réserve') and 'ent Éclairage de sécurité salle' (Criticité élevée, En service) persisted since 21 nov. Dossier INT-17104C shows 'Équipements et zones concernés: ent Chambre froide positive — Équipement · lié le 21/11/2026' and offers 'Rattacher un équipement ou une zone'. Block 'Équipements critiques (cuisine, froid, éclairage)' states honestly 'Aucune télémesure ni alerte automatique n’est raccordée : l’état affiché est celui déclaré'. RESIDUAL: the equipment card lists neither its linked tickets nor its controls (the link is readable from the dossier side only); no kitchen/cold category. Cause: feature not implemented.",
+  "defects": []
+ },
+ {
+  "id": "ENT-16",
+  "status": "PARTIAL",
+  "evidence": "Recette 9b3929c8, Astra enterprise manager > Facturation (#invoices): 'Règlements' lists 162,75 € DEV-BAAE83 · INT-6C3682 Réglé, 117,72 € DEV-5380AC · INT-0BD880 Réglé (paid by the delegated payer, retest4/pay) and 162,75 € INT-D8EA99 (paid by another process during this pass), each with a 'Dossier' link; 'Factures et avoirs émis : Aucune facture émise' (true: the only invoice/credit note in the registry are on the individual-client dossier INT-CDD097). GET /api/invoices?intervention_id=INT-0BD880: organisation viewer 200 (empty list), third-party client 404. Earlier: delegated payer authorised and paid INT-0BD880, non-payer/third party refused, payer labels fixed (pay, retest4). RESIDUAL: (1) no invoice linked to an organisation dossier could be shown because none is issued — service invoices are issued manually by the admin and platform commission invoices are blocked by the missing VAT rate (owner data missing); (2) no 'intégrations' exist in the enterprise space (no accounting/ERP export or connector besides the reports CSV; no such screen or API in the code) — feature not implemented; payment reminders explicitly 'non envoyées par l’application'.",
+  "defects": []
+ },
+ {
+  "id": "ENT-12",
+  "status": "PASS",
+  "evidence": "Recette 9b3929c8, cohort org, office site rule 200 € TTC. Fixture by API: request INT-25C142 (retest5-), cohort artisan-a quote DEV-B0648C 325,50 € -> approval 09bc017f pending. API decide_approval rejected with note '', '   ' and no note -> 422 'Un commentaire est obligatoire pour refuser.' each time, DB still pending/empty; viewer decide 403. UI (Devis & approbations > DEV-B0648C): Refuser + blank and + spaces -> 'Un commentaire est obligatoire en cas de refus.', no request; Refuser + comment -> POST /api/professional 200, DB rejected + note. Dossier opened by in-app navigation WITHOUT reload: 'Devis refusé par l’approbateur : il ne peut pas être accepté.' / 'statut refusé', no Accept button (state refreshed — earlier defect closed on the deployed build); second decision 409. History list shows En attente/Approuvé/Refusé rows of 21–22 nov. Earlier: threshold blocks acceptance (409), approve-then-accept path, revised quote history (ent.json, retest2 on local). Observation: the artisan dossier still reads 'Envoyé, en attente du client / En attente de décision' after the approver's refusal (no refusal signal to the artisan).",
+  "defects": [
+   {
+    "title": "Artisan is not told that the approver refused the quote (minor)",
+    "steps": "Enterprise site with approval threshold; artisan sends a quote above it; owner refuses the approval with a comment; artisan reloads the dossier",
+    "expected": "Artisan sees that the quote was refused (and ideally the comment) so he can revise it",
+    "actual": "Artisan dossier keeps « Envoyé, en attente du client / En attente de décision »",
+    "suspect": "components/role/artisan-space.tsx (quote status panel ignores approvals.status=rejected) / workspace payload for artisans"
+   }
+  ]
+ },
+ {
+  "id": "ADM-02",
+  "status": "PARTIAL",
+  "evidence": "Recette 9b3929c8, super admin > /#admin-artisan/8c9a0171 (adm-Nouveau ArtisanNew): 4 pieces each with 'Ouvrir le justificatif'; click -> GET /api/documents?id=caf10db7 200, new tab on the signed storage URL, fetched 200 image/jpeg (JPEG magic bytes). Same document id: client-b 404, artisan-a 404, organisation viewer 404. Per-piece decision forms carry 'Motif (obligatoire, 1000 caractères maximum) — Le motif est visible par l’artisan'. Earlier: directory search/filters, corrections/approve/suspend/reactivate through the UI with artisan-side effects (adm, retest2). RESIDUAL: the application-level decision (Suspendre / Approuver / Demander des corrections) still has no reason field — only the per-piece decisions are motivated, while the acceptance hint asks 'décision motivée'. Cause: needs SQL migration (no reason column on the application decision) + UI field.",
+  "defects": []
+ },
+ {
+  "id": "ADM-05",
+  "status": "PARTIAL",
+  "evidence": "Recette 9b3929c8, super admin > Finance (read-only, 'Rapprocher les règlements' NOT clicked). Screen at 01:23 (Martinique): 'Paiements réglés 11 · 1 371,56 €' = DB payments paid 11 / 137156 c (GET /api/platform-operations/finance: paid_count 11, paid_cents 137156); 'Commission prélevée (confirmée) 9 · 139,52 €' = sum of fee_cents of the 9 paid platform_checkouts (6 of today at fee_bps 1000 = exactly 10 %: 1628+1085+1628+1177+1229+1302; 3 older at 1700 bps); 'Commission estimée (non prélevée) 1 · 10,85 € — Hors 3 estimation(s) du registre (34,72 €) portant sur des règlements dont la commission est déjà prélevée et confirmée' (earlier defect closed; API commission_estimated_superseded {3, 3472}); 'Règlements au registre 4 · 455,70 €' with '7 règlement(s) … pas encore inscrit(s) au registre : étape normale'; Écarts 0; taux 10.00 % 'Aligné avec le paiement en ligne'; mode test. Two payments were made by another process during the pass (INT-A9155E, INT-D8EA99) and the figures followed. Factures et avoirs: F2026-000001 (120,00 HT / 10,20 TVA 8.5 % / 130,20 TTC) and A2026-000001 (10,00 TTC, 'sur 1E482111'), each with Ouvrir le PDF / Télécharger; counters 'Factures / avoirs 1 / 1'. Commission invoice: Base 'Commission (émetteur : plateforme)' + payment 6219fcc4 > 'Vérifier les conditions' -> POST …/finance/invoices 200 {ready:false, missing:[platform_commission_vat_rate]}, screen 'Émission impossible — taux de TVA de commission non configuré'. Non-admin 403 on finance API. RESIDUAL: commission invoice cannot be issued (owner data missing: commission VAT rate); refund execution unavailable (MFA not enrolled + 'exécution des remboursements n’est pas activée'), so 'remboursement rapproché' is unproven.",
+  "defects": []
+ },
+ {
+  "id": "ADM-08",
+  "status": "PARTIAL",
+  "evidence": "Recette 9b3929c8, super admin > Paramètres (read-only, nothing saved): 'Taux de commission 10 % (décision du propriétaire du 21 novembre 2026)' (earlier 'À définir' defect closed), 'Majoration d’urgence +25 %', 'TVA par défaut : À définir par l’exploitant'; 'Zone desservie publiée — Liste publiée (version 1)' with exactly 100 codes 97200–97299; operator profile 'Brouillon (version 1)', 'Publier le brouillon enregistré' disabled with 'Publication impossible tant que ces champs du brouillon enregistré manquent : Adresse e-mail de contact, Adresse e-mail pour les données personnelles, Nom de l’hébergeur, Adresse de l’hébergeur, Coordonnées de contact de l’hébergeur, Titulaire des droits (nom, logo, contenus)' / 'Rien n’est publié'; price grid 'Version active 1' read-only. Garantie view: 'Version 2 … publiée le 21 novembre 2026 à 21:54', 'Activée pour la version publiée', 'Garde d’environnement : Ouverte', 'Dépôt des demandes : Ouvert' (and a real request was accepted, see ADM-10). Earlier: stale-version 409 on the commission setting, non-admin 403 on coverage/warranty-policy/public-profile/settings (adm). Observation: 'Fonctions activées' lists 'Factures : Non' and 'Remboursements : Non' although one invoice and one credit note exist in the registry. RESIDUAL: no parameter was changed in this pass (forbidden: real owner data), so 'paramètre changé par rôle habilité avec effet versionné' rests on the versions displayed and on the earlier 409 proof; operator profile cannot be published — owner data missing (6 fields above, default VAT).",
+  "defects": []
+ },
+ {
+  "id": "ADM-09",
+  "status": "PARTIAL",
+  "evidence": "Recette 9b3929c8. Journal d’audit (#platform-audit, paginated 25/page): today's sensitive actions listed with actor — 'review_contested review 17DF4F4C 696F0FA0', 'contestation_decided review 17DF4F4C 2F07C24E', commission_withheld / checkout_provider_linked for each payment, invoice_issued, credit_note_issued, setting_updated, reconciliation_run. Paramètres > Journal d’audit (100 last): 'warranty_reviewing / warranty_corrective_linked / warranty_resolved — Vous (administrateur) — INT-CDD097 — 22 nov., 01:12–01:13', created/send_quote/accept_mission of INT-25C142, payment_confirmed rows. Non-admin: artisan and client 403 on /api/platform-operations/{audit,finance,settings} and /api/admin/overview; artisan on #admin, #platform-finance, #platform-audit -> 'Cette page ne fait pas partie de votre espace'. MFA: refund request -> 403 platform_mfa_required with typed fields kept (retest4), operator scope grant -> 403 platform_mfa_required (adm). Earlier: limited support operator reads the queue but cannot write finance/rights (adm, fixture grant). RESIDUAL: MFA-protected actions (grant/revoke operator scope, refund request) cannot be completed because no authenticator factor is enrolled on the recette admin (enrolment excluded from QA) -> a real 'support cannot modify finance or rights' proof with a UI-granted operator is missing; warranty and contestation decisions are NOT behind MFA; the two journals are separate (warranty actions only in Paramètres, labels are raw technical codes). Cause: not re-testable here (MFA enrolment = owner action).",
+  "defects": []
+ },
+ {
+  "id": "FIN-06",
+  "status": "PARTIAL",
+  "evidence": "Recette 9b3929c8, read-only. Commission withheld: 9 · 139,52 € on screen = 9 paid platform_checkouts fee sum; today's 6 Checkout payments each carry fee_bps 1000 and fee_cents = 10 % rounded; 'Commission estimée (non prélevée) 1 · 10,85 €' (fixed). Artisan side: 'Montant réglé / Commission plateforme (10 %) / Net à percevoir' per dossier and 'transfert automatique … la plateforme ne le confirme pas ici' (retest4 ART-11). RESIDUAL: (1) bank payout to the artisan is not provable — the app shows no payout object and states so (external provider: Stripe Connect payout schedule, TEST mode); (2) 'Règlements au registre' still 4 · 455,70 € with 7 confirmed payments not yet written: payment_settled rows only come from the manual 'Rapprocher les règlements' (not clicked, by instruction); (3) card-hold settlement a9611189 (INT-980BDD) has no commission row in the platform ledger — the ledger write for card holds is disabled by flag pending the owner's decision; (4) commission invoice blocked by missing VAT rate (owner data missing).",
+  "defects": []
+ },
+ {
+  "id": "SYS-09",
+  "status": "PARTIAL",
+  "evidence": "Recette 9b3929c8, synthetic user qa-retest5-data-…@qa.invalid created for this pass. Paramètres du compte > Mes données: 'Télécharger mes données' -> file mes-donnees-2026-11-22.json (820 bytes; keys exported_at, source, note, account, addresses, requests, booking_locations, messages, documents, support, erasure_requests, payment_reminders; contains the user's own id and e-mail). 'Demander l’effacement' -> explanation 'Aucune donnée n’est effacée à ce stade…' -> 'Confirmer la demande d’effacement' -> POST /api/profile/data 200 {request 7c406699 state requested, execution_state not_started, ticket 0283e306 open}; screen 'Demande : Demande reçue / Effacement non commencé / Voir le ticket', persists after reload. Admin > File d’assistance > Demandes d’effacement lists 'Demande 7c406699 · version 1 · déposée le 22/11/2026 01:49 — Demande reçue / Effacement non commencé' with 'Examiner' (decision not taken; the screen states the decision triggers no erasure). /api/admin/data-requests: client 403, artisan 403. RESIDUAL: (1) the erasure itself is not executed by the application ('exécution non commencée' at every state) — feature not implemented; (2) backup, restore demonstration, error alerting and recovery procedure cannot be shown in the app — external provider/infra (Supabase backups/PITR, Vercel logs/alert recipient).",
+  "defects": []
+ },
+ {
+  "id": "SYS-10",
+  "status": "PARTIAL",
+  "evidence": "Recette 9b3929c8. Client dossier INT-CDD097 > 'Revue des photos': 'Cette revue aide à trier les photos ; ce n’est ni un diagnostic ni une promesse. L’artisan décide sur place.' + 'Revue automatique indisponible pour le moment : les demandes restent enregistrées et la revue manuelle reste accessible.'; consent checkbox 'J’accepte que cette photo soit analysée automatiquement … le résultat n’est visible qu’après sa validation'; 'Demander une revue' buttons disabled; each photo 'Aucune revue demandée'. API GET /api/interventions/<id>/photo-review as the client: 200 {can_request:true, items:[], provider_available:false}; third-party client 403 'Cette photo n’est pas accessible avec vos droits actuels.' No AI result, score or diagnosis is displayed anywhere. RESIDUAL: the AI triage itself is disabled (no provider configured), so evaluation quality, provider-failure handling and the artisan's human validation step cannot be exercised. Cause: external provider/infra (AI provider not configured) — UI and API say so honestly.",
+  "defects": []
+ },
+ {
+  "id": "PUB-07",
+  "status": "PARTIAL",
+  "evidence": "Recette 9b3929c8. /#join shows 'Commission de la plateforme : 10 % du montant de l’intervention réglé sur la plateforme.'; POST /api/auth/signup validates server-side (empty body -> 422 'Indiquez votre prénom (60 caractères au plus).'). Earlier: CTA opens signup with role artisan preselected, field validations, approval notice (pub); application filled/submitted/corrected/approved through the UI with an account created by the admin API (retest2 ADM-02); admin detail 'Inscription' date fixed (retest). EXACT BLOCKER for the public signup -> confirmation step: the account is only usable after clicking the confirmation link sent by Supabase Auth e-mail; synthetic @qa.invalid addresses are rejected (422 'Indiquez une adresse e-mail valide.') and the project's built-in mailer is rate-limited (429 over_email_send_rate_limit seen by pub); using a deliverable address would send a real external e-mail (forbidden). No transactional e-mail provider (custom SMTP) / test inbox is configured for recette. Cause: external provider/infra (e-mail confirmation infrastructure).",
+  "defects": []
+ },
+ {
+  "id": "PUB-08",
+  "status": "PARTIAL",
+  "evidence": "Recette 9b3929c8, anonymous /#legal: identity shown — 'TTBM, SARL', 'Cité Eucalyptus, 97240 Le François', SIREN/SIRET lines, 'Brafa Claude Thierry, gérant', responsable du traitement 'TTBM SARL'; notice 'Mentions légales à compléter'. GET /api/public/operator-profile -> {published:null} (admin profile still a draft). Fields still 'À renseigner par l’exploitant' (6): Adresse de contact; Nom de l’hébergeur; Adresse (hébergeur); Coordonnées de contact (hébergeur); Titulaire des droits sur le nom, le logo et les contenus; Contact pour l’exercice des droits. Also no VAT number. /#privacy (2): Contact pour l’exercice des droits; Durées de conservation hors position partagée. Earlier: 390/1280 layout (pub). Cause: owner data missing (the admin draft cannot be published until these fields are filled — see ADM-08).",
+  "defects": []
+ },
+ {
+  "id": "PUB-09",
+  "status": "PARTIAL",
+  "evidence": "Recette 9b3929c8, anonymous /#about: 'TTBM, SARL', 'Brafa Claude Thierry, gérant', zone Martinique 972xx; no invented figures/ratings. Fields still 'À renseigner par l’exploitant' (4): Équipe; Coordonnées de contact; Adresse e-mail de contact; Téléphone. Earlier: CTAs and 390/1280 layout (pub). Cause: owner data missing (team presentation and contact details in the operator profile draft).",
+  "defects": []
+ },
+ {
+  "id": "CLI-03",
+  "status": "PARTIAL",
+  "evidence": "Recette 9b3929c8. GET /api/public/coverage: 97240 -> {covered, version 1}; 75001 -> {not_covered, version 1}; 97217 -> {covered} although DB has 0 artisan profile covering 97217 (11 cover 97240). Earlier (retest3, UI): 75001 recap notice 'Le code postal 75001 ne figure pas dans la zone publiée par l’exploitant : il est possible qu’aucun artisan ne puisse prendre votre demande…', 97240 no notice and matched to an eligible artisan; offers only reach artisans whose postal codes match (core). The wizard was not re-driven in this pass. RESIDUAL: a request in a published 972xx commune that no approved artisan covers (e.g. 97217) gets no 'no artisan available in your zone' signal — coverage is computed from the published list only, not from artisan availability; and the hint's 'concurrence de deux artisans distincts' was covered earlier by core only. Cause: feature not implemented (no-artisan-in-zone signal).",
+  "defects": [
+   {
+    "title": "No signal when a covered 972xx commune has no artisan (carried over)",
+    "steps": "GET /api/public/coverage?postal_code=97217 (or create a request there)",
+    "expected": "Notice that no artisan currently serves the commune",
+    "actual": "status covered; request stays in « Recherche d’un artisan » with no notice; 0 artisan profile lists 97217",
+    "suspect": "app/api/public/coverage/route.ts + request recap notice (coverage derived from published list only)"
+   }
+  ]
+ },
+ {
+  "id": "CLI-02",
+  "status": "PARTIAL",
+  "evidence": "Recette 9b3929c8, client-a on INT-D715EC: dossier 'Photos (3)' (req1.jpg uploaded at creation + report photos), 'Gérer les pièces' -> #documents listing each file with 'Télécharger' and an upload form (dossier selector, file, Ajouter). Private access on request photo req1.jpg (GET /api/documents?id=): owner 200, assigned artisan-a 200, client-b 404, unassigned artisan-b 404, organisation viewer 404, anonymous 401; history API third party 404. Earlier: upload JPEG/PNG, type refusal, removal BEFORE sending, signed URL 200 / public URL 400 (core). REMOVAL CONTROL: none on web after upload — Documents page offers only Télécharger / Ajouter, and DELETE /api/documents returns 405 (route exports GET and POST only). Also still open: the Documents list does not say which dossier a file belongs to (12 rows named req1.jpg / avant.jpg / apres.jpg), and no share/unshare of photos with eligible artisans before assignment (core). Cause: feature not implemented (photo withdrawal and pre-assignment sharing consent).",
+  "defects": []
+ },
+ {
+  "id": "CLI-05",
+  "status": "PARTIAL",
+  "evidence": "NOT re-run in this pass (time box). Earlier evidence on the deployed recette (retest3, INT-D715EC, real UI with Playwright geolocation): consent -> start 200 + position 200, client 'Suivi actif' with OSM map tiles; client destination confirmation (geocode 200) stops the share and the artisan sees an explicit message; travel_en_route / travel_on_site recorded (also visible today in the audit journal for INT-D715EC); regression run PASS (retest3 REGRESSION). RESIDUAL as recorded by retest3: the remaining part of the acceptance hint (ETA with source and freshness, explicit location-refusal/failure states, stop control end to end) was only partially observed — see results/retest3.json CLI-05; no new observation here. Cause: not re-testable here (not executed in this session).",
+  "defects": []
+ },
+ {
+  "id": "CLI-07",
+  "status": "PARTIAL",
+  "evidence": "NOT re-run in this pass (time box). Earlier evidence: quote v1 refused / v2 accepted on the right version (dossier INT-CDD097 still shows 'Version 1 — Refusé ou remplacé / Version 2 — Accepté', read today as the client; cohort INT-56B17B DEV-770A8D Refusé then DEV-0FC1A1 Accepté listed today in client-a Documents); amendment proposed -> accepted -> totals 'avenants acceptés compris' persisted (retest3 on recette, INT-D715EC 163,84 + 43,40 = 207,24 €); today the server refused accept_quote without the exact quote version (422 'Ouvrez la version exacte du devis avant de l’accepter.'); third party 404 on quote documents. RESIDUAL: no in-app notification is emitted for a proposed/decided amendment (retest3 defect, not re-checked); expired-version refusal not re-run here. Cause: feature not implemented (amendment notification).",
+  "defects": []
+ },
+ {
+  "id": "FIN-04",
+  "status": "PARTIAL",
+  "evidence": "Restated, nothing new executed (no refund by instruction). Evidence: admin > Finance > Remboursements today reads 'Exécution indisponible : l’exécution des remboursements n’est pas activée pour votre accès sur ce service (fournisseur de paiement configuré, mode test). Une demande approuvée n’est pas un remboursement effectué.', 0 request, 'Remboursements confirmés 0 · 0,00 €'; creating a request -> 403 platform_mfa_required with the typed fields kept (retest4); failed attempts counted ('tentatives échouées : 2'); declined card and retry proven earlier (pay/fin). RESIDUAL: refund request/approval/execution and dispute synchronisation cannot be exercised — the action is behind MFA and no factor is enrolled on the recette admin (owner action), and refund execution is not enabled; disputes need a Stripe-side event. Cause: not re-testable here (MFA not enrolled) + external provider/infra (Stripe refund/dispute events).",
+  "defects": []
+ },
+ {
+  "id": "FIN-05",
+  "status": "PARTIAL",
+  "evidence": "Recette 9b3929c8. Registry today: Facture F2026-000001 (120,00 HT, TVA 10,20 at 8.5 %, 130,20 TTC, issuer AUDIT SYNTHETIQUE ASTRA, dossier CDD0970A) and Avoir A2026-000001 (9,22 HT / 0,78 TVA / 10,00 TTC, 'sur 1E482111'), PDF links for admin; the client dossier INT-CDD097 lists both with Voir le PDF / Télécharger; anonymous GET /api/invoices/<id>/pdf 401; third-party client / other artisan / org viewer 404 (retest4). Numbers, amounts and VAT prorata coherent; credit note capped at the balance (retest4). RESIDUAL: the platform commission invoice cannot be issued — 'Vérifier les conditions' -> {ready:false, missing:[platform_commission_vat_rate]}, 'Émission impossible — taux de TVA de commission non configuré'; minor open item: quote reference on the invoice PDF differs from the app (retest4). Cause: owner data missing (commission VAT rate).",
+  "defects": []
+ },
+ {
+  "id": "SYS-01",
+  "status": "PASS",
+  "evidence": "Recette 9b3929c8 backed by the real recette database and private storage, no demo data path: every action of this pass was read back from the DB or after reload (warranty case 6e47ee7c, contestation cfa1e926, approval 09bc017f, erasure request 7c406699, payments/ledger sums, artisan performance = DB). Files: real private storage — signed URL fetched 200 image/jpeg for an admin-opened credential; request photo and report photo 200 for owner and assigned artisan. Cross-account refusals observed today: documents 404 (other client, other artisan, org viewer) / 401 anonymous; invoices PDF 401 anonymous, 404 third parties (retest4); warranty 404/403 third party; site operations 403; approvals 403 viewer; admin/finance/audit APIs 403 for client and artisan; payment status 404 third party (retest4); photo-review 403 third party. Accounts persist across sessions (cohort of 21 nov. still logs in). Infra-level items (backups) are under SYS-09.",
+  "defects": []
+ },
+ {
+  "id": "SYS-06",
+  "status": "PARTIAL",
+  "evidence": "Recette 9b3929c8. What exists: private documents per dossier with signed download; visibility owner + assigned artisan + admin only (req1.jpg and report photo apres.jpg on INT-D715EC: client-b 404, artisan-b 404, org viewer 404, anonymous 401; /api/documents/history third party 404); quote PDF documents with revisions (owner 200 with issuer ready, third party 404; revision 1 generation and 'Mettre à jour le PDF' — adm); credential versions with decision history (adm); invoices/credit notes immutable ('Un document ne se supprime pas : il se corrige par avoir'), PDF rendered from the registry snapshot, third parties 404 / anonymous 401; site pieces with 'Actuelles / Historique' tabs. RESIDUAL: no deletion/withdrawal of a document (DELETE 405), no retention period or archiving/expiry rule visible or enforced ('Durées de conservation … À renseigner par l’exploitant' on /#privacy), credential expiry reminders not observed, PDF revision 2 not re-generated in this pass. Cause: feature not implemented (retention/archiving, expiry) + owner data missing (retention durations).",
+  "defects": []
+ },
+ {
+  "id": "_META",
+  "status": "INFO",
+  "evidence": "retest5 closing pass, target https://domdepannage-recette-20261112.vercel.app only (main 9b3929c8, Stripe TEST), local dev not started; ~/dev/domdepannage not edited. Data created (all prefixed retest5-): warranty case 6e47ee7c on INT-CDD097 (resolved, corrective link to existing dossier 0E073E8B); contestation cfa1e926 on review 17df4f4c (INT-6C3682) decided 'retenue' -> THE REVIEW IS CURRENTLY MASKED (the deciding script step was declined in the session but had already been executed by the local runner; no restore attempted — Admin > Avis & Notes > Rétablir to revert; artisan average is 4,3/5 on 3 reviews meanwhile); enterprise request INT-25C142 + quote DEV-B0648C + approval 09bc017f rejected (cohort org); synthetic user qa-retest5-data-… with erasure request 7c406699 (open ticket 0283e306, not decided). Not done: Rapprocher les règlements, MFA enrolment, refunds, any change to coverage/warranty policy/commission/operator profile. Dossiers d8ea9913 / a9155ec4 not touched by this pass (both were paid by another process during the pass, 01:03 and 01:09 Martinique). CLI-05 and CLI-07 were not re-run (time box).",
+  "defects": []
+ }
+]

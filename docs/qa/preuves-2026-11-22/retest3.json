@@ -1,0 +1,98 @@
+[
+ {
+  "id": "SYS-05",
+  "status": "PASS",
+  "evidence": "Deployed recette https://domdepannage-recette-20261112.vercel.app, Playwright real UI, client-a/artisan-a, dossier INT-D715EC (d715ec0d-21e3-4eb1-a8ce-fbe3b64df99a) created for this run (22 Nov 03:48-03:56Z; coordinator reports the deployment moved from 5a0ba773 to eb12dec4 during the session, exact switch time unknown). Artisan kept #detail open (in-page marker proves no reload). Before acceptance the panel \"Documents, validité et avenants du devis\" read \"En attente de décision / Les avenants ne concernent qu’un devis accepté\". Client accepted DEV-88B3C0 (POST actions 200, DB quotes.status accepted) → artisan panel showed \"Accepté\" + \"Proposer un avenant\" 1.0 s after the confirm click, no reload. Amendment form typed (label/qty/price/TVA/motif) then left 60 s: 3 polling ticks (GET operations at 18/38/58 s, quote-documents at 11/31/51 s) plus a real change (client slot change shown on the artisan screen after 18.8 s) → the 5 field values unchanged; then proposed (POST /api/quote-amendments 201), client saw it without reload in 11 s. Other live propagation re-seen: assignment 2.1 s, artisan slot → client 8.6 s, quote → client 2.5 s, report → client 7.4 s, start and completion live.",
+  "defects": []
+ },
+ {
+  "id": "ART-DOSSIER-CONSOLE",
+  "status": "PASS",
+  "evidence": "Deployed recette https://domdepannage-recette-20261112.vercel.app, Playwright real UI, client-a/artisan-a, dossier INT-D715EC (d715ec0d-21e3-4eb1-a8ce-fbe3b64df99a) created for this run (22 Nov 03:48-03:56Z; coordinator reports the deployment moved from 5a0ba773 to eb12dec4 during the session, exact switch time unknown). Console listened on the artisan page during the whole run (accept, slot, quote, amendment, tracking, start, report, complete) + fresh reload of #detail/d715ec0d + opening the older dossier INT-5F417F + back: 0 \"two children with the same key\" message. Only console entry: the expected 409 network line on the tracking post after the destination change.",
+  "defects": []
+ },
+ {
+  "id": "SYS-08",
+  "status": "PASS",
+  "evidence": "Anonymous /#new/urgent → 3 steps → focus \"Créer mon compte et continuer\" → Enter: URL /#auth, document.activeElement = H2 \"Créer un compte\" (tabindex=-1), next Tab = first field (account type select); same at 390 px. Skip link re-run by keyboard on /#auth, /#pricing, /#legal, /prestations: Tab reaches \"Aller au contenu\", Enter → hash and h1 unchanged, activeElement MAIN#main, next Tab lands inside main.",
+  "defects": []
+ },
+ {
+  "id": "CLI-05",
+  "status": "PARTIAL",
+  "evidence": "Deployed recette https://domdepannage-recette-20261112.vercel.app, Playwright real UI, client-a/artisan-a, dossier INT-D715EC (d715ec0d-21e3-4eb1-a8ce-fbe3b64df99a) created for this run (22 Nov 03:48-03:56Z; coordinator reports the deployment moved from 5a0ba773 to eb12dec4 during the session, exact switch time unknown). Playwright geolocation on the artisan context. Start: consent → start 200 + point 200, client \"Suivi actif\", OSM map tiles rendered. Client confirmed a destination (geocode IGN/BAN 200, tracking 200) → next artisan position post 409; artisan panel showed only \"Le partage a été arrêté par une modification du dossier (par exemple une destination confirmée par le client). Relancez le partage avec un nouveau consentement.\" — the raw \"Actualisez la page\" sentence is in the 409 body but nowhere on the page; state \"Non partagé\" with a \"Partager ma position\" button. Restart (consent asked, start 200 + point 200) worked first try; client \"Suivi actif\", ETA \"vers 00:17 · Durée 24 min · 16.4 km · IGN Géoplateforme / BD TOPO\" + map. Stale sample: stop, 70 s without a new browser position, restart → start 200, the old sample is not posted at all, panel stays \"Partage en cours\" with \"Position trop ancienne : non envoyée.\" (no mention of a page reload); a new browser position was then posted automatically without any click (point 200) and the client returned to \"Suivi actif\" with ETA. NOT exercised: the server-side 422 branch and its message \"Position refusée par le service (trop ancienne)…\" (components/features/tracking/model.ts:291) — the new client-side age guard (model.ts:397) drops samples older than 60 s before any request, so the 422 could not be provoked from the UI.",
+  "defects": []
+ },
+ {
+  "id": "CLI-09",
+  "status": "PASS",
+  "evidence": "client-a session, POST /api/profile/addresses {action:save,…,values.postal_code:\"9720\"} → 422 {\"error\":\"Le code postal doit comporter cinq chiffres.\"}; \"9724X\" → same 422; no row created (GET records 0, DB none). UI form/persistence part not re-run in this pass (was PASS in retest).",
+  "defects": []
+ },
+ {
+  "id": "CLI-04",
+  "status": "PASS",
+  "evidence": "Deployed recette https://domdepannage-recette-20261112.vercel.app, Playwright real UI, client-a/artisan-a, dossier INT-D715EC (d715ec0d-21e3-4eb1-a8ce-fbe3b64df99a) created for this run (22 Nov 03:48-03:56Z; coordinator reports the deployment moved from 5a0ba773 to eb12dec4 during the session, exact switch time unknown). Artisan proposed a slot (24 nov. 10:00–12:00) → client dossier, without reload after 8.6 s, shows \"Créneau proposé par l’artisan — modifiez-le s’il ne vous convient pas.\" under the slot, persists after reload; only \"Modifier le créneau / Enregistrer le nouveau créneau\" offered (no confirm button, stated as intended: no server concept). Client change then reached the artisan screen in 18.8 s.",
+  "defects": []
+ },
+ {
+  "id": "FIN-03",
+  "status": "PARTIAL",
+  "evidence": "Payment-return check (signed out → /#auth with message → dossier after login) NOT re-run in this pass: the script for it was not executed (tool call declined during the session). Last observation remains the retest one (PASS on the deployed build at 4f7acef3). Related, seen in the happy path: completed dossier shows \"Payer 207,24 € sur la plateforme\" (not clicked). Rest of FIN-03 (real payment) not tested by instruction.",
+  "defects": []
+ },
+ {
+  "id": "PUB-FLOW",
+  "status": "PASS",
+  "evidence": "Anonymous /#new/urgent. (a) Step 1 filled → \"Continuer\" → on step 2, reload: sessionStorage courant-request-draft holds category+description+urgency; wizard reopens on step 1 with the description restored and the category kept (Continuer passes without re-selecting). (b) Step 2 with address + postal typed, no Continuer, reload: draft holds address \"Cité Eucalyptus retest3\" / 97240; wizard reopens on step 1, and step 2 shows both fields restored after \"Continuer\". Signed-in client: a draft left at the recap reopens directly on the recap. Observation (not a data loss): after a reload on step 2 the wizard restarts at step 1 rather than step 2. A separate visual check of the selected category chip after reload was not executed.",
+  "defects": []
+ },
+ {
+  "id": "CLI-07",
+  "status": "PARTIAL",
+  "evidence": "Deployed recette https://domdepannage-recette-20261112.vercel.app, Playwright real UI, client-a/artisan-a, dossier INT-D715EC (d715ec0d-21e3-4eb1-a8ce-fbe3b64df99a) created for this run (22 Nov 03:48-03:56Z; coordinator reports the deployment moved from 5a0ba773 to eb12dec4 during the session, exact switch time unknown). Regression OK: avenant AV-1-DEV-88B3C0 proposed (4000 HT + 8,5 % = 43,40 € TTC) → client alert + \"Consulter l’avenant\" without reload (11 s) → accepted (POST 200) → \"Devis & résumé\": 163,84 € + \"Avenant … accepté + 43,40 € TTC\" + \"Total TTC, avenants acceptés compris 207,24 €\", persists after reload; completed dossier: \"Paiement après l’intervention, sur la plateforme (207,24 €)\" and button \"Payer 207,24 € sur la plateforme\". Artisan panel showed the amendment \"Accepté\" without reload. The earlier remaining gap (no in-app notification for a proposed/decided amendment) was not in this fix list and was not re-checked → status kept PARTIAL.",
+  "defects": [
+   {
+    "title": "No in-app notification for a proposed / decided amendment (carried over, not re-checked in this pass)",
+    "steps": "artisan proposes an avenant; client GET /api/notifications",
+    "expected": "notification \"avenant à valider\"",
+    "actual": "not re-checked; absent in retest",
+    "suspect": "app/api/quote-amendments/route.ts RPC emits no notification; lib/features/notifications/kinds.ts"
+   }
+  ]
+ },
+ {
+  "id": "CLI-03",
+  "status": "PARTIAL",
+  "evidence": "Regression OK: client-a, postal 75001 → recap shows \"Le code postal 75001 ne figure pas dans la zone publiée par l’exploitant : il est possible qu’aucun artisan ne puisse prendre votre demande. Elle reste enregistrée et aucun délai n’est garanti.\" (request not sent); 97240 → no notice on the dossier. The earlier remaining gap (972xx commune covered by no artisan, e.g. 97217, gets no notice) was not in this fix list and not re-run → status kept PARTIAL.",
+  "defects": [
+   {
+    "title": "No notice for a 972xx commune that no artisan covers (carried over, not re-run)",
+    "steps": "client: new request \"Rue QA, 97217 Le Marin\" → recap",
+    "expected": "honest notice",
+    "actual": "not re-run; no notice in retest",
+    "suspect": "components/features/coverage/model.ts (published zone only)"
+   }
+  ]
+ },
+ {
+  "id": "FIN-06",
+  "status": "PARTIAL",
+  "evidence": "Also covers ADM-05. Admin (read-only, 0 non-GET request from the page, \"Rapprocher les règlements\" not clicked) → /#platform-finance on the deployed recette (eb12dec4 per coordinator): \"Commission estimée (non prélevée) 4 · 45,57 € — Au taux 10.00 % (version 1)\", \"Commission prélevée (confirmée) 7 · 112,39 €\", \"Règlements au registre 4 · 455,70 €\". GET /api/platform-operations/finance → report.ledger.commission_estimated_count 4 / commission_estimated_cents 4557. platform_ledger_entries (service role, read): 4 commission_estimated rows = 4557 cts, of which 3 (3472 cts) belong to payments that also have a commission_withheld row; expected after the fix: 1 · 10,85 €. Gap NOT closed. Other parts of ADM-05/FIN-06 not re-run in this pass.",
+  "defects": [
+   {
+    "title": "Finance \"Commission estimée (non prélevée)\" still counts payments whose commission is already withheld",
+    "steps": "admin → /#platform-finance, read the \"Commission estimée (non prélevée)\" tile; compare with platform_ledger_entries",
+    "expected": "1 · 10,85 € (estimated rows whose payment has a commission_withheld row excluded)",
+    "actual": "4 · 45,57 € (all commission_estimated rows; 3 payments / 34,72 € counted both as estimated and as withheld)",
+    "suspect": "the figure comes from the SQL report function, supabase/migrations/202610310014_platform_operators.sql:688 (plain count/sum over entry_kind=commission_estimated), rendered as-is by components/features/platform-operations/platform-finance-view.tsx:203. Commit 5a0ba773 announces the fix in its message but changes no finance/ledger file and no migration (git show --stat: 15 files, none under supabase/ or platform-operations) — fix apparently not committed or migration not applied to the recette DB."
+   }
+  ]
+ },
+ {
+  "id": "REGRESSION",
+  "status": "PASS",
+  "evidence": "Deployed recette https://domdepannage-recette-20261112.vercel.app, Playwright real UI, client-a/artisan-a, dossier INT-D715EC (d715ec0d-21e3-4eb1-a8ce-fbe3b64df99a) created for this run (22 Nov 03:48-03:56Z; coordinator reports the deployment moved from 5a0ba773 to eb12dec4 during the session, exact switch time unknown). Full happy path through the UI: request 97240 with photo (POST /api/bookings 201, document 201) → artisan-a accepts (assigned) → slot → quote 151,00 HT / 12,84 TVA / 163,84 TTC sent and accepted → avenant 43,40 accepted → En route, position sharing, Sur place → Démarrer (confirmation) → in_progress; \"Terminer l’intervention\" disabled before the report → report + avant.jpg + apres.jpg (2 × POST /api/documents 201) → enabled → Terminer (confirmation) → DB completed, completed_at 03:56:00Z, paid_at null. Client: statut \"À régler\", \"Paiement après l’intervention, sur la plateforme (207,24 €)\", button \"Payer 207,24 € sur la plateforme\" (NOT clicked), 390 px no overflow. 0 pageerror on both pages; console: only the expected 409 network line (tracking after destination change).",
+  "defects": []
+ }
+]

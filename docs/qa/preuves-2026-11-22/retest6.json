@@ -1,0 +1,110 @@
+[
+ {
+  "id": "ENT-07",
+  "status": "PASS",
+  "evidence": "Recette bda85303, cohort ent-owner, real UI at 1280 and 390 px (no overflow). Site 'ent Restaurant Le Lagon' > Opérations du site > Équipements > card 'ent Chambre froide positive' (Criticité critique, Dégradé, emplacement 'ent Cuisine, réserve'): block 'Maintenance et contrôles planifiés' lists 'ent Contrôle chambre froide mensuel · Actif · prochaine échéance le 10 nov. 2026' (= DB site_maintenance_plans 842dd9f6, equipment_id d5c11631, next_due_on 2026-11-10); 'Interventions liées' expands to 'INT-17104C · Coupure de courant · À régler · demande du 21 nov. 2026 · liée le 21 nov. 2026' + 'Ouvrir le dossier' -> #detail/17104cea… which shows 'Équipements et zones concernés: ent Chambre froide positive'. Equipment without link ('ent Éclairage de sécurité salle') shows 'Aucune intervention n’est rattachée. Le rattachement se fait depuis le dossier d’une intervention du site.' Organisation viewer (ent-viewer): same card, same linked dossier and plan, opens the dossier, no Ajouter/Modifier control, 'Lecture seule : vos droits ne permettent pas de modifier ces liens.' Third-party client GET /api/site-operations?site_id=… 403. Earlier: equipment create/edit persistence, viewer write 403 (ent.json). Observations (not blocking the hint): category list has no kitchen/cold entry ('Autre équipement'); the plan whose due date is past (10 nov.) is shown 'Actif' with no overdue marker; no telemetry (stated on screen).",
+  "defects": []
+ },
+ {
+  "id": "ENT-06",
+  "status": "PARTIAL",
+  "evidence": "Recette bda85303, cohort ent-owner. Restaurant site sheet (type Restauration): header figures (budget 3 000 €, engagé 195,30 €, prochaine échéance 20 déc. 2026), Interventions > Passées lists urgent INT-17104C, and the critical equipment card now lists that ticket with reference, status 'À régler', request date and link date + 'Ouvrir le dossier' (see ENT-07); viewer read-only; third party 403. RESIDUAL unchanged: (1) no restaurant-specific dashboard (the sheet is the generic site sheet + 'Équipements critiques' note); (2) a ticket carries no due time/deadline — the equipment line shows request and link dates only, the dossier shows 'Urgent' without a target time; deadlines exist only on maintenance items and manually opened SLA cases. The acceptance hint ('ticket critique visible avec échéance correcte') is therefore not met. Cause: feature not implemented (no SLA due time computed/displayed per ticket; would need a per-ticket deadline from the SLA policy).",
+  "defects": []
+ },
+ {
+  "id": "CLI-02",
+  "status": "PARTIAL",
+  "evidence": "Recette bda85303, real UI, cohort client-a. New request INT-D0192D (d0192d95…, 97240, 'retest6 QA …') created through the wizard with req1.jpg (POST /api/bookings 201, POST /api/documents 201 doc 5d5c002d). Dossier block 'Photos visibles par les artisans avant attribution': 'req1.jpg — Privée' + 'Partager avec les artisans…' -> inline confirmation ('Partager cette photo ? Les artisans éligibles … pourront la voir avant attribution…'), 'Annuler' sends nothing; 'Partager la photo' -> POST /api/interventions/<id>/offer-photos 200 {shared:true}, 'Photo partagée avec les artisans éligibles.' / 'req1.jpg — Visible par les artisans éligibles', persists after reload. While shared: eligible artisan-a and artisan-b GET offer-photos 200 [{id}] and ?photo=<id> 200 image/jpeg 4267 bytes (JPEG magic, re-encoded), third-party client 404 (GET) / 403 (POST); direct /api/documents?id= for the unassigned artisan 404. 'Retirer du partage…' -> confirmation ('… Elle reste dans votre dossier privé : le document n’est pas supprimé.'), 'Annuler' sends nothing, 'Retirer la photo du partage' -> POST 200 {shared:false}, 'Photo retirée du partage…' / 'Privée', persists after reload; artisan list then {items:[]} and ?photo= 404; document row and 'Photos (1)' still present. After artisan-a accepted the mission in the UI: block absent for the client (also after reload), client POST share 409, assigned artisan sees 'Photos du dossier req1.jpg · Ouvrir la photo' (documents 200), other artisan 404. Earlier: upload/type refusal/private access matrix (core, retest5). RESIDUAL: (1) the WEB artisan offer card has no gallery — the opened offer shows category/zone/estimate only and never calls offer-photos, so the shared photo is visible to an eligible artisan only in the mobile app (ios.json) or by API; cause: OfferPhotosPanel is mounted in components/role/client-space.tsx only, no web counterpart of apps/mobile OfferPhotoGallery in components/role/artisan-space.tsx. (2) No true deletion of an uploaded photo (DELETE /api/documents 405, retest5); needs SQL/RPC + storage removal.",
+  "defects": [
+   {
+    "title": "Web artisan cannot see client-shared photos in an available offer",
+    "steps": "Client shares a request photo (POST offer-photos 200). Eligible artisan > Missions > Disponibles > open the offer",
+    "expected": "'Photos choisies par le client' gallery as in the mobile app",
+    "actual": "No photo, no request to /api/interventions/<id>/offer-photos; API returns the photo (200 image/jpeg) to the same artisan",
+    "suspect": "components/role/artisan-space.tsx (offer detail card) — components/features/offer-photos/* only used by client-space.tsx"
+   }
+  ]
+ },
+ {
+  "id": "CLI-07",
+  "status": "PARTIAL",
+  "evidence": "Recette bda85303, real UI, INT-D0192D (client-a / artisan-a). v1 DEV-A7EE8A sent by the artisan (form preview 151,00 / 12,84 / 163,84 € = DB 15100/1284/16384 c), shown live to the client. Client 'Voir le devis' > 'Refuser' > reason form ('Transmis à l’artisan…') > 'Confirmer le refus' -> POST …/operations 200, DB v1 rejected, dossier back to assigned; client: 'Devis refusé. L’artisan peut vous proposer une nouvelle version.'; artisan: 'Le client a refusé DEV-A7EE8A (163,84 €). Son motif est dans la conversation du dossier… Lire le motif' -> #messages shows 'Devis refusé : retest6 QA — montant trop élevé…', history '02:19 — Refusé par le client', notification quote_rejected. Accepting the refused v1 by API -> 409. v2 DEV-A83117 (12050/1024/13074 c) -> client sees 'Version 1 — Refusé ou remplacé / Version 2 — Envoyé, à valider', accepts v2 on #quote/a831173f -> POST actions 200, DB v2 accepted (accepted_at set), v1 stays rejected. Amendment AV-1-DEV-A83117 proposed by the artisan (POST /api/quote-amendments 201): client dossier without reload shows 'Un avenant proposé par l’artisan attend votre décision. Rien n’est ajouté au montant à régler sans votre accord.' + 'Avenant AV-1-DEV-A83117 — à valider · 43,40 € TTC' + 'Consulter l’avenant'; quote page 'Proposé, en attente de décision'; 'Accepter l’avenant' > 'Confirmer l’acceptation' -> POST 200; 'Devis & résumé': 130,74 € + 'Avenant … accepté + 43,40 € TTC' + 'Total TTC, avenants acceptés compris 174,14 €', persists after reload; server: amendment accepted 4000/340/4340 c, quote 13074 c, API accepted_total_cents 17414 (= 13074 + 4340). Third-party client GET dossier 404. Earlier: third party accept/reject 403, artisan self-accept 403, accept without exact version 422 (core, retest5). RESIDUAL: (1) no notification for amendments — notifications rows for this dossier: client mission_assigned, quote_received ×2 and nothing at 06:25–06:27 for the proposal; artisan quote_rejected, quote_accepted, message_received and nothing for the amendment decision; cause: no notification kind/trigger for quote_amendments (needs SQL migration). (2) The hint's 'version expirée refusée' was not exercised: both quotes read 'Validité non renseignée par l’émetteur' and no expired quote was produced in this pass. (3) Observation: the artisan dossier lists the accepted amendment (43,40 €) but shows only 130,74 €, not the 174,14 € total. DISCLOSURE: the tool call that ran the v1 refusal step (client 'Confirmer le refus' + the API probe accepting the refused v1) was declined in the session, but the local runner had already executed it (quote found rejected on read-back, probe answered 409); the pass then continued on the coordinator's instruction.",
+  "defects": [
+   {
+    "title": "No in-app notification when an amendment is proposed or decided",
+    "steps": "Artisan proposes an amendment on an accepted quote; client accepts it; read notifications of both",
+    "expected": "Client notified of the proposal, artisan of the decision",
+    "actual": "No notification row for either event (quote events do notify)",
+    "suspect": "supabase migrations: notification triggers cover quotes only, none on quote_amendments; app/api/quote-amendments/route.ts"
+   }
+  ]
+ },
+ {
+  "id": "CLI-05",
+  "status": "PASS",
+  "evidence": "Recette bda85303, real UI, INT-D0192D (client-a / artisan-a), Playwright geolocation in Martinique on the artisan context. Before sharing the client card reads 'Aucun partage de position en cours'. Artisan 'En route' (operations 200) > 'Partager ma position' > consent notice (last position only, no history, position+destination sent to IGN) > 'Autoriser et démarrer' -> tracking 200 ×2; client without reload: 'Suivi actif', 'Position ± 15 m · il y a 17 s (à 02:27)', 'Source : Position déclarée par le navigateur de l’artisan (non certifiée)', ETA 'Non disponible — Destination non confirmée'. Client confirms a destination while sharing (geocode 200 source IGN/BAN, tracking 200): sharing stops; the artisan's next position post gets 409 and the panel shows ONLY 'Le partage a été arrêté par une modification du dossier (par exemple une destination confirmée par le client). Relancez le partage avec un nouveau consentement.' (raw 'Actualisez la page' not shown). Relaunch (button labelled 'Partager ma position') -> new consent -> 200 on first try; client: map with OSM tiles, artisan marker, destination pin and drawn route (shot retest6-cli05-client-eta), 'Arrivée estimée vers 02:52 · Durée 24 min · 16.4 km par la route · calculée à 02:28 · hors trafic temps réel, sans garantie · Source : IGN Géoplateforme / BD TOPO', 'Position ± 12 m · il y a 15 s', 'Recalculer (dans 26 s)'; POST tracking/route 200; server tracking shared true / position_state fresh / destination source ign. Arrival 'Je suis arrivé' -> tracking 200, travel_stage on_site, server shared false, session null, position null, position_state stopped; client without reload: step 'Sur place', 'Aucun partage de position en cours', ETA 'Non disponible'. Location refused (permission cleared): 'Localisation refusée par le navigateur : autorisez-la dans les réglages du site pour partager votre position.', server stays not shared. Third party: client-b tracking 404 / route 404, artisan-b 404. Earlier: stale sample handling, stop control, anonymous 401 (core, retest, retest3). Matrix hint (map/ETA with source, freshness, explicit failure/refusal; preview proof; access refusals) met on web. Minor: the relaunch button is labelled 'Partager ma position' rather than 'Reprendre le partage'; a 409 console line appears on the artisan side at the refused post.",
+  "defects": []
+ },
+ {
+  "id": "ADM-10",
+  "status": "PASS",
+  "evidence": "Recette bda85303, real UI. Follow-up of the two retest5 minor defects, both CLOSED. (1) Astra client filed a new warranty request from paid dossier INT-0DB3BB ('Déposer une demande de suivi' -> POST /api/warranty 200, case f14f3a42 submitted, 'Demande enregistrée … Version des conditions enregistrée au dépôt : 2', 'Une demande de suivi est déjà en cours pour ce dossier'). Super admin > Garantie: block 'Dossier correctif' read 'Demande F14F3A42 · Transmise … Rattachement possible seulement quand la demande est « En cours d’examen » … Aucun dossier existant ne peut être rattaché', attach disabled; decision 'En cours d’examen' + note -> POST /api/warranty 200 (DB reviewing) and WITHOUT reload (page marker intact) the block now reads 'Demande F14F3A42 · En cours d’examen · Aucun dossier correctif rattaché · Dossiers existants du même demandeur…: Prise ou interrupteur · Terminée et réglée · créé le 21 novembre 2026 · Ouvrir · Rattacher…', the free-id field and 'Rattacher…' enabled. (2) Client dossier INT-CDD097 (case 6E47EE7C resolved in retest5) now shows 'Réponse : …' + 'Dossier correctif rattaché : INT-0E073E · Coupure de courant · Recherche d’un artisan. Vous le retrouvez dans vos demandes.' Earlier (retest5): validation, duplicate 409, attach with confirmation, resolve, third-party 404/403, artisan read. Left as is: case F14F3A42 remains 'En cours d’examen' with no linked dossier (no attach/resolve done in this pass). By design no corrective intervention is created automatically (link to an existing dossier only). Observation: the admin header shows 'Version des conditions 3' (a draft not created by this pass) while published terms stay version 2.",
+  "defects": []
+ },
+ {
+  "id": "ADM-08",
+  "status": "PARTIAL",
+  "evidence": "Recette bda85303. Super admin > Paramètres (read-only, nothing saved) > 'Fonctions activées sur le service': 'Factures : Oui — factures de prestation émises manuellement depuis Finance (PDF disponible). Factures de commission : émetteur plateforme configuré ; elles exigent aussi un taux de TVA sur la commission, à régler dans Finance.' — matches the real state (GET /api/platform-operations/finance: invoice_count 1, credit_note_count 1; settings invoice_issuer TTBM SARL / SIRET set, commission_vat_rate null, commission_bps 1000 v1). 'Remboursements : Demandes et avoirs traités dans Finance ; l’exécution du remboursement n’est pas activée pour votre accès sur ce service.' — consistent with the refund execution gate seen earlier (MFA not enrolled, retest4; refund_settled_count 0). Also 'Réaffectation avant acceptation du devis : Oui', 'Demandes d’assistance : Oui'; audit journal lists this pass's events. The two lines are now truthful (earlier wording defect closed). RESIDUAL unchanged (retest5): no setting was changed in this pass (forbidden by the brief), so 'paramètre changé … avec effet versionné' rests on earlier evidence (commission 10 % v1, warranty terms v2); operator profile still an unpublished draft because owner data is missing (contact e-mails, host identity, rights holder); default VAT 'À définir'. Cause: owner data missing.",
+  "defects": []
+ },
+ {
+  "id": "ENT-02",
+  "status": "PASS",
+  "evidence": "Recette bda85303. Used invitation link (retest2 code, invitation status accepted in DB) opened by a signed-in third account (client-b): POST /api/organizations/invitations/accept 409 and the screen shows the invitation-specific alert 'Ce lien d’invitation n’est plus valable : il a été révoqué, déjà utilisé ou il a expiré. Demandez une nouvelle invitation au propriétaire de l’organisation.'; client-b has no membership afterwards; unknown 64-char code: same message, 409. Signed out, the same link shows the neutral page 'Invitation à rejoindre une organisation … Se connecter pour accepter' (validity is only checked after sign-in). No code of a row in status 'revoked' was available (codes are shown once), so the revoked case is covered by the same server answer only. Earlier: invite/accept paths, role change, removal with open page, restore by invitation, refusals (retest2, ent).",
+  "defects": []
+ },
+ {
+  "id": "ENT-03",
+  "status": "PASS",
+  "evidence": "Recette bda85303. Cohort ent-owner (site 'ent Site archivé Dostaly' archived_at set in DB): Sites & contrats > 'Pilotage professionnel' > 'Site concerné' offers 'Choisir un site, ent ERP Salle Polyvalente, ent Bureaux Pointe Simon, ent Restaurant Le Lagon, ent Résidence Eucalyptus' — archived site absent (earlier defect closed); header scope selector likewise. Earlier: archive refused with open requests (specific message), writes and new request refused on an archived site, active list excludes archives (retest2, retest5). Observation: the 'Site' filter of the interventions search on the dashboard still lists the archived site (read filter over past dossiers).",
+  "defects": []
+ },
+ {
+  "id": "ENT-16",
+  "status": "PARTIAL",
+  "evidence": "Recette bda85303. Astra organisation viewer opens paid dossier INT-6C3682: 'Terminée et réglée', 'Dossier réglé.', 'Réglé le 22 nov., 00:31', no payer alert (0 role=alert), review block headed 'Avis du demandeur' ★★★★★ (earlier wording defects closed). Earlier: delegated payer paid, non-payer/third party refused, settlements list (retest4, retest5). RESIDUAL unchanged: (1) no invoice linked to an organisation dossier exists (service invoices are issued manually; commission invoices blocked by the missing commission VAT rate — owner data missing); (2) no 'intégrations' screen/API in the enterprise space — feature not implemented. Minor: opening a dossier as viewer logs a console 404 (GET /api/interventions/<id>/quote-grid/access 404).",
+  "defects": [
+   {
+    "title": "Console 404 when an organisation viewer opens a dossier (minor)",
+    "steps": "Organisation viewer > open any organisation dossier (seen on INT-6C3682 and cohort INT-17104C)",
+    "expected": "No console error",
+    "actual": "GET /api/interventions/<id>/quote-grid/access 404 {error:'Ce dossier est introuvable.'} logged as a console error; page otherwise fine",
+    "suspect": "quote-grid access fetch issued for roles that cannot read it (components/features quote-grid panel / app/api/interventions/[id]/quote-grid/access/route.ts)"
+   }
+  ]
+ },
+ {
+  "id": "ART-02",
+  "status": "PASS",
+  "evidence": "Recette bda85303. Candidate artisan (pub fixture, application persisted with postal_codes [97240, 75001], status submitted): #application after a full reload shows 'Le code postal 75001 ne figure pas dans la zone publiée par l’exploitant. Vous pouvez le conserver dans votre dossier ; vérifiez qu’il correspond bien à votre zone d’intervention.' next to the 75001 chip, 0 console error (earlier 'notice lost after reload' defect closed). Nothing saved in this pass; the only stored application containing 75001 is in status 'Soumise' (editable, 'toute modification la repasse en brouillon'), not a never-submitted draft. Earlier: form validation, draft save/reload, submit, notice on add/remove (retest2, adm).",
+  "defects": []
+ },
+ {
+  "id": "CLI-10",
+  "status": "PASS",
+  "evidence": "Recette bda85303. Duplicate review: Astra client POST /api/reviews on INT-CDD097 (already reviewed) -> 409 'Vous avez déjà laissé un avis pour cette intervention.' (specific message), reviews count unchanged (4). Viewer reads the review under 'Avis du demandeur' (ENT-16). No moderation action taken in this pass. Earlier: eligibility, contestation and traced moderation (retest4, retest5).",
+  "defects": []
+ },
+ {
+  "id": "FIN-05",
+  "status": "PARTIAL",
+  "evidence": "Recette bda85303. Invoice PDF F2026-000001 downloaded as the client (GET /api/invoices/1e482111…/pdf 200 application/pdf, 4029 bytes): text 'FACTURE · F2026-000001 · Émis le 21/11/2026 23:43 (heure de Martinique) · Devis : DEV-6CCE65 · Dossier : INT-CDD097' — short quote reference (quote id 6cce6539…), earlier long-reference defect closed. Earlier: numbers/amounts/credit note coherent, access refusals (retest4, retest5). RESIDUAL unchanged: platform commission invoice cannot be issued (commission VAT rate not configured — owner data missing).",
+  "defects": []
+ },
+ {
+  "id": "REGRESSION",
+  "status": "PASS",
+  "evidence": "Recette bda85303. Smoke, fresh browser contexts: public home (h1 'Dépannage électrique', 1280 and 390 px without overflow), /#pricing (rules: 'Tarification … barème horaire, devis précis avant travaux', 'Majoration d’urgence', 'TVA … (+25 %)', 'Grille indicative par type de panne'), /#legal ('TTBM, SARL', SIREN 929507762, SIRET 92950776200011) — 0 console error. Fresh logins: client-a -> #profile (Espace particulier), artisan-a -> #overview (Tableau de bord), ent-owner and ent-viewer -> #overview (Portail entreprise), super admin -> #admin — 0 console error at landing. Console errors seen elsewhere in the pass: viewer dossier 404 on quote-grid/access (see ENT-16) and the expected 409 on a refused position post (CLI-05).",
+  "defects": []
+ }
+]

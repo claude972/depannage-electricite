@@ -1,0 +1,130 @@
+[
+ {
+  "id": "FIN-01",
+  "status": "PASS",
+  "evidence": "Android (Expo Go, Pixel 6 API 34), payeur = gestionnaire Astra (compte 'enterprise'), dossier INT-D8EA99 terminé non réglé (devis accepté 16275 c) : fiche 'À régler · 162,75 €' → 'Régler sur Stripe en mode test' ouvre un Chrome Custom Tab checkout.stripe.com ('Environnement de test', 'Intervention électrique — devis et avenants acceptés', 162,75 €). Carte 4242 4242 4242 4242 / 12/30 / 123, pays Martinique → Payer → redirection vers la recette. Serveur (service role) : platform_checkouts 77526f02 amount_cents=16275 fee_bps=1000 fee_cents=1628 status open→paid ; payments cd28f753 total 16275 pending→paid method=stripe ; interventions.status completed→paid paid_at 05:09:05Z. Un seul checkout et un seul payment malgré 2 ouvertures (abandon puis paiement) : même session cs_test réutilisée. Shots android2-04-dossier-unpaid, -05-checkout-open, -10-card, -12-after-pay, -14-after-close-tab.",
+  "defects": []
+ },
+ {
+  "id": "FIN-02",
+  "status": "PASS",
+  "evidence": "Après le paiement TEST Android de INT-D8EA99 : webhook traité en ~5 s (payments.status=paid, platform_checkouts.status=paid, paid_at renseignés), montant payé = devis accepté 16275 c, commission fee_bps=1000 → fee_cents=1628 ; platform_ledger_entries pour ce payment : exactement 1 ligne commission_withheld debit 1628 eur (basis live=false, fee_id/charge/transfer présents), aucun doublon (relu après relance et après 2e lecture). Écran Android : 'Terminée et réglée', 'Règlement confirmé par la plateforme · 162,75 € · 22 nov. 2026, 01:09' (heure Martinique = 05:09Z). Refus/abandon : voir FIN-03. Shots android2-15-paid-top, -18-dossier-after-restart.",
+  "defects": []
+ },
+ {
+  "id": "FIN-03",
+  "status": "PARTIAL",
+  "evidence": "Abandon : Checkout ouvert puis Retour système → dossier toujours 'À régler' avec bouton de paiement, bandeau 'Paiement en attente de confirmation' et carte 'Retour du paiement — Règlement en attente de confirmation' + 'Vérifier le règlement' (reste en attente, aucune fausse confirmation) + 'Fermer ce message' (carte retirée) ; serveur payments=pending, intervention completed. Paiement réel : après Payer, le Custom Tab affiche la recette web avec le lien 'Revenir à mon dossier dans l’application mobile' (depannageelectrique://dossier/<id>?retourPaiement=1) ; fermeture de l’onglet → le dossier natif affiche 'Règlement confirmé par la plateforme 162,75 €' + carte 'Retour du paiement — Règlement confirmé.' avec 'Fermer ce message'. Force-stop + relance : session restaurée sur l’accueil entreprise, dossier toujours 'Terminée et réglée', plus aucune carte de retour. NON VÉRIFIABLE sous Expo Go : le retour automatique par le schéma depannageelectrique:// (aucune activité ne le gère dans Expo Go : 'pm query-activities' = No activities found ; l’appui sur le lien ne fait rien, l’utilisateur doit fermer l’onglet). Artefact Expo Go : à la fermeture du Custom Tab c’est l’accueil d’Expo Go qui réapparaît, projet rouvert par exp://. Shots android2-06-abandon-back, -07-abandon-app, -08-abandon-verify, -09-abandon-dismissed, -12-after-pay, -14-after-close-tab, -16-restart, -18-dossier-after-restart.",
+  "defects": [
+   {
+    "title": "[mineur] Après abandon du Checkout, le dossier affiche « Paiement en attente de confirmation » alors que rien n’a été engagé",
+    "steps": "Payeur Android, dossier terminé non réglé → Régler sur Stripe en mode test → Retour système sans payer → revenir au dossier",
+    "expected": "Retour à l’état « À régler » sans bandeau d’attente (ou mention « paiement non finalisé »)",
+    "actual": "Bandeau « Paiement en attente de confirmation » + carte « Règlement en attente de confirmation » jusqu’à fermeture manuelle ; pas de fausse confirmation, bouton de paiement toujours présent",
+    "suspect": "apps/mobile/src/app/dossier/[id].tsx:140 (PaymentReturnStatus) et libellé d’état quand payments.status=pending ; apps/mobile/src/lib/payment-return.ts (paymentReturnStatus renvoie pending par défaut)"
+   },
+   {
+    "title": "[à confirmer sur build autonome] Page de retour Stripe dans le Custom Tab : formulaire de connexion web + message « Connectez-vous pour relire l’état de votre retour Stripe »",
+    "steps": "Payer avec 4242 dans le Custom Tab Android",
+    "expected": "Retour direct dans l’application (ou page de retour minimale avec le seul lien vers l’application)",
+    "actual": "La recette web s’affiche déconnectée (le Custom Tab n’a pas la session native) avec une alerte et un formulaire de connexion ; le lien depannageelectrique:// est sans effet sous Expo Go",
+    "suspect": "components/courant-app.tsx:3188-3190 (lien mobileReturn) ; components/app/mobile-return.ts ; schéma apps/mobile/app.json:9 non enregistré dans Expo Go"
+   }
+  ]
+ },
+ {
+  "id": "ART-11",
+  "status": "PASS",
+  "evidence": "Artisan Astra (Connect TEST actif) sur Android après le paiement TEST de INT-D8EA99, bundle rechargé : dossier 'Dossier réglé', 162,75 €, puis 'Montant réglé · 162,75 €', 'Commission plateforme (10 %) · − 16,28 €', 'Net à percevoir · 146,47 €' et la phrase 'Votre part nette est transférée par Stripe sur votre compte de règlement… (transfert automatique). Le virement vers votre compte bancaire suit ensuite le calendrier de versement de Stripe ; la plateforme ne le confirme pas ici.' ; pied 'Règlement confirmé par la plateforme · 162,75 € · 22 nov. 2026, 01:09'. Cohérent avec le serveur : payments 16275 paid, fee_cents 1628, ledger commission_withheld 1628, net 14647. Payeur (gestionnaire Astra) sur le même dossier : seulement 'Terminée et réglée' 162,75 € et la ligne de règlement confirmé, aucune commission ni net. Premier passage (avant rechargement du bundle) : seul le brut était affiché à l’artisan — corrigé. Reste hors natif : liste des règlements/versements, facture de service. Shots android2-21-artisan-paid (avant), android2-70-artisan-breakdown, android2-71-payer-gross-only.",
+  "defects": []
+ },
+ {
+  "id": "FIN-06",
+  "status": "PASS",
+  "evidence": "Commission réelle après paiement Android : platform_checkouts fee_bps=1000 fee_cents=1628 pour 16275 c (10 %), 1 ligne platform_ledger_entries commission_withheld debit 1628 (fee_id + transfer_id Stripe TEST), pas de doublon. Affichage natif artisan : 'Commission plateforme (10 %) − 16,28 €', 'Net à percevoir 146,47 €' + phrase de transfert Stripe ; le payeur ne voit que le brut. Le virement bancaire (payout) n’est pas observable dans l’application (annoncé comme tel). Shots android2-70-artisan-breakdown, -71-payer-gross-only.",
+  "defects": []
+ },
+ {
+  "id": "ADM-02",
+  "status": "PARTIAL",
+  "evidence": "Admin Android (super-admin recette), lecture seule : Annuaire > Artisans '25 résultat(s)' (= 25 profils artisan en base), recherche 'Audit Astra' → 1 résultat, fiche native : téléphone, société 'AUDIT SYNTHETIQUE ASTRA', 'Artisan approuvé', 'Créé le 13 nov. 2026, 20:40', 'Candidature approuvée', SIRET, zones 97200, activités, justificatifs (assurance RC, immatriculation échéance 31/12/2027, 'Consulter le justificatif'), action 'Suspendre l’artisan' présente et NON pressée (consigne). Recherche sans résultat 'zzqqxx' → '0 résultat(s) · Aucun résultat.'. Non exercé : décision de candidature / suspension (écriture interdite dans ce passage) ; création/correction de candidature = web. Aucun statut de compte de règlement Stripe dans la fiche native. Shots android2-41-admin-artisan-search, -42-admin-artisan-fiche, -43-admin-noresult.",
+  "defects": []
+ },
+ {
+  "id": "ADM-03",
+  "status": "PARTIAL",
+  "evidence": "Admin Android : onglet Dossiers '68 intervention(s) · page 1' (= 68 en base) ; recherche 'INT-D8EA99' → '1 intervention(s)', carte 'Réglée · Fort-de-France · Planifié · 19 nov. 2026, 01:44' ; ouverture du dossier en lecture ('Réglée', 'Règlement confirmé par la plateforme 162,75 €', devis HT/TVA/TTC, compte rendu, pièces, conversation, assistance) ; pièce audit-apres.png ouverte par URL signée Supabase dans le Custom Tab ; filtre Statut 'Réglée' → '11 intervention(s)' (= 11 en base) ; pagination 'Page suivante' → '68 intervention(s) · page 2'. MANQUE natif : dispatch, réaffectation, escalades, commission/net du dossier (portail web). Observation non reproduite de façon fiable : 'Réinitialiser la recherche et les filtres' sans effet 3 fois de suite juste après un retour en haut de liste par balayages rapides, puis effectif après un léger défilement (probable geste de rafraîchissement en cours — à surveiller). Shots android2-31-admin-dossiers, -32-admin-search-ref, -33-admin-dossier, -34-admin-doc, -36-admin-filter-paid, -38-admin-reset, -39-admin-page2.",
+  "defects": []
+ },
+ {
+  "id": "ADM-04",
+  "status": "PARTIAL",
+  "evidence": "Admin Android : Annuaire Clients '66 résultat(s)' (41 clients + 25 gestionnaires en base), Artisans 25, Organisations 17 (= 17 en base), recherche par nom, fiches en lecture (artisan, organisation). Aucune modification en natif (rôles, comptes, sites : web). Shots android2-40-admin-annuaire, -44-admin-orgs, -45-admin-org-fiche.",
+  "defects": []
+ },
+ {
+  "id": "SYS-03",
+  "status": "PARTIAL",
+  "evidence": "Android : gestionnaire d’une AUTRE organisation (and-manager, org AND acda08e) ouvre par lien le dossier INT-D8EA99 de l’organisation Astra → 'Ce dossier est introuvable.' + Réessayer, aucune donnée affichée ; sa liste ne contient que ses dossiers. Admin : accès lecture à tous les dossiers (ADM-03). Déjà vu : client particulier tiers → introuvable. Non rejoué sur Android : membre retiré d’une organisation, lecteur (viewer) limité à un site. Shot android2-50-sys03-other-org.",
+  "defects": []
+ },
+ {
+  "id": "ENT-12",
+  "status": "PASS",
+  "evidence": "Refus effectif d’approbation avec commentaire sur Android (fixture neuve INT-9C2410, site AND Site Eucalyptus, règle propriétaire ≥ 200 €) : devis 325,50 € TTC envoyé depuis l’éditeur Android de l’artisan ; manager Android 'Accepter ce devis' + CONFIRMER → 'Ce devis doit d’abord être approuvé par votre organisation…' (approvals ebb963cb pending) ; Sites > Sites et accès > Consulter les approbations : ligne 'En attente · AND Site Eucalyptus · Devis proposé · 325,50 € TTC' > détail > commentaire 'android2 refus: montant hors budget du site' > Refuser > confirmation 'Refuser ce devis ?' REFUSER → 'Refus enregistré. Votre commentaire est transmis au demandeur.', statut 'Refusée', 'Demande du 22 nov. 2026, 01:52', 'Décision du 22 nov. 2026, 01:55', 'Note de décision' affichée. Serveur : approvals.status=rejected note identique decided_by=manager ; quote resté sent, intervention quoted. Nouvelle tentative 'Accepter ce devis' après refus → toujours bloquée (quote sent). Non rejoué : circuit avancé multi-niveaux, décision par un non-propriétaire. Shots android2-62-accept-needs-approval, -63-approval-comment, -64-approval-refuse-confirm, -65-approval-refused, -66-accept-after-refusal.",
+  "defects": [
+   {
+    "title": "[mineur] Après un refus d’approbation, le dossier affiche encore « Ce devis doit d’abord être approuvé par votre organisation… Il pourra ensuite être accepté »",
+    "steps": "Manager Android : refuser l’approbation d’un devis avec commentaire, puis ouvrir le dossier et appuyer sur Accepter ce devis",
+    "expected": "Message indiquant que l’approbation a été refusée (avec la note) et qu’un nouveau devis est nécessaire",
+    "actual": "Même message que pour une approbation en attente ; le refus et sa note ne sont visibles que dans Approbations",
+    "suspect": "apps/mobile/src/app/dossier/[id].tsx (traitement de l’erreur accept_quote) ; côté API app/api/interventions/[id]/actions/route.ts (message unique quel que soit approvals.status)"
+   }
+  ]
+ },
+ {
+  "id": "CLI-08",
+  "status": "PARTIAL",
+  "evidence": "Client Android (and-client), dossier INT-BE11C3 terminé : historique des devis complet avec ventilation — 'Devis accepté' v2 (lignes, Total HT 100,50 €, TVA 8,5 % 8,54 €, Total TTC 109,04 €) et 'Devis refusé' v1 (HT 100,00 / TVA 8,50 / TTC 108,50) ; rendez-vous + note artisan ; compte rendu 'Remis et signé par Andy ClientUn le 21 nov. 2026, 22:58' ; 4 pièces (apres.jpg, avant.jpg, 2 photos de demande) ; apres.jpg ouverte dans le Custom Tab par URL signée Supabase. Payeur entreprise après paiement : 'Règlement confirmé par la plateforme · 162,75 € · 22 nov. 2026, 01:09'. MANQUES natifs inchangés : pas de devis/facture PDF ni reçu de paiement téléchargeable, pas de versions de documents, pas de vue distincte des dossiers clos. Shots android2-68-client-dossier, -69-client-doc, -18-dossier-after-restart.",
+  "defects": []
+ },
+ {
+  "id": "SYS-06",
+  "status": "PARTIAL",
+  "evidence": "Android : pièces privées ouvertes uniquement par URL signée Supabase (hôte kcpyjzndybfdlnhvscbs.supabase.co, chemin …?token=<JWT>) dans le Custom Tab, vérifié pour 3 rôles : client (apres.jpg, INT-BE11C3), admin (audit-apres.png, INT-D8EA99), et gestionnaire d’une autre organisation → dossier 'introuvable', aucune pièce listée (SYS-03). NON testé : expiration effective du lien (durée du jeton non lue, dump tronqué), versions, rétention/suppression. Shots android2-69-client-doc, -34-admin-doc, -50-sys03-other-org.",
+  "defects": []
+ },
+ {
+  "id": "SYS-07",
+  "status": "PASS",
+  "evidence": "Recherche et pagination natives Android vérifiées contre la base : Admin Dossiers '68 intervention(s)' (=68), recherche 'INT-D8EA99' → 1, filtre statut Réglée → 11 (=11), 'Page suivante' → '68 intervention(s) · page 2' (25 par page) ; Admin Annuaire : Artisans 25 (=25), Organisations 17 (=17), recherche 'Audit Astra' → 1, 'zzqqxx' → '0 résultat(s) · Aucun résultat.' ; Entreprise (and-manager) : '3 en cours · 2 urgentes', '3 résultat(s) · page 1 sur 1', recherche 'reserve' → 1, 'zzqq' → 0 'Aucune intervention ne correspond à cette sélection.' ; Approbations : filtres Toutes/En attente/Approuvée/Refusée, 'Page 1'. Réserve : 'Réinitialiser la recherche et les filtres' de la liste admin resté sans effet 3 appuis de suite après un retour rapide en haut de liste, puis effectif (non reproduit de façon fiable, voir ADM-03). Shots android2-32-admin-search-ref, -36-admin-filter-paid, -39-admin-page2, -43-admin-noresult, -67-org-search.",
+  "defects": []
+ },
+ {
+  "id": "CLI-05",
+  "status": "PARTIAL",
+  "evidence": "NON rejoué dans ce passage (temps imparti ; aucun dossier 'accepté' and-client/and-artisan disponible, il fallait recréer demande + acceptation + session de partage). État inchangé depuis les passes précédentes : ETA texte côté client pendant le partage ('Environ 37 min' puis 'Environ 9 min', 'indisponible' à l’arrêt), pas de carte native côté client.",
+  "defects": []
+ },
+ {
+  "id": "MOBILE-FIXES-2",
+  "status": "PARTIAL",
+  "evidence": "Régression Android du code mobile rechargé (Expo Go, Pixel 6 API 34), aucun écran rouge pendant tout le passage (≈ 60 min, plusieurs rechargements du bundle et 2 force-stop). (a) Clavier : éditeur de devis — clavier ouvert sur 'Prix unitaire HT', un glissement ferme le clavier et amène 'Envoyer le devis' à l’écran : OK ; motif de refus d’offre — clavier ouvert (haut du clavier y=1517), champ y=1189 et 'Confirmer le refus' y=1421 entièrement visibles, appui clavier ouvert → refus enregistré, l’offre devient 'Cette offre n’est plus disponible avec vos droits actuels' : OK ; Aide > Zone desservie > Code postal — à la première mise au point (champ y=1520, clavier y=1633) le bouton 'Vérifier' est presque entièrement masqué (liseré de ~20 px, libellé invisible, shot android2-72) : KO partiel ; l’appui sur le liseré ou la touche Entrée du clavier valide, ferme le clavier et affiche le résultat ('Dans la zone publiée' 97240 / 'Hors de la zone publiée' 75001) ; à la 2e mise au point l’écran s’est recalé (Vérifier y=1403, visible). (b) Conversation : dossier INT-9C2410 avec 16 messages (fixture) → ouverture directement sur 'android2 message 16 DERNIER' (14, 15, 16 visibles au-dessus du champ) : OK. (c) Missions artisan : missions affectées (À réaliser, Règlement attendu…) listées avant la section 'Offres disponibles' : OK. (d) Éditeur de devis : aperçu 'Total HT · 90,50 €', 'TVA · choisissez un taux' puis après 8,5 % 'Total TTC · 98,19 €' ; devis envoyé → dossier 'Total HT 90,50 € / TVA 8,5 % 7,69 € / Total TTC 98,19 €', serveur subtotal 9050 tax 769 total 9819 ; second devis 300,00 → 325,50 (serveur 30000/2550/32550) : OK. Incident de harnais (pas un défaut produit) : un appui destiné à 'Refuser cette offre' a accepté la mission de ma propre fixture INT-50D492, ensuite annulée par le client. Constat annexe : avec 4 missions actives (plafond 4) l’offre s’ouvre sur 'Cette offre n’est plus disponible avec vos droits actuels' sans mention du plafond. Shots android2-51-missions-order, -54-quote-kbd-open, -55-quote-kbd-scrolled, -56-quote-preview, -57-quote-sent, -58-refuse-form, -59-refuse-kbd, -60-refused, -61-conversation-open, -72-aide-cp-kbd, -73-aide-cp-result, -74-aide-cp-enter.",
+  "defects": [
+   {
+    "title": "Aide > Zone desservie : le clavier numérique masque presque entièrement le bouton « Vérifier » à la première saisie",
+    "steps": "Accueil public Android → Compte → Aide et contact → toucher le champ Code postal (page non défilée) → saisir 97240",
+    "expected": "Le bouton Vérifier reste entièrement visible au-dessus du clavier",
+    "actual": "Champ à y≈1520, clavier à partir de y=1633 : seul un liseré d’environ 20 px du bouton dépasse, libellé invisible (android2-72-aide-cp-kbd.png). La touche de validation du clavier fonctionne et le résultat s’affiche ensuite clavier fermé.",
+    "suspect": "apps/mobile/src/app/aide-mobile.tsx (ScrollView de l’aide : marge/inset clavier insuffisant, pas de défilement jusqu’au bouton à la mise au point)"
+   },
+   {
+    "title": "[mineur] Offre ouverte au plafond de missions actives : message générique « plus disponible avec vos droits actuels »",
+    "steps": "Artisan avec 4 missions actives (plafond 4) → ouvrir une offre encore non attribuée",
+    "expected": "Message expliquant que le plafond de missions actives est atteint",
+    "actual": "« Cette offre n’est plus disponible avec vos droits actuels. » + Réessayer ; l’offre redevient accessible dès qu’une mission est libérée",
+    "suspect": "apps/mobile/src/app/offre/[id].tsx (libellé d’erreur) ; API des offres (code d’erreur non différencié)"
+   }
+  ]
+ }
+]

@@ -1,0 +1,144 @@
+[
+ {
+  "id": "_META",
+  "status": "INFO",
+  "evidence": "Target https://domdepannage-recette-20261112.vercel.app only (local dev not started), Stripe TEST card 4242 only, main eb12dec4. Dossier consumed: 6c3682c7 (INT-6C3682, enterprise site dossier of the Astra manager) paid 162,75 EUR; review 17df4f4c posted by its requester. Not touched: d8ea9913, a9155ec4. No refund request, invoice or credit note created (refund 403 MFA, credit note 409); 'Rapprocher les règlements' NOT clicked; MFA not enrolled; enterprise request wizard left unsent. A REAL expired Checkout state could not be produced (the only expired payment in DB sits on reserved a9155ec4; no Stripe key used): expired wording was checked with browser-only response stubs reproducing the server shape (status failed + failure_code expired) - flagged wherever used. Not re-run this session: declined/3DS cards, unsigned/forged webhook, commission-invoice readiness, anonymous guest flow, invoice issuance.",
+  "defects": []
+ },
+ {
+  "id": "ART-11",
+  "status": "PASS",
+  "evidence": "Re-run in the UI as Astra artisan. INT-CDD097: 'Montant réglé 130,20 EUR / Commission plateforme (10 %) − 13,02 EUR / Net à percevoir 117,18 EUR' + 'Votre part nette est transférée par Stripe sur votre compte de règlement dans le cadre de ce paiement (transfert automatique). Le virement vers votre compte bancaire suit ensuite le calendrier de versement de Stripe ; la plateforme ne le confirme pas ici.' (honest: bank payout not claimed). DB platform_checkouts a426a078: 13020 / fee_bps 1000 / fee 1302 -> net 11718. /api/payments/status: artisan gets artisan_settlement {checkout, 13020, 1000, 1302, 11718, with_payment}; client 200 WITHOUT artisan_settlement; third-party client 404; other artisan 404. Consistent on INT-6C3682 (162,75 / 16,28 / 146,47, shown without reload right after payment), INT-0DB3BB (122,90 / 12,29 / 110,61 with amendment), INT-0BD880 (117,72 / 11,77 / 105,95), card-hold INT-980BDD (111,04 / 11,10 / 99,94, 'transfert ... confirmé par la plateforme' = guest_settlements transfer 9994). 390 px: panel present, no overflow. Residual, not blocking: Performance page lists gross TTC only; bank payout not provable per dossier.",
+  "defects": [
+   {
+    "title": "Performance page shows gross amounts only (minor)",
+    "steps": "Artisan > Performance after paid jobs",
+    "expected": "Commission / net summarised as in the dossier",
+    "actual": "'991,81 EUR · 8 règlements confirmés' and per-dossier gross TTC only",
+    "suspect": "components/role/artisan-space.tsx (Performance view)"
+   }
+  ]
+ },
+ {
+  "id": "FIN-01",
+  "status": "PASS",
+  "evidence": "Re-run: Astra enterprise manager opens INT-6C3682 (1280 px) -> 'Régler le devis et les avenants acceptés' -> POST /api/payments/checkout 200 -> Stripe TEST page 162,75 EUR == accepted quote DEV-BAAE83 16275 c; platform_checkouts 7a825be0 amount 16275, fee_bps 1000, fee_cents 1628 (10 % rounded), actor = the manager. Cancel then re-click reuses the same session (1 checkout row). Third party POST checkout 404. Expired-session wording inside the dossier (earlier defect): with a STUBBED /api/workspace payment row {failed, expired} the enterprise panel shows 'La session de paiement a expiré. Rien n’a été débité. Relancez le paiement.' (neutral, no bank wording); client-space.tsx:1115 carries the same text (source read; not seen for real, no expired dossier available). The return-notice variant is still wrong, see FIN-03.",
+  "defects": []
+ },
+ {
+  "id": "FIN-02",
+  "status": "PASS",
+  "evidence": "Re-run on INT-6C3682: 4242 submitted -> interventions.status=paid 3,4 s later (before the browser was back on the app), stripe_events evt_1UeSQt..., payments 6219fcc4 paid 16275, platform_checkouts 7a825be0 paid, ledger commission_withheld 1628 c (= 10 %). After payment: no Pay button, 'Terminée et réglée' persists after reload. Second POST /api/payments/checkout as the client -> 409 'Ce dossier est déjà réglé. Aucun nouveau paiement n’a été lancé et rien de plus n’a été débité.' (also on INT-CDD097) - earlier generic-message defect closed; third party 404. Not re-run: unsigned/forged webhook, return-blocked webhook-only variant.",
+  "defects": []
+ },
+ {
+  "id": "FIN-03",
+  "status": "PARTIAL",
+  "evidence": "Re-run. Abandoned Checkout (Stripe 'Retour', 1280 px): /?payment=cancelled&intervention=... -> #detail/6c3682c7, notice 'Retour depuis la page de paiement sans confirmation. Aucun règlement n’est confirmé pour l’instant ...', status still 'À régler', DB completed/paid_at null, Pay button present, notice gone after reload, query string cleaned: no fake confirmation. Success return (1280): 'Règlement confirmé par la plateforme. Le devis accepté est archivé dans vos documents.', 'Terminée et réglée'. Deep link: at 1280 px NO 'Revenir à mon dossier dans l’application mobile' link (cancel, success, third party); at 390 px the link is shown (depannageelectrique://dossier/<id>?retourPaiement=1), 348 px wide inside a 390 px viewport, no horizontal overflow (shot retest4-e-6c-cancel-return-390-top.png) - earlier defect closed. Third party on the return link: no dossier data. REMAINING: return notice for an expired session still uses the bank-failure wording (shown with a stubbed status response, real state not producible).",
+  "defects": [
+   {
+    "title": "Payment return on an expired session still says the payment failed and to check with the bank",
+    "steps": "Return link /?payment=pending&intervention=<id> while GET /api/payments/status answers payment.status='failed', failure_code='expired' (the real server shape, cf. attempt 19516447 of INT-CDD097). Reproduced with a Playwright stub of that response on INT-6C3682 before it was paid (shot retest4-e-6c-expired-stub-return.png)",
+    "expected": "'La page de paiement a expiré sans règlement confirmé. Vous pouvez relancer le paiement depuis ce dossier.'",
+    "actual": "'Le paiement n’a pas abouti selon Stripe. ... Vérifiez auprès de votre banque avant de recommencer.' - the 'expired' branch of paymentReturnMessage is unreachable: the status API only returns pending|paid|failed and the handler ignores failure_code",
+    "suspect": "components/courant-app.tsx:652-656 (raw = report.payment.status; failure_code never mapped to 'expired') ; app/api/payments/status/route.ts:8 ; components/app/session.ts:343-352"
+   }
+  ]
+ },
+ {
+  "id": "FIN-04",
+  "status": "PARTIAL",
+  "evidence": "Re-run of the refund request only (declined/3DS cards NOT re-run this session). Super admin (adminCreds, password-only) > Finance > Remboursements: payment 6219fcc4, 5 EUR, reason -> POST /api/platform-operations/finance/refund-requests 403 {code: platform_mfa_required}; the three typed fields are KEPT (payment id, 5, reason identical) and the screen shows 'Votre saisie est conservée. Vérifiez votre identité avec votre application d’authentification ... enregistrez ensuite à nouveau la demande.' + 'Vérification à deux étapes / Commencer la vérification' (submit disabled until verified) - earlier 'form emptied' defect closed. 0 rows in platform_refund_requests. REMAINING: refunds cannot be exercised - MFA not enrolled on the shared super admin (not enrolled on purpose) and capabilities.refund_execution=false; no refund, no dispute ever observed. MFA consistency across other finance writes not re-run.",
+  "defects": []
+ },
+ {
+  "id": "FIN-05",
+  "status": "PARTIAL",
+  "evidence": "Re-run. Artisan > Documents now has 'Factures et avoirs de prestation émis en votre nom' listing Facture F2026-000001 (130,20 EUR, TVA 10,20) and Avoir A2026-000001 (10,00 EUR) with Voir le PDF / Télécharger; same list in the artisan dossier INT-CDD097. Real downloads: facture-F2026-000001.pdf (4027 bytes, %PDF) and avoir-A2026-000001.pdf (4344 bytes); GET /api/invoices/<id>/pdf: artisan 200, client 200, third-party client 404, org viewer 404, other artisan (cohort artisan-b) 404 and nothing in his Documents. PDF text: 'Dossier : INT-CDD097' (short reference, was INT-CDD0970A) and 'Émis le 21/11/2026 23:43 (heure de Martinique)' (was UTC). Credit note above the balance: 200 EUR on F2026-000001 -> confirm -> 409 'Le montant de l’avoir dépasse le solde restant de la facture (total de la facture moins les avoirs déjà émis). Aucun avoir n’a été émis ; réduisez le montant.'; platform_invoices unchanged (1 invoice, 1 credit note). All 3 earlier defects closed. REMAINING: commission invoices stay blocked by missing commission VAT rate (owner data; readiness screen not re-run this session); no new invoice issued in this run; INT-6C3682 has no invoice.",
+  "defects": [
+   {
+    "title": "Quote reference on the invoice PDF differs from the app (minor)",
+    "steps": "Open facture-F2026-000001.pdf",
+    "expected": "DEV-6CCE65 as in the UI",
+    "actual": "'Devis : 6CCE6539' (8 hex chars, no DEV- prefix)",
+    "suspect": "lib/features/platform-operations/invoice-pdf.ts (~line 167)"
+   }
+  ]
+ },
+ {
+  "id": "FIN-06",
+  "status": "PARTIAL",
+  "evidence": "Re-run read-only (Rapprocher NOT clicked). Admin > Finance: Paiements réglés 9 · 1 100,31 EUR; Commission prélevée (confirmée) 7 · 112,39 EUR (= 96,11 + 16,28 of INT-6C3682, ledger commission_withheld 1628 written with the webhook); Règlements au registre 4 · 455,70 EUR, now worded '5 règlement(s) confirmé(s) pas encore inscrit(s) au registre : étape normale après un paiement'; Écarts 0; taux 10.00 % aligné. REMAINING: (1) 'Commission estimée (non prélevée)' still shows 4 · 45,57 EUR although 3 of those 4 payments already have a withheld commission; (2) card-hold payment a9611189 (INT-980BDD) still has no ledger commission row; (3) payment_settled rows still only come from the manual reconciliation; (4) bank payout is not provable per dossier (the artisan screen says so explicitly).",
+  "defects": [
+   {
+    "title": "'Commission estimée (non prélevée)' still includes payments whose commission is already withheld",
+    "steps": "Admin > Finance > Rapprochement (or GET /api/platform-operations/finance)",
+    "expected": "Only payments without a confirmed commission: 1 · 10,85 EUR (payment bdc2cfff)",
+    "actual": "4 · 45,57 EUR; ledger: 6f496d43 (withheld 2213 + estimated 1302), 71707f77 (withheld 1845 + estimated 1085), a7a69f49 (withheld 1845 + estimated 1085), bdc2cfff (estimated 1085 only). report.ledger.commission_estimated_count=4, cents=4557",
+    "suspect": "supabase/migrations/202610310014_platform_operators.sql:688 (plain count/sum of entry_kind='commission_estimated'; no exclusion, or the corrected function is not applied on the recette DB) ; components/features/platform-operations/platform-finance-view.tsx:203"
+   },
+   {
+    "title": "Commission of a card-hold settlement still not in the platform ledger",
+    "steps": "platform_ledger_entries for payment a9611189 (INT-980BDD, guest_settlements 0a16c85e fee 1110)",
+    "expected": "commission entry 1110 c counted in 'Commission prélevée'",
+    "actual": "0 ledger rows for that payment",
+    "suspect": "lib/features/guest/settlement-provider.ts (executeSettlement)"
+   }
+  ]
+ },
+ {
+  "id": "CLI-10",
+  "status": "PARTIAL",
+  "evidence": "Re-run on INT-6C3682 after payment, as the requester (enterprise manager): form 'Comment s’est passée l’intervention ?', submit disabled without a rating; 5/5 + comment, double click -> one POST /api/reviews 201 (17df4f4c), one DB row; after reload read-only 'Votre avis ★★★★★'. Review-form fix verified: read-only org viewer on paid INT-0BD880 (he was its delegated payer) sees NO form and no rating input; same on INT-6C3682; POST /api/reviews as viewer 403; third-party client: 'Dossier absent de vos demandes récentes', no form, POST 403; the requester of INT-0BD880 still gets the form (not submitted). Second review 409. REMAINING: the artisan still does not see the new review until a full page reload.",
+  "defects": [
+   {
+    "title": "New review still not shown to the artisan until a full reload",
+    "steps": "Artisan space already open; requester posts a review on INT-6C3682; artisan navigates in-app to #detail/6c3682c7 (the settlement panel does refresh)",
+    "expected": "'Avis du client' panel visible",
+    "actual": "Absent; appears only after page reload",
+    "suspect": "components/role/artisan-space.tsx (~1683, session.data.reviews not refreshed on navigation)"
+   },
+   {
+    "title": "Minor wording: duplicate review 409 is generic and a viewer sees the requester’s review titled 'Votre avis'",
+    "steps": "POST /api/reviews twice as the requester; open INT-6C3682 as the read-only viewer",
+    "expected": "'Un avis existe déjà' ; 'Avis du demandeur'",
+    "actual": "409 'L’état du dossier a changé ou cette action n’est plus disponible. Actualisez la page.' ; heading 'Votre avis' for a member who did not write it",
+    "suspect": "app/api/reviews/route.ts ; components/role/enterprise-space.tsx (review block)"
+   }
+  ]
+ },
+ {
+  "id": "ADM-06",
+  "status": "PASS",
+  "evidence": "Re-run (read): super admin > Avis & Notes lists the new review 'INT-6C3682 5/5 retest4- Avis QA ...' (22 nov. 2026) next to INT-CDD097, 'Moyenne 4,5/5 sur les 4 avis chargés'; moderation note visible. The moderation decision itself (dismiss a contestation) was NOT re-run this session - its result from the previous run is still displayed on the artisan dossier INT-CDD097 ('Contestation rejetée ... Décision ...'). No earlier defect was open on this capability.",
+  "defects": []
+ },
+ {
+  "id": "ENT-16",
+  "status": "PARTIAL",
+  "evidence": "Re-run. Delegated-payer selector on INT-6C3682 now reads 'Audit Astra — Propriétaire' / 'Audit Astra — Lecture' (defect closed). Enterprise requester paid INT-6C3682 by Checkout (162,75 EUR), dossier 'Terminée et réglée', second checkout 409 specific message. New request wizard (not submitted): choosing site 'AUDIT ASTRA office' prefills the street line '1 voie fictive audit', switching to 'SYNTHETIQUE R1341 restaurant recette' replaces it; postal code and city stay empty because no site of this organisation stores a postal code (sites.address is one free-text line without 972xx) - the split of a full address into postal code / city could not be observed. REMAINING / not covered: full-address prefill unproven on recette data, enterprise invoices (none issued), exports/reports, no 'Intégrations' entry.",
+  "defects": [
+   {
+    "title": "Site selection prefills the street only when the site address has no postal code",
+    "steps": "Enterprise > Nouvelle demande > step 2 > choose 'AUDIT ASTRA office' (sites.address = '1 voie fictive audit')",
+    "expected": "Complete address, or the site form requiring postal code and city",
+    "actual": "Street filled, 'Code postal' and 'Ville' empty, must be typed again on every request",
+    "suspect": "components/app/site-address.ts (by design never invents) ; site creation form stores a single free-text address (components/role/enterprise-space.tsx)"
+   }
+  ]
+ },
+ {
+  "id": "FIN-GUEST",
+  "status": "PARTIAL",
+  "evidence": "Re-run of the wording only: client dossier INT-980BDD (settled from a card hold) now shows 'Terminée et réglée' / 'Réglé (111,04 EUR).' and NO 'Empreinte bancaire enregistrée … pourra être prélevé' sentence (defect closed in the UI). Still: phone_booking_requests.provider_state = requires_capture, authorized 18000 after capture (server record not updated). Card-hold flow itself not re-run.",
+  "defects": [
+   {
+    "title": "Hold record still 'requires_capture' after the settlement",
+    "steps": "DB phone_booking_requests of INT-980BDD after capture",
+    "expected": "captured / closed state",
+    "actual": "provider_state requires_capture, authorized_amount_cents 18000, status confirmed",
+    "suspect": "lib/features/guest/settlement-provider.ts"
+   }
+  ]
+ }
+]

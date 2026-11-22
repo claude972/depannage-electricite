@@ -1,0 +1,168 @@
+[
+ {
+  "id": "PUB-FLOW",
+  "status": "PASS",
+  "evidence": "Re-ran pa.mjs/pb.mjs (Playwright, anonymous, localhost:3000 @4f7acef3). Fix A: /prestations/coupure-de-courant-partielle → Demander cette intervention → Urgent → step 5: recap <dl> and side summary both show \"Intervention en urgence : majoration de 25 %, indiquée sur le devis précis remis avant travaux.\" at 1280 and 390 (no overflow); with \"Non\"+slot (scheduled) no such text anywhere, 1280 and 390. Fix I-1: /#new/urgent filled to the recap, reload → sessionStorage courant-request-draft present, step 1 shows category + description, step 2 address/postal/city/phone/urgency prefilled, recap identical. Note (by design of the fix): the draft is written only when the recap is reached; a reload on step 1 or 2 still loses the input. 0 console errors. Shots retest-A-wizard-recap-*, retest-I1-after-reload-recap.",
+  "defects": []
+ },
+ {
+  "id": "PUB-02",
+  "status": "PASS",
+  "evidence": "Was PASS with a pointer to the wizard gap; wizard recap now shows the 25 % urgency notice (see PUB-FLOW, re-run at 1280/390, urgent vs scheduled).",
+  "defects": []
+ },
+ {
+  "id": "SYS-08",
+  "status": "PARTIAL",
+  "evidence": "Re-ran the skip-link repro by keyboard (Tab → \"Aller au contenu\" focused → Enter) on /#auth, /#pricing, /#legal, /prestations: URL hash unchanged, h1 unchanged, document.activeElement = MAIN#main, next Tab lands on the first control inside main. Fix PASS. Remaining (not in the fix batch, re-run pe.mjs): after Enter on \"Créer mon compte et continuer\" at the /#new recap the auth page opens with focus on BODY.",
+  "defects": [
+   {
+    "title": "Focus falls on BODY on the auth page after \"Créer mon compte et continuer\" (minor, unchanged)",
+    "steps": "/#new/urgent → fill 3 steps → focus \"Créer mon compte et continuer\" → Enter",
+    "expected": "Focus on the auth heading or first field",
+    "actual": "URL /#auth, document.activeElement = BODY",
+    "suspect": "components/app/forms.tsx (auth view mount, no focus management) / navigate(\"auth\") in components/courant-app.tsx"
+   }
+  ]
+ },
+ {
+  "id": "PUB-05",
+  "status": "PASS",
+  "evidence": "Re-read through the UI. Public /#help FAQ \"Où consulter les conditions de garantie ?\" → \"La garantie est portée par la plateforme : satisfaction, ré-intervention ou remboursement. Les conditions publiées figurent dans l’aide, rubrique Garantie.\" (no \"après publication\"). Help footer now: \"Une fois connecté, l’assistance répond dans votre espace. Vous pouvez aussi demander à être rappelé avec le formulaire en bas de page.\" (\"Aucun appel, email ni SMS n’est promis\" gone). Signed-in client (pub client) /#help: \"Que couvre la garantie ?\" → published wording; card \"Contact et informations légales\" → \"L’exploitant, TTBM SARL, est présenté dans les mentions légales…\" (no \"seront publiées avant l’ouverture commerciale\"). Home FAQ: no stale publication wording. Shots retest-C-public-help, retest-C-client-help.",
+  "defects": []
+ },
+ {
+  "id": "PUB-10",
+  "status": "PASS",
+  "evidence": "Re-opened /#profile/parametres as the pub client (twice, incl. reload): the React duplicate-key console error is gone (only console entries: 503 on GET /api/payments/methods = Stripe absent locally, UI shows an honest unavailable state). Notification preferences now list 11 client events only (mission_assigned labelled \"Électricien attribué à ma demande\", quote_received, work_started/completed, payment_confirmed/reminder, appointment_saved/reminder, message_received, support_replied, support_status_changed) + 3 unavailable channels; no artisan/organisation events; GET /api/notifications/preferences returns the same 11 kinds.",
+  "defects": []
+ },
+ {
+  "id": "CLI-03",
+  "status": "PARTIAL",
+  "evidence": "Fix D re-run as client-a through the 3-step form. Postal 75001 (Paris): recap shows \"Le code postal 75001 ne figure pas dans la zone publiée par l’exploitant : il est possible qu’aucun artisan ne puisse prendre votre demande. Elle reste enregistrée et aucun délai n’est garanti.\" — non-blocking: POST /api/bookings 201, INT-349CA3 (DB requested, 75001, artisan null); same notice on the dossier while searching, persists after reload, 390 px no overflow. 97240: no notice on recap nor on dossier (INT-5F417F). Remaining: the original repro (97217 Le Marin, inside the published 972xx zone but covered by no approved artisan) still shows no notice at the recap; the notice only compares with the published zone, not with actual artisan coverage. INT-349CA3 cancelled afterwards via UI (\"Demande annulée\").",
+  "defects": [
+   {
+    "title": "No \"no eligible artisan\" state for a 972xx commune that no artisan covers",
+    "steps": "client: new request, \"Rue QA, 97217 Le Marin\", Recherche de panne → recap",
+    "expected": "Honest notice that no artisan currently covers this commune (original CLI-03 repro)",
+    "actual": "No notice (only postal codes outside the published zone, e.g. 75001, get one)",
+    "suspect": "components/features/coverage/coverage-notice.tsx + components/features/coverage/model.ts (uses the published zone only); app/api/bookings/route.ts has no artisan-coverage check"
+   }
+  ]
+ },
+ {
+  "id": "CLI-07",
+  "status": "PARTIAL",
+  "evidence": "Fix E re-run on INT-5F417F (5f417f14-08e2-46f9-ba6b-83d2a3ca2329, client-a / artisan-a): quote DEV-A04746 15100/1284/16384 cts accepted; artisan proposed avenant AV-1-DEV-A04746 (POST /api/quote-amendments 201, 4000/340/4340 cts). Client dossier, left open without reload, showed after 3.4 s the alert \"Un avenant proposé par l’artisan attend votre décision. Rien n’est ajouté au montant à régler sans votre accord.\", \"Avenant AV-1-DEV-A04746 — à valider\", \"43,40 € TTC\" and a \"Consulter l’avenant\" button. After acceptance (Accepter l’avenant → Confirmer l’acceptation, POST 200): \"Devis & résumé\" shows 163,84 € + \"Avenant … accepté + 43,40 € TTC\" + \"Total TTC, avenants acceptés compris 207,24 €\", persists after navigation, 390 px no overflow; once completed the amount due reads \"Paiement après l’intervention, sur la plateforme (207,24 €)\". DB: quotes.total_cents 16384 + quote_amendments.total_cents 4340 (accepted) = 20724. Remaining: still no notification row for a proposed (client) or accepted (artisan) amendment — client kinds during the run: mission_assigned, appointment_saved, quote_received, work_started, work_completed.",
+  "defects": [
+   {
+    "title": "No in-app notification for a proposed / decided amendment",
+    "steps": "artisan proposes an avenant; client GET /api/notifications (bell)",
+    "expected": "A notification \"avenant à valider\" (and one for the artisan on decision)",
+    "actual": "No row; the dossier alert is the only signal",
+    "suspect": "amendment propose/accept RPC behind app/api/quote-amendments/route.ts emits no notification; lib/features/notifications/kinds.ts has no amendment kind"
+   }
+  ]
+ },
+ {
+  "id": "SYS-05",
+  "status": "PARTIAL",
+  "evidence": "Fix F re-run on INT-5F417F with both dossiers open and no manual reload: artisan slot → client screen 16.0 s; client slot change → artisan screen 4.5 s; saved report (status still in_progress) → client screen 1.4 s with text + both photos; proposed amendment → client screen 3.4 s. Still live: assignment 1.9 s, quote 2.7 s, start, completion. Remaining: on the artisan dossier the panel \"Documents, validité et avenants du devis\" stayed on \"En attente de décision / Les avenants ne concernent qu’un devis accepté\" (no \"Proposer un avenant\") more than 60 s after the client accepted the quote, although the header and the quote card already showed \"Accepté\"; correct only after reload.",
+  "defects": [
+   {
+    "title": "Artisan quote documents/amendments panel not refreshed after the client accepts the quote",
+    "steps": "artisan keeps #detail open; client accepts the quote; wait > 60 s",
+    "expected": "Panel shows \"Accepté\" and offers \"Proposer un avenant\"",
+    "actual": "Panel keeps \"En attente de décision\" and \"Les avenants ne concernent qu’un devis accepté\" until a manual reload",
+    "suspect": "components/features/artisan-quotes/artisan-quotes.tsx (panel state not keyed on quote status / session.refreshedAt / useDossierPoll tick), mounted from components/role/artisan-space.tsx"
+   }
+  ]
+ },
+ {
+  "id": "CLI-04",
+  "status": "PARTIAL",
+  "evidence": "Fix F re-run on INT-5F417F: appointment changes reach the other party without reload (16.0 s and 4.5 s, see SYS-05); right after the artisan saved the slot the reminder panel showed \"Rendez-vous : mardi 24 novembre à 10:00. Programmer un rappel…\" (no more \"Aucun rendez-vous enregistré\"); server appointment reminder_version 2 after the client change. Remaining (not in the fix batch): still no confirm/accept action for a proposed slot — the client dossier only offers \"Modifier le créneau\".",
+  "defects": [
+   {
+    "title": "No confirmation step for a proposed slot (unchanged)",
+    "steps": "artisan proposes a slot; open client dossier",
+    "expected": "Client (or artisan) can confirm the proposal",
+    "actual": "Only \"Modifier le créneau\"; either party overwrites",
+    "suspect": "components/role/client-space.tsx Rendez-vous section; save_intervention_appointment RPC has no confirmation state"
+   }
+  ]
+ },
+ {
+  "id": "CLI-09",
+  "status": "PASS",
+  "evidence": "Fix G re-run as client-a: Profil → Ajouter une adresse with postal \"9724X\" → blocked in the form (pattern [0-9]{5}, hint \"Code postal : cinq chiffres (ex. 97200).\", 0 request); API POST /api/profile/addresses action save with 9724X → 422, with 9724 → 422, no row in DB; 97240 → 200, shown \"Cité Eucalyptus, 97240 Le François (FR)\", persists after reload (then archived through the UI). Preference list is client-only (see PUB-10). Cosmetic: the 422 body is the raw text \"Invalid string: must match pattern /^[0-9]{5}$/\" (not reachable from the UI).",
+  "defects": []
+ },
+ {
+  "id": "CLI-05",
+  "status": "PARTIAL",
+  "evidence": "Fix H re-run on INT-5F417F with Playwright geolocation. Before any sharing the client card says \"Aucun partage de position en cours\" (no longer \"arrêté par l’artisan\"); after the client confirms a destination: client card \"Aucun partage de position en cours\"; after an artisan stop: same neutral text. \"Reprendre le partage\" after a destination change: the stale stop gets 409 internally, nothing is shown, consent appears, start 200 + point 200, client \"Suivi actif\" with ETA (30 min · 15.4 km, IGN) on the first try. Restart via \"Partager ma position\" after the re-read state also worked first try (second run). Remaining wording issues on the artisan panel: (a) after the destination change the next position post is refused 409 and the panel shows the raw sentence \"L’état du dossier a changé ou cette action n’est plus disponible. Actualisez la page.\" followed by the new explanation \"Le partage est arrêté (par exemple après un changement de destination) : relancez-le avec un nouveau consentement.\"; (b) seen once: restart (start 200) whose first position post was refused 422 (position sample about 70 s old in the test browser) → panel \"Partage interrompu par le rechargement de la page…\" although no reload happened, client stuck on \"En attente d’une première position\"; not reproduced in a second attempt with a 47 s old sample (200).",
+  "defects": [
+   {
+    "title": "Artisan tracking panel still shows \"interrompu par le rechargement de la page\" for a refused position (422), and the raw 409 \"Actualisez la page\" text after a destination change (minor)",
+    "steps": "artisan sharing; client confirms a destination; wait for the next position post (409) → message a. Then \"Partager ma position\" → consent with a position sampled > 60 s earlier → POST start 200, POST point 422 → message b",
+    "expected": "Accurate reason (position refused / sharing ended by a destination change), no \"Actualisez la page\", no mention of a reload",
+    "actual": "a) \"L’état du dossier a changé… Actualisez la page. Le partage est arrêté (par exemple après un changement de destination)…\"; b) \"Partage interrompu par le rechargement de la page. L’arrêt côté service est tenté…\" + \"Reprendre le partage\"",
+    "suspect": "components/features/tracking/model.ts (point failure path → interrupted/reload reason; error message concatenation) and components/features/tracking/artisan-tracking-panel.tsx"
+   }
+  ]
+ },
+ {
+  "id": "FIN-03",
+  "status": "PARTIAL",
+  "evidence": "Only the payment-return defect was re-run (rest of FIN-03 not re-tested, previous status kept). On the deployed recette (https://domdepannage-recette-20261112.vercel.app, same code): anonymous /?payment=pending&intervention=24e2fbb9-… → /#auth with \"Connectez-vous pour relire l’état de votre retour Stripe. Aucun statut n’est déduit du lien.\" → login as the owning client → lands on /#detail/24e2fbb9-… (INT-24E2FB). Fix PASS there. On the local dev server (localhost:3000) the same URL lands on the home page: query stripped, no redirect to /#auth, no message (3 runs), so the fix cannot be exercised locally.",
+  "defects": [
+   {
+    "title": "Dev server only: anonymous payment return is dropped (lands on Home instead of /#auth)",
+    "steps": "next dev on localhost:3000, signed out, open /?payment=pending&intervention=<uuid>",
+    "expected": "/#auth with the \"Connectez-vous pour relire…\" message, then the dossier after login (as on the deployed build)",
+    "actual": "URL becomes \"/\", Home is rendered, return context lost",
+    "suspect": "components/courant-app.tsx:462-469 and :516 — the boot effect strips window.location.search on its first run; under the React dev double-invocation of effects the second run parses an empty query, so setReturnContext(back) never receives the return (hypothesis, not verified by instrumentation)"
+   }
+  ]
+ },
+ {
+  "id": "FIN-04",
+  "status": "PARTIAL",
+  "evidence": "Only the Finance 404 defect was re-run (refund banner wording and card-hold release not re-tested here; previous status kept). Admin (adminCreds) → /#platform-finance → Litiges → \"Ouvrir un litige\" with payment id 11111111-2222-4333-8444-555555555555 → POST /api/platform-operations/finance/disputes 404 \"Ce dossier est introuvable.\" shown on the page; the form and the 4 tabs remain, Ledger tab opens normally afterwards (no \"pas encore activée\" blanking). No dispute created; \"Rapprocher les règlements\" not clicked. Fix PASS.",
+  "defects": []
+ },
+ {
+  "id": "ART-08",
+  "status": "PASS",
+  "evidence": "Re-run: artisan-a and client-a opening /#platform-finance get the standard page \"Cette page ne fait pas partie de votre espace — Le lien demandé correspond à un autre rôle ou à une autre organisation. Aucune donnée n’a été chargée.\" (identical to /#admin for the artisan); GET /api/platform-operations/finance → 403 for both.",
+  "defects": []
+ },
+ {
+  "id": "CLI-10",
+  "status": "BLOCKED",
+  "evidence": "Only the validation message was re-run (reviews still need a paid dossier, payment unavailable locally): POST /api/reviews as client-a without rating, with rating 9, and with an empty body → 422 \"Avis invalide : vérifiez la note (de 1 à 5) et le commentaire (2 000 caractères au plus).\" Fix PASS.",
+  "defects": []
+ },
+ {
+  "id": "PUB-07",
+  "status": "PARTIAL",
+  "evidence": "Only the admin detail defect was re-run (UI signup with e-mail confirmation still not testable; previous status kept): Admin → /#admin-artisan/939d3ff2-… shows \"Inscription 21 nov. 2026\", same as the directory row \"Inscrit le 21 nov. 2026\" (DB created_at 2026-11-22T02:07:34Z = 21 nov. Martinique). Fix PASS.",
+  "defects": []
+ },
+ {
+  "id": "REGRESSION",
+  "status": "PASS",
+  "evidence": "Core happy path re-run through the UI on INT-5F417F (5f417f14-08e2-46f9-ba6b-83d2a3ca2329): request with photo (POST /api/bookings 201) → artisan-a accepts (assigned, client live 1.9 s) → slot proposed/changed → quote 163,84 € sent and accepted → avenant 43,40 € accepted → En route / position sharing / Sur place → Démarrer (confirmation) → in_progress → report with avant.jpg + apres.jpg (\"Terminer\" disabled before, enabled after) → Terminer (confirmation) → completed, completed_at set, client \"À régler 207,24 €\", honest \"paiement en ligne pas encore activé\". Cancel of INT-349CA3 → \"Demande annulée.\" Console: no page errors; one React warning on the artisan dossier (duplicate key, see defect); 503 on /api/payments/methods (Stripe absent locally).",
+  "defects": [
+   {
+    "title": "React duplicate-key console error on the artisan dossier page",
+    "steps": "artisan → open any assigned dossier (#detail/<id>), watch the console",
+    "expected": "No console error",
+    "actual": "\"Encountered two children with the same key, `<interventionId>|<artisanId>|0`\" on every render",
+    "suspect": "components/role/artisan-space.tsx:1598 (DocumentManager) and :1610 (PhotoReviewPanel) are siblings with the same key `${i.id}|${profileId}|${generation}` (present since 2026-11-07, same pattern as the client-settings one that was fixed)"
+   }
+  ]
+ }
+]

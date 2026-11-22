@@ -1,0 +1,142 @@
+[
+ {
+  "id": "ENT-01",
+  "status": "PASS",
+  "evidence": "Re-run on http://localhost:3000 (dev, a8c47c1a). Fresh manager retest2-manager (auth-admin fixture, role manager, 0 membership / 0 organisation in DB). UI: Membres shows 'Aucune organisation active' + new button 'Ajouter un premier site' -> #sites; note 'Vous n’avez pas encore d’organisation : l’enregistrement de votre premier site la crée et vous en fait le propriétaire.'; 'Nouveau site' form available; empty form blocked (3 invalid fields, no request); site 'retest2 Siège Le François' saved -> POST /api/sites 201, DB organisation 'Mon organisation' 50aa0b0f + membership owner + site 27235b06 (budget 300000). Header switches to 'Mon organisation' without reload; after reload: header, 'Mes sites 1', Membres 'Votre rôle : Propriétaire'. No console error, no overflow at 390 px. The high defect is CLOSED. Second earlier gap (signup message), re-run on deployed recette https://domdepannage-recette-20261112.vercel.app: after 3 attempts answered 429 (rate limit), the 4th attempt with a @qa.invalid address returned POST /api/auth/signup 422 'Cette adresse e-mail est refusée par le service d’inscription (domaine non accepté ou adresse non distribuable). Utilisez une autre adresse e-mail.', shown as the form alert. Real signup with a synthetic address stays impossible by design of the auth provider (environment limit, now stated truthfully).",
+  "defects": []
+ },
+ {
+  "id": "ENT-02",
+  "status": "PASS",
+  "evidence": "Re-run on http://localhost:3000 (dev, a8c47c1a), organisation created in ENT-01, invitations created in the owner UI (POST /api/organizations 200, 64-char code). (a) invitee A already logged in opens /#join-organization/<code> in a new tab -> POST /api/organizations/invitations/accept 200, URL replaced by #overview, header 'Mon organisation', Membres 'Votre rôle : Lecture', DB role viewer, persists after reload (site API 200). (b) invitee B logged out opens the link (page 'Invitation à rejoindre une organisation… Se connecter pour accepter'), signs in -> accept 200 sent automatically, organisation shown, DB role viewer. Same (a)/(b) paths re-confirmed with invitees C and D. Refusals: another account opening A's link -> 403, alert 'Vous n’avez pas accès à cette action.', no membership; malformed link logged in -> 'Ce lien d’invitation est incomplet ou invalide. Demandez un nouveau code au propriétaire de l’organisation.' (no request), logged out -> same wording; invitation revoked in the owner UI (DB status revoked) then opened by its invitee -> 409 shown as an alert, no membership; already-used code after login -> 409 alert. Removal: owner 'Retirer' > confirm (POST 200, DB row gone) with A's page open -> immediately settings 404, site-operations 403, reports 404, organisation 403, counters 404; on focus the open page shows 'Aucune organisation active' / 'Ce site est introuvable ou n’est plus accessible.', same after reload. Access journal now in French: 'Invitation créée', 'Invitation acceptée', 'Membre retiré'. Console: only the expected 403/404 of the refusal probes. Both earlier defects closed; one low wording remark below.",
+  "defects": [
+   {
+    "title": "Revoked / already-used invitation link shows the generic dossier-conflict message",
+    "steps": "Owner revokes an invitation (or the code was already used); the invitee opens /#join-organization/<code> (logged in, or logs in from the link)",
+    "expected": "Message specific to the invitation (revoked, expired or already used; ask the owner for a new one)",
+    "actual": "POST /api/organizations/invitations/accept 409 'L’état du dossier a changé ou cette action n’est plus disponible. Actualisez la page.' displayed as is: not silent and not false, but it speaks of a dossier and a refresh that cannot help",
+    "suspect": "app/api/organizations/invitations/accept/route.ts (generic conflict mapping of the RPC refusal); display in components/courant-app.tsx acceptInvitation",
+    "severity": "low"
+   }
+  ]
+ },
+ {
+  "id": "ENT-12",
+  "status": "PARTIAL",
+  "evidence": "Re-run on http://localhost:3000 (dev, a8c47c1a) with own data: rule 200 EUR on site 27235b06, request INT-160A47, quote DEV-813F34 325,50 EUR sent by ent-artisan (fixtures by API) -> approval bd552e53 pending. API: decide_approval rejected with note '', '   ' and without note -> 422 'Un commentaire est obligatoire pour refuser.' each time, DB approval still pending with empty note. UI (Devis & approbations > DEV-813F34): Refuser + blank and + spaces only -> 'Un commentaire est obligatoire en cas de refus.', no request sent. Dossier opened first (shows 'statut en attente / Acceptation suspendue à l’approbation'), then Approuver + comment in the UI (POST /api/professional 200, DB approved + note), then the dossier opened by in-app navigation WITHOUT reload -> 'statut approuvé', buttons 'Accepter le devis' / 'Refuser ce devis' present; 'Accepter le devis' > 'Confirmer l’acceptation' -> 200, DB intervention accepted. Wording 'décision approuvé' replaced by 'statut approuvé'. The two medium defects are CLOSED. Not PASS only because the third earlier item (duplicate React key in the quote block) could not be re-run on a dev build: the local server stopped before that step; on deployed recette https://domdepannage-recette-20261112.vercel.app the dossier INT-9DC5DD with 2 versions ('Version 1 · DEV-67C110', 'Version 2 · DEV-37C1A8') was opened and both versions switched with 0 console error, but a production build does not emit that warning, so this proves nothing either way (the code now uses key `source-<id>`).",
+  "defects": []
+ },
+ {
+  "id": "ENT-03",
+  "status": "PASS",
+  "evidence": "Re-run on http://localhost:3000 (dev, a8c47c1a) with own site 'retest2 Site à archiver' (7ee06392) holding one open request. UI archive ('Archiver le site…' > confirm) -> POST /api/sites/<id>/settings 409 {reason: open_interventions} and the panel shows 'Archivage impossible : ce site a encore des interventions en cours. Clôturez-les ou annulez-les, puis archivez le site.'; DB archived_at null. Form usable right after: access note edited and saved -> 200, settings_version 2. After cancelling the request, UI archive -> 200, DB archived_at set. Writes on the archived site: set_site_budget, save_compliance, set_approval_rule -> 409 'Ce site est archivé : il est en lecture seule et ne peut plus être modifié.' for the three; DB budget unchanged (100000), 0 compliance record, 0 rule. Same 409 message displayed when the rule form is submitted through the UI. Archived sheet: badge 'Archivé', no write button; scope selector now reads 'retest2 Site à archiver (archivé)'; 'Mes sites 1'. All three earlier defects closed; one low remark below.",
+  "defects": [
+   {
+    "title": "Rule and deadline forms still offer the archived site",
+    "steps": "Sites & contrats > Pilotage professionnel > Approbations (or Audits et maintenance) > 'Site concerné'",
+    "expected": "Archived site absent or marked '(archivé)'",
+    "actual": "'retest2 Site à archiver' listed as an ordinary choice; saving is refused with the correct 409 message",
+    "suspect": "components/app/forms.tsx ProfessionalOperations (writableSites = sites.filter(canWriteSite) does not exclude archived_at)",
+    "severity": "low"
+   }
+  ]
+ },
+ {
+  "id": "ENT-04",
+  "status": "PASS",
+  "evidence": "Site sheet re-run on http://localhost:3000 (dev, a8c47c1a) (dev build, where the duplicate-key warning would appear) for own site 27235b06: after navigation (12 s) and after reload (14 s) exactly 1 'Paramètres du site', 1 'Consommation électrique', 1 'Contacts et consignes du site', 0 'Lecture des paramètres du site…', 0 'Chargement des consommations…', no other loading placeholder, console errors []. Shortcuts (local): 'Configurer la règle' -> #contracts/approvals:<site> with the threshold form and the site preselected; Échéances & conformité 'Ajouter' -> #contracts/compliance:<site> with the deadline form and the site preselected; dashboard 'Gérer' -> #contracts/compliance. On deployed recette https://domdepannage-recette-20261112.vercel.app, the data-rich sheet of ent-owner 'ent Bureaux Pointe Simon' (d91634e1), where the defect was first seen: 1 settings / 1 energy / 1 contacts panel, no loading placeholder after navigation and after reload. Limit: the dossier with two quote versions was only opened on the recette production build (0 console error, not conclusive for a dev-only warning; see ENT-12).",
+  "defects": []
+ },
+ {
+  "id": "ENT-13",
+  "status": "PASS",
+  "evidence": "Low items re-run. Grid authorisation before an artisan is assigned (http://localhost:3000 (dev, a8c47c1a), then deployed recette https://domdepannage-recette-20261112.vercel.app once a published grid existed): on dossier INT-6ACE5E (status requested, no artisan) the 'Grille publiée' select and 'Autoriser…' are disabled with 'Une grille ne peut être autorisée qu’une fois un artisan attribué à ce dossier.' (select lists 'retest2 Grille maintenance (version 1)' but is disabled); on a dossier with an artisan the select is enabled and no reason is shown. Viewer (deployed recette https://domdepannage-recette-20261112.vercel.app, retest2-inv-b, role Lecture) on dossier INT-160A47: no grid block and no 'Les grilles n’ont pas pu être lues' alert (GET quote-grid/access 404 handled silently). 'Publier (irréversible)' (deployed recette https://domdepannage-recette-20261112.vercel.app): draft 'retest2 Grille maintenance' created in the UI (save_contract_grid 200); click -> no request, confirmation 'Publier la grille « … » ? Une fois publiée, elle est figée…' with 'Confirmer la publication' / 'Annuler'; Annuler -> still draft; confirm -> publish_contract_grid 200, status published, persisted after reload. The three earlier low defects are closed.",
+  "defects": []
+ },
+ {
+  "id": "ENT-14",
+  "status": "PARTIAL",
+  "evidence": "Re-run on deployed recette https://domdepannage-recette-20261112.vercel.app (read-only) as ent-owner, site 'ent Bureaux Pointe Simon' > Opérations du site > Budget: 'Budget saisi 250,00 € / Devis acceptés 303,80 € / Écart -53,80 €' and the new warning 'Dépassement du budget : les devis acceptés sur cet exercice dépassent le budget saisi de 53,80 €.' -> the overrun alert gap is CLOSED. Not re-run: the overlapping-exercise message (earlier low defect, 409 generic text), a second exercise, and the 'Réglé' amount (needs a payment).",
+  "defects": [
+   {
+    "title": "Overlapping budget exercise refused with a generic message (NOT re-tested, carried over)",
+    "steps": "Budget > Ajouter un exercice with dates overlapping the existing exercise",
+    "expected": "Message saying exercises cannot overlap",
+    "actual": "Earlier run: 409 'L’état du dossier a changé ou cette action n’est plus disponible. Actualisez la page.'; not in the fix commit, not re-run",
+    "suspect": "app/api/site-operations/route.ts save_fiscal_year error mapping",
+    "severity": "low"
+   }
+  ]
+ },
+ {
+  "id": "ENT-15",
+  "status": "PASS",
+  "evidence": "Re-run on deployed recette https://domdepannage-recette-20261112.vercel.app as retest2-manager: Rapports > 'Télécharger le rapport CSV' -> rapport.csv, column 'Activité' = 'Bureaux' for both sites (header '\"Site\";\"Activité\";\"Budget déclaré EUR\";…'; rows 'retest2 Siège Le François;Bureaux;3000.00;325.50;…;2;oui' and 'retest2 Site à archiver;Bureaux;1000.00;0.00;…;1;oui'), amounts equal to the accepted quote in DB (32550 cents). Only the office label was exercised with own data (syndic / restaurant / ERP labels come from the same map, not downloaded). Earlier low defect closed.",
+  "defects": []
+ },
+ {
+  "id": "ENT-16",
+  "status": "PARTIAL",
+  "evidence": "NOT re-testable: the 'pay button disabled with an honest message when Stripe is not configured' check needs a server without Stripe; the local dev server stopped before this step and deployed recette https://domdepannage-recette-20261112.vercel.app has Stripe TEST configured. Observed on recette only (never clicked): GET /api/payments/checkout 200 {available:true}; enterprise dossier INT-17104C (ent-owner) shows 'Régler le devis et les avenants acceptés' enabled and no unavailability message, which is the expected state when payment is configured. The client dossier INT-AB926E (adm-client) rendered no pay button in my check (state not investigated). Status unchanged from the earlier run (payment itself not exercised).",
+  "defects": [
+   {
+    "title": "Pay button offered although online payment is not configured (NOT re-tested)",
+    "steps": "Owner / delegated payer / client opens a completed dossier on a server without Stripe key",
+    "expected": "Button disabled with the message 'Le paiement en ligne n’est pas encore disponible…'",
+    "actual": "Not reproducible on recette (Stripe TEST configured); fix present in code (GET /api/payments/checkout + data-pay-unavailable) but not observed",
+    "suspect": "components/app/platform-pay.tsx; lib/features/payments/checkout.ts checkoutAvailability",
+    "severity": "low"
+   },
+   {
+    "title": "Viewer sees a payer-delegation read error on a dossier",
+    "steps": "Member with role Lecture (retest2-inv-b) opens dossier INT-160A47 on recette",
+    "expected": "Payer block hidden or read-only for a member who cannot manage it",
+    "actual": "Alert 'La délégation de paiement n’a pas pu être vérifiée. Réessayez.' with a 'Réessayer' button; GET /api/interventions/<id>/payer 404 (same pattern as the grid block that was just fixed)",
+    "suspect": "components/features/delegated-payer/model.ts (404 on the read treated as a retryable error)",
+    "severity": "low"
+   }
+  ]
+ },
+ {
+  "id": "ADM-02",
+  "status": "PARTIAL",
+  "evidence": "Re-run on deployed recette https://domdepannage-recette-20261112.vercel.app. Admin > Artisans > Examiner (adm-Nouveau ArtisanNew): each of the 4 linked pieces has 'Ouvrir le justificatif'; click -> GET /api/documents?id= 200, new tab opened on the signed storage URL (/storage/v1/object/sign/intervention-documents/…?token=…); the 4 URLs fetched 200 (2 application/pdf starting with %PDF, 2 image/jpeg). Same document id for non-admins: client adm-third 404, artisan adm-artisan-ok 404, manager retest2-manager 404 ('Ce document est introuvable.'), anonymous 401. Decisions through the UI on own candidate retest2-artisan (application filled and submitted in the artisan UI): 'Demander des corrections' -> POST /api/admin/artisans 200, DB changes_requested, artisan banner 'L’opérateur demande des modifications…'; resubmitted in the UI; 'Approuver' -> 200, DB approved + artisan_approved true; 'Suspendre' -> 200, DB suspended, artisan banner 'accès suspendu', missions eligible=false, set_availability 403, accept_mission 403; 'Réactiver' -> 200, approved again. No console error. The 'open the piece' defect is CLOSED. Still open (not in the fix commit): application-level decisions carry no reason.",
+  "defects": [
+   {
+    "title": "Application decision (corrections / approval / suspension) still has no reason field",
+    "steps": "Admin > Artisans > Examiner > 'Demander des corrections' > 'Confirmer la demande de corrections'",
+    "expected": "Mandatory reason sent to the artisan and kept (matrix criterion 'décision motivée'); a definitive refusal action",
+    "actual": "Confirmation only ('Renvoyer la candidature à l’artisan pour corrections ?'), POST /api/admin/artisans 200 without reason; the artisan sees the generic banner only; actions limited to approve / request_changes / suspend / reinstate",
+    "suspect": "app/api/admin/artisans/route.ts:4-9 (schema without reason); components/role/admin-space.tsx ConfirmAction of the decisions",
+    "severity": "medium"
+   }
+  ]
+ },
+ {
+  "id": "ART-04",
+  "status": "PASS",
+  "evidence": "Re-run on deployed recette https://domdepannage-recette-20261112.vercel.app with own approved artisan retest2-artisan (97240, socket + lighting) and an open request created first in 97240 (INT-6ACE5E, lighting). #missions, switch 'Disponible pour de nouvelles missions', no reload, 4 consecutive toggles: Non -> Oui: POST /api/artisan 200, DB available true, one new GET /api/artisan/missions, list shows '2 offres affichées' incl. the 'Éclairage' offer (API eligible true, 2 items); Oui -> Non: DB false, one refetch, list replaced by 'Aucune offre ne vous est proposée… votre compte n’est pas disponible' (API eligible false, 0); repeated once more with the same results. No console error. Earlier defect closed.",
+  "defects": []
+ },
+ {
+  "id": "ART-02",
+  "status": "PASS",
+  "evidence": "Re-run on deployed recette https://domdepannage-recette-20261112.vercel.app with a fresh unapproved artisan retest2-artisan. Application form: adding 97240 -> no notice; adding 75001 -> non-blocking notice 'Le code postal 75001 ne figure pas dans la zone publiée par l’exploitant. Vous pouvez le conserver dans votre dossier ; vérifiez qu’il correspond bien à votre zone d’intervention.'; 'Enregistrer le brouillon' -> POST /api/artisan 200, DB postal_codes [97240, 75001]; notice disappears when the code is removed; submit -> submitted. The out-of-zone defect is CLOSED. Signup with a refused e-mail domain (/#auth > Créer un compte > Artisan électricien, @qa.invalid): 3 attempts first hit the rate limit (429 'Trop de tentatives…'), the 4th returned POST /api/auth/signup 422 'Cette adresse e-mail est refusée par le service d’inscription (domaine non accepté ou adresse non distribuable). Utilisez une autre adresse e-mail.', shown as the form alert -> message defect CLOSED. Both earlier defects closed; one low remark below (after a reload the saved 75001 chip is shown without the notice).",
+  "defects": [
+   {
+    "title": "Out-of-zone notice is not shown again for an already saved code",
+    "steps": "Save the draft with 75001, reload, open #application",
+    "expected": "Notice still visible for a kept out-of-zone code",
+    "actual": "Chip 75001 displayed without notice (addedCodes only tracks codes added in the current form)",
+    "suspect": "components/role/artisan-space.tsx ApplicationForm (addedCodes state)",
+    "severity": "low"
+   }
+  ]
+ },
+ {
+  "id": "ART-12",
+  "status": "PASS",
+  "evidence": "Re-run on deployed recette https://domdepannage-recette-20261112.vercel.app as adm-artisan-ok2 (team owner): #missions > Équipe prestataire > Ouvrir > Interventions. Row 'Prise ou interrupteur · À régler' (INT-AB926E, DB status completed): no technician select, no 'Affecter' button, text 'Dossier terminé : l’affectation n’est plus possible.'; row 'Éclairage · Artisan affecté' (INT-3225E8, DB assigned) keeps its assignment controls ('Retirer l’affectation'). No overflow at 390 px, no console error. Earlier defect closed.",
+  "defects": []
+ }
+]

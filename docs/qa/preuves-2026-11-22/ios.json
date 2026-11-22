@@ -1,0 +1,503 @@
+[
+ {
+  "id": "PUB-01",
+  "status": "PASS",
+  "evidence": "iOS Expo Go (iOS 27.2 sim), guest home by touch: address/profile selectors, tabs Dépannage/Installation/Diagnostic, categories, 'De la demande au devis', commitments, indicative ranges list, FAQ, artisan block, blog; bottom tabs Accueil/Services/Activité/Compte navigate. Shots ios-pub01-home-p1..p7.",
+  "defects": []
+ },
+ {
+  "id": "PUB-02",
+  "status": "PASS",
+  "evidence": "Catalogue (Services tab) + prestation 'Panne de tableau électrique' show 'Fourchette indicative de 150 à 350 euros' + 'Le prix final est fixé par le devis que vous acceptez' (values = GET /api/public/indicative-prices). Aide > Tarifs shows validated rules: barème horaire, devis avant travaux, 'Majoration d’urgence +25 % pour une intervention demandée en urgence', zone 'Martinique entière (codes postaux 972xx)'. Shots ios-pub02-*, ios-pub-aide-p1.",
+  "defects": []
+ },
+ {
+  "id": "PUB-03",
+  "status": "PASS",
+  "evidence": "Aide > Zone desservie by touch: 97240 → 'Dans la zone publiée / Le code postal 97240 figure dans la zone publiée'; 75001 → 'Hors de la zone publiée … Vous pouvez tout de même déposer une demande'; '972' → 'Saisissez un code postal de cinq chiffres.' Shots ios-pub03-97240/75001/invalid. Note: with the number pad open the 'Vérifier' button is covered by the keyboard (must tap keyboard 'Done' first) — see SYS-08.",
+  "defects": []
+ },
+ {
+  "id": "PUB-04",
+  "status": "PASS",
+  "evidence": "Guest: 'Appelez-nous' → alert 'Le numéro d’assistance n’est pas disponible pour le moment.' + 'Voir les options de contact' → Aide; WhatsApp button → alert 'Le contact WhatsApp n’est pas encore disponible.'; Aide > Contact states e-mail/phone 'ne sont pas encore publiés. Une fois connecté, écrivez à l’assistance depuis votre espace' (intentional: contacts unpublished, no placeholder shown). Authenticated assistance tested under SYS-04/CLI. Shots ios-pub04-*.",
+  "defects": []
+ },
+ {
+  "id": "PUB-05",
+  "status": "PASS",
+  "evidence": "Home 'Questions fréquentes' (5 questions, accordion opens by touch, shot ios-pub05-faq-open), prestation page FAQ, 'Conseils' blog cards, Aide screen + 'Ouvrir le centre d’aide sur le Web'. Native Aide itself has no FAQ list (FAQ is on home/prestation).",
+  "defects": []
+ },
+ {
+  "id": "PUB-06",
+  "status": "PASS",
+  "evidence": "Aide > Conditions de garantie: 'Garantie de la plateforme', 'Publié par l’exploitant le 21 novembre 2026 (version 2)', 'Lire les conditions (version 2)' expands full text (satisfaction / ré-intervention / remboursement). Shot ios-pub06-garantie.",
+  "defects": []
+ },
+ {
+  "id": "PUB-07",
+  "status": "PARTIAL",
+  "evidence": "Native entry verified: home 'Découvrir la candidature' → screen 'Rejoindre le réseau d’électriciens' → 'Ouvrir le dossier de candidature' opens the web portal /#join in the in-app Safari (shots ios-pub07-candidature, ios-pub07-join-web). The application form itself is web-only by design (not submitted from iOS).",
+  "defects": []
+ },
+ {
+  "id": "PUB-08",
+  "status": "PASS",
+  "evidence": "Aide > Exploitant du service shows: 'TTBM, SARL'; SIREN 929507762; SIRET 92950776200011; Immatriculation 'RCS Fort-de-France'; siège 'Cité Eucalyptus, 97240 Le François'; 'Brafa Claude Thierry, gérant'. No placeholder; e-mail/phone explicitly 'pas encore publiés'. Shots ios-pub-aide-p2/p3.",
+  "defects": []
+ },
+ {
+  "id": "PUB-09",
+  "status": "PARTIAL",
+  "evidence": "Operator identity block (same as PUB-08) is shown natively in Aide and no invented figure appears on the native home. The 'À propos' mission/team page exists only on the web portal and was not opened from iOS.",
+  "defects": []
+ },
+ {
+  "id": "PUB-10",
+  "status": "PASS",
+  "evidence": "Guest: Aide > 'Confidentialité' opens the portal /#privacy in the in-app Safari (page text read in the view tree). ios-client: Profil > 'Mes données' sheet with 'Consulter la confidentialité' + 'Gérer mes données sur le site (connexion requise)' (opens portal /#profile in the in-app browser; states the app session is not transmitted). Data export/deletion themselves are web-only and were not performed. Shots ios-pub10-*.",
+  "defects": []
+ },
+ {
+  "id": "CLI-01",
+  "status": "PASS",
+  "evidence": "ios-client by touch: Demandes > Nouvelle demande, 3 steps. Validation: 'Indiquez si l’intervention est urgente.', postal 9724 → 'Renseignez un code postal à cinq chiffres.'. 'Ma position' (simulated GPS 14.616,-60.903) reverse-geocoded to '51bis Rue Lubin, 97240 Le François'; access note; recap 'Tableau électrique · Urgent … 150,00 € à 350,00 €'; confirm alert → 'Votre demande est transmise' INT-B11824. Server: interventions b1182440 status=requested, urgency=urgent, postal 97240, estimate 15000-35000. Cross-account GET by ios-client2 → 404. Defect: map blank in address step (see defects). Scheduled variant not replayed on iOS. The urgency-notice fix of the newer bundle was NOT seen by me (my request form run predates it).",
+  "defects": [
+   {
+    "title": "Address-step map is blank on iOS (Expo Go): Leaflet DOM component collapses to a 2-pt-wide strip",
+    "steps": "Log in as client > Demandes > Nouvelle demande > step 2 \"Adresse d’intervention\" (also after \"Ma position\")",
+    "expected": "Map with marker under \"Déplacez la carte sous le repère pour indiquer l’entrée.\"",
+    "actual": "Empty 262-pt area with a thin vertical line; accessibility tree shows the map region as [33,387][35,397] (2x10 pt). Metro log: \"Web ERROR [Error: Top OS ($$EXPO_DOM_HOST_OS) is not defined. This is a bug in the DOM Component runtime.]\" for src/components/booking-map-dom.tsx. Address can still be set by GPS/search/manual fields. Seen in Expo Go dev runtime; not verified in a standalone build. Shots ios-cli01-gps-c.png",
+    "suspect": "apps/mobile/src/components/booking-location-field.tsx:76-77 (dom={{useExpoDOMWebView:false, matchContents:true}}) + src/components/booking-map-dom.tsx (\"use dom\")"
+   },
+   {
+    "title": "Urgent request recap on native does not state the +25 % urgency surcharge",
+    "steps": "Nouvelle demande > \"Oui, c’est urgent\" > recap (step 3)",
+    "expected": "Same notice as web booking (shared/commercial-facts.ts URGENCY_NOTICE: majoration de 25 %)",
+    "actual": "Recap shows only \"Tableau électrique · Urgent\" and the indicative range; URGENCY_NOTICE is not imported anywhere in apps/mobile/src (surcharge only appears in Aide > Tarifs)",
+    "suspect": "apps/mobile/src/app/demande.tsx (progress===2 card), app/demande-client.tsx"
+   }
+  ]
+ },
+ {
+  "id": "CLI-02",
+  "status": "PASS",
+  "evidence": "Library picker (PHPicker) by touch in step 1: 'Photo sélectionnée. Elle sera ajoutée au dossier après confirmation.'; after submit the dossier lists photo-demande-….jpg; server documents row 55b876b7 (image/jpeg) linked to intervention. Consent: 'Partager avec les artisans' → alert 'Partager cette photo ?' → 'Retirer de l’offre'; the eligible artisan sees 'Photos choisies par le client' with the image rendered in the offer before acceptance (shot ios-art05-offer-p1). Camera capture / size limits not tested.",
+  "defects": []
+ },
+ {
+  "id": "CLI-03",
+  "status": "PARTIAL",
+  "evidence": "On iOS both sides: new request shows 'Recherche d’un artisan / Vous serez informé lorsqu’un artisan sera attribué'; the eligible approved artisan (97240) sees it in 'Offres disponibles' and accepts → client sees 'Devis à valider', notification 'Électricien attribué'. Artisan set unavailable → no offers (server available=false). Not tested: out-of-zone request, no-artisan outcome, two artisans competing.",
+  "defects": []
+ },
+ {
+  "id": "CLI-04",
+  "status": "PARTIAL",
+  "evidence": "ios-artisan 'Fixer le rendez-vous': past date 2026-11-20 → 'Indiquez un créneau futur avec une heure de fin après l’heure de début.'; 2026-11-24 09:00–11:00 + note saved → server intervention_appointments starts_at 13:00Z (09:00 Antilles), note 'IOS rdv test'. ios-client sees 'Rendez-vous 24 nov. 2026 à 09:00 – 11:00' + 'Note de l’artisan · IOS rdv test' (note line seen on the later bundle) and notification 'Rendez-vous enregistré … (heure de Martinique)'. Not tested: modification/history, client-side change request (none offered natively), scheduled slot at request time.",
+  "defects": []
+ },
+ {
+  "id": "CLI-05",
+  "status": "PASS",
+  "evidence": "ios-client on dossier INT2 (7a3954da): 'Arrivée de l’artisan' card; destination confirmed by touch ('Rechercher cette adresse' → 'Confirmer Cité Espérance 97240 Le François'; server destination source=ign confirmed_by client). Artisan (API) set en_route + shared a point → iOS screen updated by itself to 'Environ 16 min · itinéraire IGN, sans trafic en temps réel' + 'Destination confirmée…'; then on_site → 'L’artisan est arrivé.' Before sharing: 'Estimation d’arrivée indisponible pour le moment.' Third party GET tracking → 404. Native shows ETA text only (no map on the tracking card). Artisan-side sharing from iOS: see ART-06. Shots ios-cli05-eta, ios-cli05-arrived.",
+  "defects": []
+ },
+ {
+  "id": "CLI-06",
+  "status": "PARTIAL",
+  "evidence": "ios-client dossier before quote acceptance (23:15): no artisan identity block. After acceptance/completion (23:55, newer bundle): 'Votre artisan · Ios Artisan · Appeler l’artisan · +596696000000'. Conversation header 'Avec votre artisan · Ios Artisan' was already visible at 23:24 while the quote was still refused/pending. Because the bundle was updated between the two observations I cannot attribute the difference to stage gating alone; the call link was not tapped.",
+  "defects": []
+ },
+ {
+  "id": "CLI-07",
+  "status": "PASS",
+  "evidence": "ios-client by touch: quote card '1 × IOS remplacement disjoncteur · 200,00 € HT / Total TTC 217,00 €'; refusal requires a reason ('Refuser ce devis' disabled when empty) → alert 'Refuser ce devis ?' → server quotes 0e7de931 status=rejected. Acceptance on INT2: 'Accepter ce devis' → alert 'Accepter ce devis ? Le montant total est de 108,50 € TTC' → quote c3df95df status=accepted, intervention status=accepted. Expired-version refusal not tested. Note: quote card shows HT lines + TTC total but not the VAT rate/amount line.",
+  "defects": []
+ },
+ {
+  "id": "CLI-08",
+  "status": "PASS",
+  "evidence": "ios-client completed dossier INT-B11824: timeline, accepted quote (180,00 € HT / 195,30 € TTC) and the earlier refused quote (200,00 € HT / 217,00 € TTC) both listed exactly, report text, 'Pièces du dossier' avant.jpg / apres.jpg / request photo; tapping apres.jpg opens the signed file in the in-app browser (shot ios-cli08-document-open2). List 'Mes demandes' shows status chips ('À régler 195,30 €'). Not tested: 'Retrouver une commande' search, invoice/receipt documents (no payment yet), >100 dossiers window.",
+  "defects": []
+ },
+ {
+  "id": "CLI-09",
+  "status": "PARTIAL",
+  "evidence": "Profil by touch: 'Informations personnelles' sheet, Nom changed → server profiles.last_name='ClientQA' and header updated; 'Notifications > Préférences': unchecked 'Rappel de rendez-vous' + Enregistrer → notification_preferences.muted_kinds=['appointment_reminder'] version 1; 'Sécurité' shows login e-mail + password-reset link. Addresses are NOT native: 'Adresses enregistrées' only offers 'Ouvrir mon carnet d’adresses' (web portal, new login required). Version-conflict path not tested. UX: in the identity sheet the first tap on 'Enregistrer' only closes the keyboard, a second tap saves.",
+  "defects": []
+ },
+ {
+  "id": "CLI-10",
+  "status": "NOT_TESTED",
+  "evidence": "Not exercised on the iOS screen (time budget reached). Review requires a paid intervention; payment was explicitly deferred to the dedicated payment test. INT-B11824 is left completed/unpaid for it.",
+  "defects": []
+ },
+ {
+  "id": "ART-01",
+  "status": "PASS",
+  "evidence": "ios-artisan tabs Accueil/Missions/Devis/Messages/Profil by touch. Accueil 'Bonjour Ios' + availability + 'Tableau de bord' + 'Missions récentes'; Missions = offers + assigned missions with status chips ('Devis à préparer', 'À réaliser'); Devis tab 'Mes devis' with filters Tous/Envoyés/Acceptés/Refusés (accepted 195,30 €, refused 217,00 € kept). UX note: assigned missions sit below the whole offers list (20+ cards, oldest first) in Missions.",
+  "defects": []
+ },
+ {
+  "id": "ART-02",
+  "status": "N/A_NATIVE",
+  "evidence": "Artisan application is not native: guest 'Candidature' screen says 'Le dossier de candidature s’ouvre sur le portail DomDépannage' and opens /#join in the in-app browser (seen on device). Source: artisan-availability.tsx tells unapproved artisans to complete the application on the web portal.",
+  "defects": []
+ },
+ {
+  "id": "ART-03",
+  "status": "N/A_NATIVE",
+  "evidence": "No credential upload/review for the artisan role natively (same evidence as ART-02; ios-artisan Profil on device shows only identity, security, notifications, availability, capacity). An admin-side review component exists in source (artisan-application-review.tsx) but was not opened (no admin session on iOS).",
+  "defects": []
+ },
+ {
+  "id": "ART-04",
+  "status": "PASS",
+  "evidence": "ios-artisan: availability switch (Missions tab) OFF → 'Vous êtes indisponible…', offers list replaced by 'Votre profil doit être approuvé et disponible'; server artisan_profiles.available=false; ON → offers return, available=true. Capacity buttons 'Limiter à 3/4 missions' visible in Profil (not changed). Zones/postal codes are not editable natively.",
+  "defects": []
+ },
+ {
+  "id": "ART-05",
+  "status": "PASS",
+  "evidence": "Offer detail 'Le François · 972**', 'Estimation après commission 135,00 € à 315,00 €', client-shared photo; 'Accepter la mission' → server status=assigned/artisan_id set. Refusal on another request (52e8aa61): 'Refuser cette offre' → reason mandatory (button disabled when empty) → 'Confirmer le refus' → back to Missions, server mission_declines row reason='IOS hors planning'. Concurrency of two artisans not tested. Keyboard hides 'Confirmer le refus' (see SYS-08).",
+  "defects": []
+ },
+ {
+  "id": "ART-06",
+  "status": "PASS",
+  "evidence": "Before acceptance the offer hides the address ('972**', 'L’adresse précise reste dans le dossier attribué'); after acceptance the dossier shows '51bis Rue Lubin, 97240, Le François' + access note. 'Signaler mon départ' → server travel_stage=en_route; 'Partager ma position pendant le trajet' → tracking session with consent, points posted from the iOS GPS (last_seq=3, position 14.6105,-60.94 fresh); 'Signaler mon arrivée' → on_site. No client phone number is displayed natively (contact = in-app conversation). Defect: raw CoreLocation error text shown and never cleared.",
+  "defects": [
+   {
+    "title": "Tracking card shows a raw English technical error and keeps it after recovery",
+    "steps": "ios-artisan > accepted mission > Signaler mon départ > Partager ma position pendant le trajet while the first GPS fix fails (simulator: kCLErrorLocationUnknown)",
+    "expected": "French user message (e.g. Position indisponible) that disappears once positions are sent",
+    "actual": "Card displays \"Calling the getCurrentPositionAsync function has failed → Caused by: Cannot obtain current location → Caused by: The operation couldn’t be completed. (kCLErrorDomain error 0.)\" and the text stays although later samples succeed (server last_seq=3, position_state=fresh). Shot ios-art06-sharing.png",
+    "suspect": "apps/mobile/src/components/mission-tracking.tsx sample() catch: setError(issue instanceof Error ? issue.message : …) — error never reset on a successful point"
+   }
+  ]
+ },
+ {
+  "id": "ART-07",
+  "status": "PASS",
+  "evidence": "Quote editor in dossier: empty send → 'Renseignez les libellés, quantités, prix et le taux de TVA applicable.'; line 'IOS remplacement disjoncteur' 1×200 € + TVA 8,5 % → alert 'Envoyer le devis ?' → server quote 0e7de931 sent total 21700. After client refusal, editor reopens empty; revision 180 € HT sent → quote 5968541b sent 19530 while 0e7de931 stays rejected (both listed in dossier and Devis tab). Draft persistence across restart not tested. Total TTC is not previewed before sending; decimal keypad hides 'Envoyer le devis' (see SYS-08).",
+  "defects": []
+ },
+ {
+  "id": "ART-08",
+  "status": "PASS",
+  "evidence": "Artisan dossier shows no client actions (no 'Accepter ce devis', no payment/cancel buttons); server: POST /api/interventions/b1182440/actions accept_quote as artisan → 403 'Vous n’avez pas accès à cette action.'. Client 'Nouvelle demande' route is reserved to client role in code (not replayed by deep link).",
+  "defects": []
+ },
+ {
+  "id": "ART-09",
+  "status": "PASS",
+  "evidence": "ios-artisan by touch on INT-B11824: 'Démarrer l’intervention' (alert) → in_progress; report: 'Ajouter la photo avant/après' → sheet 'Photothèque / Appareil photo' → library picker → 'Remplacer la photo avant/après'; empty save → 'Ajoutez un compte rendu détaillé et votre nom.'; filled + 'Enregistrer le compte rendu'; 'Clôturer l’intervention' enabled only after report → alert → server status=completed, intervention_reports summary/signature_name/before_photo_id/after_photo_id set, documents avant.jpg + apres.jpg owned by artisan. Camera source not tested (simulator).",
+  "defects": []
+ },
+ {
+  "id": "ART-10",
+  "status": "N/A_NATIVE",
+  "evidence": "ios-artisan Profil on device lists only: Sécurité, Mes données, Notifications, Informations personnelles, Mes missions, Disponibilité (+ capacity 3/4). No reputation, punctuality or revenue section exists natively.",
+  "defects": []
+ },
+ {
+  "id": "ART-11",
+  "status": "N/A_NATIVE",
+  "evidence": "No payouts/net/transfer screen in the artisan space on device (tabs Accueil/Missions/Devis/Messages/Profil; Devis tab lists quote amounts only). The only fee information is 'Estimation après commission' on offers (10 %: 150–350 → 135–315 €).",
+  "defects": []
+ },
+ {
+  "id": "ART-12",
+  "status": "N/A_NATIVE",
+  "evidence": "No provider-company/technician management seen in the artisan space on device; no provider_team endpoint is called from apps/mobile/src (source grep). Not checked with a provider-team account.",
+  "defects": []
+ },
+ {
+  "id": "ENT-01",
+  "status": "NOT_TESTED",
+  "evidence": "Manager session (ios-manager + organisation 39468815 created as fixtures) was never opened on the iOS screen: time budget reached. Source only: manager tabs Accueil/Sites/Dossiers/Messages/Profil, routes organisation/[id].",
+  "defects": []
+ },
+ {
+  "id": "ENT-02",
+  "status": "N/A_NATIVE",
+  "evidence": "Source-only evidence, NOT confirmed on the device (manager session not opened): no route or API call for members/roles/delegations in apps/mobile/src (routes are organisation/*, site/[id], contrat/[id], approbation/[id]). To be confirmed on screen.",
+  "defects": []
+ },
+ {
+  "id": "ENT-03",
+  "status": "NOT_TESTED",
+  "evidence": "Manager session (ios-manager + organisation 39468815 created as fixtures) was never opened on the iOS screen: time budget reached. Source only: organisation/[id] lists active/archived sites via /api/organizations/{id}/sites.",
+  "defects": []
+ },
+ {
+  "id": "ENT-04",
+  "status": "NOT_TESTED",
+  "evidence": "Manager session (ios-manager + organisation 39468815 created as fixtures) was never opened on the iOS screen: time budget reached. Source only: site/[id] reads /api/sites/{id}/settings.",
+  "defects": []
+ },
+ {
+  "id": "ENT-05",
+  "status": "N/A_NATIVE",
+  "evidence": "Source-only evidence, NOT confirmed on the device (manager session not opened): no route or API call for syndic/co-ownership in apps/mobile/src (routes are organisation/*, site/[id], contrat/[id], approbation/[id]). To be confirmed on screen.",
+  "defects": []
+ },
+ {
+  "id": "ENT-06",
+  "status": "N/A_NATIVE",
+  "evidence": "Source-only evidence, NOT confirmed on the device (manager session not opened): no route or API call for restaurant dashboard in apps/mobile/src (routes are organisation/*, site/[id], contrat/[id], approbation/[id]). To be confirmed on screen.",
+  "defects": []
+ },
+ {
+  "id": "ENT-07",
+  "status": "N/A_NATIVE",
+  "evidence": "Source-only evidence, NOT confirmed on the device (manager session not opened): no route or API call for restaurant equipment in apps/mobile/src (routes are organisation/*, site/[id], contrat/[id], approbation/[id]). To be confirmed on screen.",
+  "defects": []
+ },
+ {
+  "id": "ENT-08",
+  "status": "N/A_NATIVE",
+  "evidence": "Source-only evidence, NOT confirmed on the device (manager session not opened): no route or API call for office maintenance in apps/mobile/src (routes are organisation/*, site/[id], contrat/[id], approbation/[id]). To be confirmed on screen.",
+  "defects": []
+ },
+ {
+  "id": "ENT-09",
+  "status": "N/A_NATIVE",
+  "evidence": "Source-only evidence, NOT confirmed on the device (manager session not opened): no route or API call for energy consumption in apps/mobile/src (routes are organisation/*, site/[id], contrat/[id], approbation/[id]). To be confirmed on screen.",
+  "defects": []
+ },
+ {
+  "id": "ENT-10",
+  "status": "N/A_NATIVE",
+  "evidence": "Source-only evidence, NOT confirmed on the device (manager session not opened): no route or API call for ERP audits in apps/mobile/src (routes are organisation/*, site/[id], contrat/[id], approbation/[id]). To be confirmed on screen.",
+  "defects": []
+ },
+ {
+  "id": "ENT-11",
+  "status": "NOT_TESTED",
+  "evidence": "Manager session (ios-manager + organisation 39468815 created as fixtures) was never opened on the iOS screen: time budget reached. Source only: organisation/demande posts a site request to /api/interventions.",
+  "defects": []
+ },
+ {
+  "id": "ENT-12",
+  "status": "NOT_TESTED",
+  "evidence": "Manager session (ios-manager + organisation 39468815 created as fixtures) was never opened on the iOS screen: time budget reached. Source only: approbation/[id] + native-approval-workflow call /api/quotes/{id}/approval. The new Approve/Refuse fix was NOT seen by me.",
+  "defects": []
+ },
+ {
+  "id": "ENT-13",
+  "status": "NOT_TESTED",
+  "evidence": "Manager session (ios-manager + organisation 39468815 created as fixtures) was never opened on the iOS screen: time budget reached. Source only: organisation/contrats and contrat/[id] are read views of /api/enterprise/contracts.",
+  "defects": []
+ },
+ {
+  "id": "ENT-14",
+  "status": "N/A_NATIVE",
+  "evidence": "Source-only evidence, NOT confirmed on the device (manager session not opened): no route or API call for budgets in apps/mobile/src (routes are organisation/*, site/[id], contrat/[id], approbation/[id]). To be confirmed on screen.",
+  "defects": []
+ },
+ {
+  "id": "ENT-15",
+  "status": "NOT_TESTED",
+  "evidence": "Manager session (ios-manager + organisation 39468815 created as fixtures) was never opened on the iOS screen: time budget reached. Source only: organisation/interventions uses /api/enterprise/overview and search; no export code.",
+  "defects": []
+ },
+ {
+  "id": "ENT-16",
+  "status": "N/A_NATIVE",
+  "evidence": "Source-only evidence, NOT confirmed on the device (manager session not opened): no route or API call for invoices/payer/integrations in apps/mobile/src (routes are organisation/*, site/[id], contrat/[id], approbation/[id]). To be confirmed on screen.",
+  "defects": []
+ },
+ {
+  "id": "ADM-01",
+  "status": "N/A_NATIVE",
+  "evidence": "No admin session was opened on iOS. Source-only evidence, not confirmed on device: no native screen or API call for global KPI dashboard in apps/mobile/src.",
+  "defects": []
+ },
+ {
+  "id": "ADM-02",
+  "status": "NOT_TESTED",
+  "evidence": "No admin session was opened on iOS. Source: admin role has native tabs incl. 'Annuaire' and artisan-application-review.tsx (/api/admin/artisans). Native code exists, so this is not N/A; it was not exercised.",
+  "defects": []
+ },
+ {
+  "id": "ADM-03",
+  "status": "NOT_TESTED",
+  "evidence": "No admin session was opened on iOS. Source: admin-native-interventions.tsx lists /api/admin/interventions. Native code exists, so this is not N/A; it was not exercised.",
+  "defects": []
+ },
+ {
+  "id": "ADM-04",
+  "status": "NOT_TESTED",
+  "evidence": "No admin session was opened on iOS. Source: annuaire tab + annuaire/[id] read /api/admin/directory. Native code exists, so this is not N/A; it was not exercised.",
+  "defects": []
+ },
+ {
+  "id": "ADM-05",
+  "status": "N/A_NATIVE",
+  "evidence": "No admin session was opened on iOS. Source-only evidence, not confirmed on device: no native screen or API call for quotes/invoices/finance back-office in apps/mobile/src.",
+  "defects": []
+ },
+ {
+  "id": "ADM-06",
+  "status": "N/A_NATIVE",
+  "evidence": "No admin session was opened on iOS. Source-only evidence, not confirmed on device: no native screen or API call for review moderation in apps/mobile/src.",
+  "defects": []
+ },
+ {
+  "id": "ADM-07",
+  "status": "N/A_NATIVE",
+  "evidence": "No admin session was opened on iOS. Source-only evidence, not confirmed on device: no native screen or API call for support ticket triage (only the user-side assistance screens exist) in apps/mobile/src.",
+  "defects": []
+ },
+ {
+  "id": "ADM-08",
+  "status": "N/A_NATIVE",
+  "evidence": "No admin session was opened on iOS. Source-only evidence, not confirmed on device: no native screen or API call for platform settings in apps/mobile/src.",
+  "defects": []
+ },
+ {
+  "id": "ADM-09",
+  "status": "N/A_NATIVE",
+  "evidence": "No admin session was opened on iOS. Source-only evidence, not confirmed on device: no native screen or API call for roles/audit trail in apps/mobile/src.",
+  "defects": []
+ },
+ {
+  "id": "ADM-10",
+  "status": "N/A_NATIVE",
+  "evidence": "No admin session was opened on iOS. Source-only evidence, not confirmed on device: no native screen or API call for warranty cases in apps/mobile/src.",
+  "defects": []
+ },
+ {
+  "id": "FIN-01",
+  "status": "NOT_TESTED",
+  "evidence": "Payment journey NOT started on iOS, on the coordinator's instruction (a dedicated payment test follows). Seen on device only: completed dossier INT-B11824 shows 'À régler 195,30 €' and the action 'Régler sur Stripe en mode test' (not tapped). Server: status=completed, paid_at=null.",
+  "defects": []
+ },
+ {
+  "id": "FIN-02",
+  "status": "NOT_TESTED",
+  "evidence": "Payment journey NOT started on iOS, on the coordinator's instruction (a dedicated payment test follows). No webhook/amount/fee verification done.",
+  "defects": []
+ },
+ {
+  "id": "FIN-03",
+  "status": "NOT_TESTED",
+  "evidence": "Payment journey NOT started on iOS, on the coordinator's instruction (a dedicated payment test follows). Return-to-app after Checkout not exercised (source: payment-return.ts / index.tsx redirect to dossier with retourPaiement=1).",
+  "defects": []
+ },
+ {
+  "id": "FIN-04",
+  "status": "NOT_TESTED",
+  "evidence": "Payment journey NOT started on iOS, on the coordinator's instruction (a dedicated payment test follows). Declined card / refund / dispute not exercised.",
+  "defects": []
+ },
+ {
+  "id": "FIN-05",
+  "status": "NOT_TESTED",
+  "evidence": "Payment journey NOT started on iOS, on the coordinator's instruction (a dedicated payment test follows). No invoice produced; no invoice screen seen natively.",
+  "defects": []
+ },
+ {
+  "id": "FIN-06",
+  "status": "NOT_TESTED",
+  "evidence": "Payment journey NOT started on iOS, on the coordinator's instruction (a dedicated payment test follows). Only the 10 % commission display on offers was seen (see ART-11).",
+  "defects": []
+ },
+ {
+  "id": "FIN-07",
+  "status": "N/A_NATIVE",
+  "evidence": "Source-only evidence, not confirmed on device: no subscription/premium code in apps/mobile/src.",
+  "defects": []
+ },
+ {
+  "id": "FIN-08",
+  "status": "N/A_NATIVE",
+  "evidence": "Source-only evidence, not confirmed on device: no saved-payment-method code in apps/mobile/src (single Stripe Checkout link).",
+  "defects": []
+ },
+ {
+  "id": "SYS-01",
+  "status": "PARTIAL",
+  "evidence": "Real backend through the iOS app: request, photo upload, quote, appointment, messages, report all read back from the recette DB (ids in CLI/ART entries). Cross-account refusals with real tokens: ios-client2 GET /api/interventions/b1182440 → 404, messages → 404, tracking → 404. Not tested: file access by a third party via document id.",
+  "defects": []
+ },
+ {
+  "id": "SYS-02",
+  "status": "PASS",
+  "evidence": "Five account switches on the device (client ↔ artisan): after 'Se déconnecter' the app returns to the guest home; the next account shows only its own space (artisan: 'Missions récentes: aucune' before assignment, no client dossier; client: only its 2 requests). Process kill + relaunch (Expo Go terminated, exp:// reopened) restored the ios-client session on 'Mes demandes' without login. Wrong password → 'Identifiants incorrects.'. Not tested: late response of account A arriving after B logs in.",
+  "defects": []
+ },
+ {
+  "id": "SYS-03",
+  "status": "NOT_TESTED",
+  "evidence": "Not exercised on the iOS screen (time budget reached). Enterprise member revocation not exercised (no manager session).",
+  "defects": []
+ },
+ {
+  "id": "SYS-04",
+  "status": "PASS",
+  "evidence": "Chat by touch on both roles (artisan 'IOS bonjour, artisan en route mardi', client 'IOS merci, client ok'; server /api/messages lists them; refusal reason auto-posted 'Devis refusé : …'). Notifications screen (client): 6 items 'Électricien attribué', 'Devis reçu', 'Nouveau message', 'Rendez-vous enregistré', counter '6 non lues' → 'Tout marquer comme lu' → 0 non lue; 'Voir la conversation' deep-links to the thread. Not tested: pagination, offline/network error, push (push_enabled=false, in-app list only). UX: the thread opens at the oldest message; composer and newest messages need a manual scroll.",
+  "defects": []
+ },
+ {
+  "id": "SYS-05",
+  "status": "PASS",
+  "evidence": "Without leaving the screen: artisan conversation received the client message sent from another session ('IOS reponse client temps reel 2'); client conversation received 'IOS artisan live vers client 3'; client dossier tracking card went from 'Estimation d’arrivée indisponible' to 'Environ 16 min · itinéraire IGN' then 'L’artisan est arrivé.' by itself. Mechanism is polling (5 s chat, 15 s tracking), not a socket. Not verified live: status chip/quote card refresh on an open dossier.",
+  "defects": []
+ },
+ {
+  "id": "SYS-06",
+  "status": "PARTIAL",
+  "evidence": "Documents (request photo, avant.jpg, apres.jpg) listed on both roles' dossiers and opened through a signed Supabase URL in the in-app browser. Not tested: expiry of the link, versions, retention, archived documents.",
+  "defects": []
+ },
+ {
+  "id": "SYS-07",
+  "status": "NOT_TESTED",
+  "evidence": "Not exercised on the iOS screen (time budget reached). 'Retrouver une commande' search and list windows (100 dossiers) not exercised.",
+  "defects": []
+ },
+ {
+  "id": "SYS-08",
+  "status": "PARTIAL",
+  "evidence": "Accessibility tree spot check (what VoiceOver reads): tabs expose labels + selected state, switches expose label + value, service rows have full spoken labels ('… Fourchette indicative de 150 à 350 euros'), headings have header role in source, decorative icons hidden. Keyboard: inputs stay visible, but action buttons below them are covered (defects). Dynamic Type, real VoiceOver gestures, dark mode and a store/TestFlight build were NOT tested (Expo Go only).",
+  "defects": [
+   {
+    "title": "Keyboard covers the primary action button; content cannot scroll far enough",
+    "steps": "ios-artisan > offer > 'Refuser cette offre' > type in 'Motif du refus' (same on quote editor with the decimal keypad: 'Envoyer le devis'; Aide > 'Code postal': 'Vérifier')",
+    "expected": "Button reachable above the keyboard, or a Done key",
+    "actual": "At maximum scroll 'Confirmer le refus' sits at y≈578–626 under the keyboard (top y≈546); a tap there types a key (a stray '5' turned 180 into 1805 in the quote price). Multiline and numeric fields have no Done key; only a drag-down dismiss works. The missing scroll range ≈ height of the bottom tab bar, which is removed while typing. Shot ios-sys08-decline-button-hidden.png",
+    "suspect": "apps/mobile/src/components/ui.tsx:33 (KeyboardAvoidingView padding/keyboardVerticalOffset) together with components/global-mobile-chrome.tsx (returns null while typing, changing the layout height)"
+   },
+   {
+    "title": "Conversation opens at the oldest message",
+    "steps": "Open a thread with 5+ messages (dossier > Ouvrir la conversation, or from a notification)",
+    "expected": "Newest message and composer in view",
+    "actual": "Screen starts at the top; 'Votre message' and 'Envoyer' are off-screen below",
+    "suspect": "apps/mobile/src/app/dossier/messages.tsx (no scroll-to-end)"
+   },
+   {
+    "title": "Artisan 'Missions': assigned missions are below the whole offers list, offers sorted oldest first",
+    "steps": "ios-artisan > Missions with 20+ open offers",
+    "expected": "Assigned missions and newest offers easy to reach",
+    "actual": "A new offer and all assigned missions are at the very bottom (long scroll)",
+    "suspect": "apps/mobile/src/app/(espace)/interventions.tsx (ListHeaderComponent holds ArtisanOffers), components/artisan-offers.tsx"
+   }
+  ]
+ },
+ {
+  "id": "SYS-09",
+  "status": "N/A_NATIVE",
+  "evidence": "Operations/backup/restore are not a native-app capability; nothing to exercise on iOS.",
+  "defects": []
+ },
+ {
+  "id": "SYS-10",
+  "status": "N/A_NATIVE",
+  "evidence": "Source-only evidence, not confirmed on device beyond the request form: no AI photo diagnosis in the native request flow (photo is only attached).",
+  "defects": []
+ }
+]

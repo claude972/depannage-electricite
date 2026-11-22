@@ -1,0 +1,195 @@
+[
+ {
+  "id": "CLI-01",
+  "status": "PASS",
+  "evidence": "UI 3-step form as client-a. Validation seen: no category → \"Choisissez le problème…\"; postal \"9724\" blocked (pattern); payment mode not chosen → \"Choisissez un mode de paiement avant d’envoyer ; rien n’a été envoyé\" (0 request). Double-click on \"Envoyer ma demande\" → exactly one POST /api/bookings 201 and one DB row each time (INT-12FF2E socket/scheduled 8000–18000 cts; INT-F2C0E0 lighting/urgent 8000–20000; INT-56B17B panel 15000–35000; INT-C04B3D diagnostic 12000–28000), status requested, artisan_id null. Reload on step 3 keeps the draft; reload on #detail keeps reference/description/photos. Cancel via UI with confirmation → cancelled (requested and assigned); cancel on completed → 409. Third party client-b GET dossier → 404. 390 px: no horizontal overflow on #new.",
+  "defects": []
+ },
+ {
+  "id": "CLI-02",
+  "status": "PARTIAL",
+  "evidence": "At creation: req1.jpg + req2.png picked, .txt refused in picker (\"Formats de photo autorisés : JPEG, PNG et WebP\"), \"Retirer req2.png\" removes before sending; after submit 2× POST /api/documents 201, \"Photos (2)\" on dossier, persists after reload. Private access: signed URL via \"Télécharger\" 200 image/png; public storage URL 400; client-b GET /api/documents?id → 404 and empty list; anonymous 401; unassigned artisan 404; assigned artisan sees req1.jpg. Reload of the draft loses picked files with an honest message (\"1 photo choisie avant le rechargement n’a pas pu être conservée\"). Missing on web: no way to remove/withdraw a photo once uploaded (Documents page only has Télécharger/Ajouter) and no share/unshare of photos with eligible artisans before assignment (GET /offer-photos as eligible artisan → items:[]).",
+  "defects": [
+   {
+    "title": "No removal / sharing-consent control for request photos on web",
+    "steps": "client: create request with photos → open dossier → \"Gérer les pièces\" (#documents)",
+    "expected": "Remove a photo, and share/withdraw it for eligible artisans (matrix: consentement partage/retrait)",
+    "actual": "Only \"Télécharger\" and \"Ajouter le document\"; no delete, no share toggle. POST /api/interventions/[id]/offer-photos exists but is consumed only by apps/mobile",
+    "suspect": "components/role/client-space.tsx (documents view) — no caller of app/api/interventions/[id]/offer-photos/route.ts on web; app/api/documents/route.ts has no DELETE"
+   },
+   {
+    "title": "Documents list does not say which dossier a file belongs to",
+    "steps": "client with photos on two dossiers → #documents",
+    "expected": "Each file labelled with its INT reference",
+    "actual": "Two identical \"req1.jpg — 21 nov. 2026\" rows, indistinguishable",
+    "suspect": "components/role/client-space.tsx (Pièces et justificatifs list)"
+   }
+  ]
+ },
+ {
+  "id": "CLI-03",
+  "status": "PARTIAL",
+  "evidence": "Matching: eligible artisan-a/b see the offer anonymised (city, \"972**\", estimate, estimate after commission; no address/description; GET dossier 404 before acceptance). Atomic assignment: artisan-a and artisan-b clicked \"Accepter la mission\" simultaneously on INT-56B17B → A 200, B 403 \"Vous n’avez pas accès à cette action\" + UI \"Cette offre n’est plus disponible avec vos droits actuels\"; DB status assigned, artisan_id = artisan-a only. No-artisan case: request in 97217 Le Marin (0 approved artisans cover it; coverage in DB only 97200/97240) is accepted and stays \"Recherche d’un artisan … attend qu’un artisan éligible l’accepte ; aucun délai n’est garanti\"; not listed for artisan-a/b. No explicit \"no artisan in your area\" state anywhere.",
+  "defects": [
+   {
+    "title": "No honest \"no eligible artisan\" state for an uncovered postal code",
+    "steps": "client: new request, address \"Rue QA sans artisan, 97217 Le Marin\", category Recherche de panne → send (INT-C04B3D)",
+    "expected": "Client is told that no artisan currently covers this zone/category (at confirmation or on the dossier)",
+    "actual": "POST /api/bookings 201 status confirmed; dossier shows the generic \"Recherche d’un artisan\" indefinitely",
+    "suspect": "app/api/bookings/route.ts (no coverage check) and components/role/client-space.tsx detail header; components/features/coverage/postal-coverage-check.tsx not used in the logged-in request flow"
+   }
+  ]
+ },
+ {
+  "id": "CLI-04",
+  "status": "PARTIAL",
+  "evidence": "On INT-56B17B (56b17b1d-3bdd-4f46-af05-a0979b2c4670, client-a / artisan-a): artisan \"Proposer un créneau\" — past slot refused in UI (\"Ce créneau est déjà passé\", 0 request) and by server (422); future slot saved (24/11 10:00–12:00 Martinique = 14:00Z, reminder_version 1). Client sees it, changes it in UI (past → \"Le créneau doit se situer dans le futur\"; future 23/11 15:00–16:00 saved, version 2), persists after reload; history keeps both events (ids 24, 25 with actors). Stale version → 409; client-b write 403 / read 404; artisan-b write 403. After start: \"Le créneau ne peut plus être modifié\". Not offered: no explicit confirm/accept action for a proposed slot on either side (only text \"doit être confirmé avec l’artisan\"). The client's change did not appear on the artisan's open dossier until manual reload (>60 s).",
+  "defects": [
+   {
+    "title": "Appointment change by the other party is not pushed to an open dossier",
+    "steps": "artisan-a keeps #detail open; client-a saves a new slot",
+    "expected": "Artisan screen shows the new slot without reload",
+    "actual": "Still shows the old slot after 60+ s; correct after reload",
+    "suspect": "components/app/realtime.ts:6 — REALTIME_TABLES = [\"interventions\",\"quotes\",\"messages\"] (intervention_appointments not subscribed)"
+   },
+   {
+    "title": "Reminder panel says \"Aucun rendez-vous enregistré\" right after the artisan saves a slot",
+    "steps": "artisan saves a slot on the dossier",
+    "expected": "Reminder panel reflects the saved appointment",
+    "actual": "Slot shown above, but panel keeps \"Aucun rendez-vous enregistré pour ce dossier\" until reload",
+    "suspect": "components/features/appointment-reminders (panel not re-read after save_appointment); copy in model.ts:108"
+   },
+   {
+    "title": "No confirmation step for a proposed slot",
+    "steps": "artisan proposes a slot; open client dossier",
+    "expected": "Client (or artisan) can confirm/accept the proposal",
+    "actual": "Only \"Modifier le créneau\"; either party silently overwrites",
+    "suspect": "components/role/client-space.tsx Rendez-vous section; save_intervention_appointment RPC has no confirmation state"
+   }
+  ]
+ },
+ {
+  "id": "CLI-05",
+  "status": "PARTIAL",
+  "evidence": "On INT-56B17B (56b17b1d-3bdd-4f46-af05-a0979b2c4670, client-a / artisan-a) with Playwright geolocation (14.61,-60.99 ±15 m): artisan \"En route\" → travel_stage en_route; \"Partager ma position\" shows a consent notice then \"Autoriser et démarrer\" → client card \"Suivi actif\", position ±15 m with age, source \"déclarée par le navigateur (non certifiée)\". Client confirmed a destination (IGN/BAN candidates) → after a fresh position: map with route drawn, \"Arrivée estimée vers 22:39 — 24 min · 12.6 km … hors trafic temps réel, sans garantie\", source IGN; POST tracking/route 200 distance_m 12597. Third party: client-b 404 (tracking and route), artisan-b 404, anonymous 401; client cannot start sharing (403). \"Arrêter le partage\" → client \"Partage arrêté\" within ~12 s, server shared=false, position null, route 503 position_unavailable. Sur place → stepper updated. 390 px no overflow. Defects below concern restart after a destination change and labels.",
+  "defects": [
+   {
+    "title": "\"Reprendre le partage\" fails with 409 after the client changes the destination",
+    "steps": "artisan sharing; client confirms a destination (this stops sharing, as warned); artisan clicks \"Reprendre le partage\"",
+    "expected": "Sharing restarts (with consent)",
+    "actual": "POST /tracking 409 \"L’état du dossier a changé… Actualisez la page\"; a second click on \"Partager ma position\" then works. Artisan panel also keeps \"Partage en cours\" until its next position post",
+    "suspect": "components/features/tracking/artisan-tracking-panel.tsx:153 / model.ts ~485 (stale expected_version reused instead of re-reading the snapshot)"
+   },
+   {
+    "title": "Misleading stop reasons",
+    "steps": "a) before any sharing, b) after the client changed destination",
+    "expected": "Neutral or accurate reason",
+    "actual": "Client card says \"Partage arrêté par l’artisan\" in both cases; artisan panel says \"Partage interrompu par le rechargement de la page\" though no reload happened",
+    "suspect": "components/features/tracking/model.ts:88"
+   }
+  ]
+ },
+ {
+  "id": "CLI-06",
+  "status": "PASS",
+  "evidence": "Before assignment the client dossier shows \"Coordonnées disponibles après attribution\" and participants API returns []. After acceptance (live, ~2 s): \"Artisan assigné — Qa ArtisanB/Qa ArtisanA, +596696000000\" with tel: link and \"Contacter\" (opens the dossier conversation). Quote page shows the artisan name; generated PDF shows company, SIRET, contact. client-b: dossier/participants 404.",
+  "defects": []
+ },
+ {
+  "id": "CLI-07",
+  "status": "PARTIAL",
+  "evidence": "On INT-56B17B (56b17b1d-3bdd-4f46-af05-a0979b2c4670, client-a / artisan-a): v1 DEV-770A8D 16600/1411/18011 cts (8.5 %) shown identically to the client; \"Refuser\" requires a reason (≥5 chars) → quote rejected, dossier back to assigned, reason posted in the conversation. v2 DEV-0FC1A1 15465/1315/16780 cts; client \"Accepter le devis\" → accepted, accepted_at set, v1 stays rejected and read-only. Refusals: accept rejected v1 → 409; accept without quote_id → 422; client-b accept/reject 403, GET quote 404; artisan self-accept 403. Avenant AV-1-DEV-0FC1A1 4000/340/4340 cts proposed by artisan, accepted by client after \"Confirmer l’acceptation\"; client-b and artisan accept → 403; amount due then 211,20 € (16780+4340). Not tested: expired quote (artisan quote form has no validity field: \"Validité non renseignée par l’émetteur\"). Quote acceptance itself is a single click with no confirmation.",
+  "defects": [
+   {
+    "title": "Proposed amendment is invisible unless the client opens the quote page",
+    "steps": "artisan proposes an avenant on the accepted quote; client is on / reloads the dossier",
+    "expected": "Notification and a visible \"avenant à valider\" on the dossier",
+    "actual": "No notification row (latest kinds: work_started, message_received, quote_received), no mention on #detail even after reload; \"Devis & résumé\" keeps 167,80 € while the amount to pay becomes 211,20 €",
+    "suspect": "components/role/client-space.tsx (Devis & résumé section ignores amendments); amendment propose RPC behind app/api/quote-amendments/route.ts emits no notification"
+   }
+  ]
+ },
+ {
+  "id": "CLI-08",
+  "status": "PASS",
+  "evidence": "#documents lists both quote versions with correct amounts/status; filters Refusés/Acceptés/En attente/Tous correct. Old rejected v1 opens exactly (2 × 60,50, 180,11 €, read-only, link to current version). PDF generated for v2 and v1 (POST /api/quote-documents 201, revision 1, sha256); v2 PDF downloaded and text checked: lines, 154,65 / 13,15 / 167,80 €, issuer, recipient, state \"Accepté\". Text recap of v1 downloaded with exact lines. PDF access: client-b 404, anonymous 401. Timeline on the dossier shows recorded timestamps for each step and \"—\" where none exists. Notes: document dates are in UTC (\"22/11/2026 02:10 UTC\") while the rest of the UI is in Martinique time.",
+  "defects": []
+ },
+ {
+  "id": "CLI-09",
+  "status": "PARTIAL",
+  "evidence": "Profile: empty first name blocked (required), bad phone \"12345\" → \"Indiquez un numéro de téléphone en +596, +590 ou +33…\" (0 request), valid edit → PATCH /api/profile 200, persisted after reload and in DB (then restored). Addresses: add, preferred flag, prefill in new request (\"Adresse préférée « core Domicile » présélectionnée\"), edit, remove preference, archive with confirmation, persisted after reload; client-b archive of client-a address → 404 and empty list. Notification preferences: muted \"Nouveau message\" → saved (muted_kinds [\"message_received\"]), persisted after reload, and a new message then created no notification; restored. External channels shown as \"Indisponible : aucun fournisseur configuré\". 390 px no overflow.",
+  "defects": [
+   {
+    "title": "Saved address accepts an invalid French postal code",
+    "steps": "Profil → Ajouter une adresse → code postal \"9724X\", pays FR → Enregistrer",
+    "expected": "Refused (5 digits for FR), as in the request form",
+    "actual": "POST /api/profile/addresses 200, stored and shown as \"9724X Le François (FR)\", then prefilled into a new request where it is invalid",
+    "suspect": "lib/features/client-addresses/schemas.ts:3 — postal_code regex /^[A-Z0-9][A-Z0-9 -]+$/ regardless of country_code"
+   },
+   {
+    "title": "Client preference list shows events of other roles",
+    "steps": "client → Notifications → Préférences",
+    "expected": "Only events a client can receive",
+    "actual": "Also \"Mission qui m’est attribuée\", \"Compte professionnel approuvé/suspendu\", \"Approbation interne…\", organisation events",
+    "suspect": "app/api/notifications/preferences/route.ts (kinds not filtered by role)"
+   }
+  ]
+ },
+ {
+  "id": "CLI-10",
+  "status": "BLOCKED",
+  "evidence": "Reviews require the dossier to be in status \"paid\" (submit_review: status='paid', supabase/migrations/202610310003_web_operations.sql:285) and payment cannot be made locally (no Stripe key), so the review form never appears: on the completed dossier INT-56B17B (56b17b1d-3bdd-4f46-af05-a0979b2c4670, client-a / artisan-a) there is no review UI, and POST /api/reviews as the owner → 403; as artisan → 403. Rating choice, single submission, third-party refusal on a real review, and the artisan's contestation (ReviewContestationPanel exists in artisan-space.tsx; artisan Profil/Performance show \"Aucun avis\") could not be exercised. Payment was not faked. Payment step observed: client \"À régler — Paiement après l’intervention, sur la plateforme (211,20 €) … Le paiement en ligne n’est pas encore activé sur ce service. Aucun paiement n’est demandé pour l’instant\", no Payer button; artisan \"Terminée, règlement attendu … Le paiement en ligne n’est pas encore activé\"; paid_at null, payments [] — honest unavailable state, no crash, no fake success.",
+  "defects": []
+ },
+ {
+  "id": "ART-05",
+  "status": "PASS",
+  "evidence": "artisan-a opened INT-F2C0E0, \"Refuser la mission\" + reason → POST operations decline_offer 200; offer disappears for A (14 → 13, also after reload), A's later accept → 403; still offered to artisan-b; dossier stays requested / artisan_id null for the client. artisan-b then accepted it in the UI → assigned to B. Empty reason: no request sent (no visible error text captured).",
+  "defects": []
+ },
+ {
+  "id": "ART-06",
+  "status": "PASS",
+  "evidence": "Before acceptance the offer shows only city + \"972**\", \"Distance non calculée\", and \"L’adresse exacte, le contact et la description sont transmis après acceptation\"; API offer has no address, GET dossier 404, client document 404. After acceptance the mission shows \"Cité Eucalyptus, 97240 Le François\", description, client photo, and Participants with client name + phone (tel: link). artisan-b on artisan-a's dossier: 404 (dossier, messages, tracking).",
+  "defects": []
+ },
+ {
+  "id": "ART-07",
+  "status": "PASS",
+  "evidence": "Quote form: VAT not preselected, send disabled with \"Pour envoyer, il manque : un taux de TVA\"; non-integer quantity 1.5 refused (\"des quantités et prix valides\"). Draft saved (private: client quotes [] and GET quote-draft 403), restored after reload. v1 sent 16600/1411/18011 cts; after client refusal the form reopens with \"Versions précédentes — Refusé par le client\"; v2 with 3 lines 15465/1315/16780 (rounding 13,145 → 13,15). Double-click on send created a single v2 (2 quotes in DB). Accepted quote is read-only; changes go through \"Proposer un avenant\" (validation messages, 4000/340/4340 cts).",
+  "defects": []
+ },
+ {
+  "id": "ART-08",
+  "status": "PASS",
+  "evidence": "artisan-a on #admin, #admin-interventions, #admin-reviews, #new, #requests, #sites, #members → \"Cette page ne fait pas partie de votre espace … Aucune donnée n’a été chargée\". API: /api/admin/interventions 403, /api/admin/dashboard 403, POST /api/interventions 403, POST /api/bookings 409 \"Utilisez votre espace professionnel\", POST /api/reviews 403, cancel 403, reassign 403, self-accept quote 403. Order: start before quote acceptance 409, complete before start 409, complete without report 409; client start / set_travel_stage 403. Start and finish each ask for confirmation. Note: #platform-finance renders a page shell with \"Accès non vérifié / Vos droits d’opérateur ne couvrent pas cette section\" (no data) instead of the generic forbidden page.",
+  "defects": []
+ },
+ {
+  "id": "ART-09",
+  "status": "PASS",
+  "evidence": "On INT-56B17B (56b17b1d-3bdd-4f46-af05-a0979b2c4670, client-a / artisan-a) in progress: \"Terminer l’intervention\" disabled with \"il manque : le compte rendu, la photo avant, la photo après\"; server complete → 409. Report form: summary required, same photo for before/after disabled in UI and 422 on server; avant.jpg + apres.jpg uploaded from the form; saved (report_revision d39051af…, before/after ids distinct, 2 checks). Finish → completed, completed_at set. Client sees the report with both photos and signs the receipt (checkbox required; double-click → one receipt \"signé par Qa ClientA\"), persisted after reload and visible to the artisan; client-b sign 403, artisan self-sign 403.",
+  "defects": []
+ },
+ {
+  "id": "SYS-04",
+  "status": "PASS",
+  "evidence": "Dossier conversation on INT-56B17B (56b17b1d-3bdd-4f46-af05-a0979b2c4670, client-a / artisan-a): client → artisan text, artisan → client text and photo message (POST /api/messages/photo 201 with attachment, \"Voir la photo\" opens it); 4 messages in DB with correct authors; read receipts (\"Lu\") appear on the sender side. client-b read 404 / post 403 / attachment 404; artisan-b post 403. Notification bell count increments live for both roles; list shows assigned / appointment / quote / message / work_started events with \"Ouvrir le dossier\"; mark one read (8→7), mark all (0), persisted after reload. Notes: the \"Messages\" menu itself has no unread badge (only the bell); no notification for a proposed amendment (see CLI-07).",
+  "defects": []
+ },
+ {
+  "id": "SYS-05",
+  "status": "PARTIAL",
+  "evidence": "Updated on the other party's screen without reload: assignment (client, ~2 s), quote v1/v2 received (~3 s), quote refusal (artisan, ~2 s), start and completion (client, ~5 s), cancellation (artisan, ~4 s), incoming messages incl. photo (~2.5 s), tracking start/stop. Not updated without reload: appointment change, saved report (client saw it only once the status changed), proposed amendment.",
+  "defects": [
+   {
+    "title": "Appointments, reports and amendments are not part of the live refresh",
+    "steps": "keep a dossier open on one side; on the other side change the slot / save the report / propose an avenant",
+    "expected": "Open screen refreshes",
+    "actual": "Stale until reload or until an interventions/quotes/messages row changes",
+    "suspect": "components/app/realtime.ts:6 (REALTIME_TABLES limited to interventions, quotes, messages); refresh wiring in components/courant-app.tsx:737"
+   }
+  ]
+ }
+]

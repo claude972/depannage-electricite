@@ -1,0 +1,584 @@
+[
+ {
+  "id": "PUB-01",
+  "status": "PASS",
+  "evidence": "Accueil public natif (Expo Go, Pixel 6 API 34) : sélecteurs Lieu d'intervention / Je suis un, onglets Dépannage/Installation/Diagnostic, recherche, 'Pour vous', cartes, parcours 3 étapes, engagements, fourchettes, FAQ (5 questions dépliables), bannière électricien, blog conseils (article ouvert), barre Accueil/Services/Activité/Compte. Shots android-00-start, android-11-conseil, android-12-faq.",
+  "defects": []
+ },
+ {
+  "id": "PUB-02",
+  "status": "PASS",
+  "evidence": "Services + fiche prestation : fourchettes indicatives identiques à GET /api/public/indicative-prices (panel 15000–35000 c → '150–350 €', socket 80–180, outage 150–250, lighting 80–200, diagnostic 120–280) avec mention 'Fourchette indicative. Le prix final est fixé par le devis'. Aide > Tarifs : Tarification au barème horaire, Devis précis avant travaux, 'Majoration d'urgence +25 %'. Shots android-01-services, android-02-prestation, android-05-aide-top.",
+  "defects": [
+   {
+    "title": "[mineur] Aide > Tarifs annonce une grille « ci-dessous » absente de l’écran",
+    "steps": "Compte > Aide et contact > carte Tarifs",
+    "expected": "Le texte renvoie vers l’écran Services (où se trouve la grille) ou la grille est affichée dessous",
+    "actual": "« La grille par type de panne figure ci-dessous. » alors que la carte suivante est Contact ; la grille n’existe que dans Services",
+    "suspect": "shared/commercial-facts.ts PRICING_RULES (texte web réutilisé) / apps/mobile/src/app/aide-mobile.tsx:36"
+   }
+  ]
+ },
+ {
+  "id": "PUB-03",
+  "status": "PASS",
+  "evidence": "Aide > Zone desservie : 'Martinique entière (codes postaux 972xx)'. 9724 → 'Saisissez un code postal de cinq chiffres.' ; 97240 → 'Dans la zone publiée' ; 75001 → 'Hors de la zone publiée … Vous pouvez tout de même déposer une demande.' API coverage: covered / not_covered version 1. Shots android-06-cov-97240, android-06-cov-75001.",
+  "defects": [
+   {
+    "title": "[mineur] Le clavier numérique reste ouvert après « Vérifier » et masque le résultat",
+    "steps": "Aide > Code postal > saisir 75001 > toucher Vérifier",
+    "expected": "Clavier refermé, résultat visible",
+    "actual": "Le clavier reste affiché ; seule l’étiquette « Hors de la zone publiée » dépasse, la phrase est masquée (android-06-cov-75001.png)",
+    "suspect": "apps/mobile/src/app/aide-mobile.tsx CoverageCheck.check (pas de Keyboard.dismiss())"
+   }
+  ]
+ },
+ {
+  "id": "PUB-04",
+  "status": "PASS",
+  "evidence": "Public : 'Appelez-nous' → alerte 'Le numéro d'assistance n'est pas disponible pour le moment' + 'Voir les options de contact' ; WhatsApp → 'pas encore disponible' ; Aide > Contact : e-mail/téléphone 'pas encore publiés' (voulu) ; 'Ouvrir le centre d'aide sur le Web' ouvre l'onglet Chrome. Connecté (client) : dossier > 'Écrire à l'assistance' : validation vide ('Indiquez un sujet de 4 à 160 caractères', 'Écrivez un message de 10 à 4000 caractères'), envoi → 'Demande enregistrée', suivi 'Ouverte' + historique ; serveur support_tickets c37b36e0 status=open lié à INT-BE11C3. Rappel téléphonique public non proposé en natif. Shots android-10-appelez, android-10-whatsapp, android-59-assistance-envoyee, android-59-assistance-suivi.",
+  "defects": [
+   {
+    "title": "[mineur] Alerte WhatsApp non refermable par Retour (incohérent avec l’alerte Appelez-nous)",
+    "steps": "Accueil > bouton WhatsApp > touche Retour Android",
+    "expected": "L’alerte se ferme comme celle de « Appelez-nous » (cancelable)",
+    "actual": "Retour sans effet ; il faut toucher FERMER",
+    "suspect": "apps/mobile/src/components/mobile-contact-actions.tsx WhatsAppContactButton (Alert.alert sans { cancelable: true })"
+   }
+  ]
+ },
+ {
+  "id": "PUB-05",
+  "status": "PASS",
+  "evidence": "FAQ accueil (5 questions, réponse dépliée vérifiée 'Comment se passe le règlement ?'), FAQ par prestation, écran Aide, conseils ; lien centre d'aide Web OK. Shots android-12-faq, android-02-prestation.",
+  "defects": []
+ },
+ {
+  "id": "PUB-06",
+  "status": "PASS",
+  "evidence": "Aide > Conditions de garantie : 'Garantie de la plateforme', 'Publié par l'exploitant le 21 novembre 2026 (version 2)', bouton 'Lire les conditions (version 2)' déplie le texte complet (satisfaction, ré-intervention, remboursement). Shot android-07-garantie.",
+  "defects": []
+ },
+ {
+  "id": "PUB-07",
+  "status": "PASS",
+  "evidence": "Accueil > 'Vous êtes électricien ?' > 'Découvrir la candidature' → écran Candidature natif → 'Ouvrir le dossier de candidature' ouvre le portail web /#join dans l'onglet Chrome intégré (dossier en 5 parties). Le dépôt lui-même est web par conception (voir ART-02/03). Shots android-13-candidature, android-13-candidature-web.",
+  "defects": []
+ },
+ {
+  "id": "PUB-08",
+  "status": "PASS",
+  "evidence": "Aide > Exploitant du service : 'TTBM, SARL' ; SIREN 929507762 ; SIRET 92950776200011 ; RCS Fort-de-France ; Cité Eucalyptus, 97240 Le François ; 'Brafa Claude Thierry, gérant'. Lien 'Mentions légales' présent (portail). E-mail/téléphone non publiés (voulu). Shot android-07-identite.",
+  "defects": []
+ },
+ {
+  "id": "PUB-09",
+  "status": "PASS",
+  "evidence": "Identité exploitant publiée dans Aide (mêmes valeurs que PUB-08) ; pas de page 'À propos/équipe' native dédiée : le contenu éditorial est sur le portail web. Shot android-07-identite.",
+  "defects": []
+ },
+ {
+  "id": "PUB-10",
+  "status": "PARTIAL",
+  "evidence": "Aide > 'Confidentialité' ouvre la page /#privacy du portail dans l'onglet Chrome (contenu lu : données enregistrées, etc.) ; 'Mentions légales' présent. Connecté : Profil > 'Mes données' → feuille avec 'Consulter la confidentialité' et 'Gérer mes données sur le site'. MANQUE : aucun choix utilisateur géré en natif ; 'Gérer mes données sur le site' ouvre le portail sans session ('Connectez-vous pour accéder à cet espace') : l'utilisateur doit se reconnecter sur le web. Préférences de notification natives OK (CLI-09). La page web indique encore 'la politique complète sera publiée avant l'ouverture commerciale'. Shots android-09-privacy, android-32-mes-donnees, android-32-mes-donnees-web.",
+  "defects": [
+   {
+    "title": "« Gérer mes données sur le site » ouvre le portail sans session",
+    "steps": "Client connecté > Profil > Mes données > Gérer mes données sur le site",
+    "expected": "Arrivée sur l’espace de gestion des données (session transmise ou écran natif)",
+    "actual": "Onglet Chrome sur la page d’accueil du portail avec « Connectez-vous pour accéder à cet espace. » ; il faut ressaisir ses identifiants",
+    "suspect": "apps/mobile/src/app/(espace)/profil.tsx (lien web simple, pas de jeton de liaison de session)"
+   }
+  ]
+ },
+ {
+  "id": "CLI-01",
+  "status": "PASS",
+  "evidence": "Client Android (and-client) : Demandes > Nouvelle demande, 3 étapes. Étape 1 : type 'Prise ou interrupteur', description, photo, 'Continuer' sans choix d'urgence → 'Indiquez si l'intervention est urgente.' ; 'Oui, c'est urgent'. Étape 2 : recherche d'adresse (géocodeur, suggestion 'Cité Espérance 97240 Le François' choisie), code postal 9724 → 'Renseignez un code postal à cinq chiffres.', corrigé 97240, téléphone prérempli +596696000000. Étape 3 : récapitulatif ('Prise ou interrupteur · Urgent', adresse, '80,00 € à 180,00 €. Le devis fixe le prix final.') → confirmation → 'Votre demande est transmise · INT-BE11C3'. Serveur : interventions be11c314 category=socket urgency=urgent postal_code=97240 status=requested estimate 8000–18000 indicative_price_version=1. Demande planifiée créée côté web (fixture INT-C49E0F), non rejouée au toucher. Shots android-23-demande-1, android-23-demande-urgent, android-24-adresse-recherche, android-24-cp-invalide, android-25-recap, android-26-demande-envoyee, android-27-dossier-client.",
+  "defects": [
+   {
+    "title": "[mineur] Majoration d’urgence publiée (+25 %) non rappelée dans le récapitulatif ni l’estimation d’une demande urgente",
+    "steps": "Nouvelle demande > Prise ou interrupteur > Oui, c’est urgent > récapitulatif",
+    "expected": "Le récapitulatif d’une demande urgente rappelle la règle publiée « +25 % pour une intervention demandée en urgence » (ou l’estimation en tient compte)",
+    "actual": "Estimation 80,00 € à 180,00 € identique à une demande planifiée, aucune mention de la majoration ; l’urgence n’est plus affichée dans le dossier client ensuite",
+    "suspect": "apps/mobile/src/app/demande.tsx (récapitulatif) / app/api/interventions/route.ts (estimate_min/max sans majoration) — à arbitrer côté produit"
+   },
+   {
+    "title": "[mineur] Recherche d’adresse non bornée à la zone desservie",
+    "steps": "Nouvelle demande > étape 2 > rechercher « Cite Eucalyptus Le Francois »",
+    "expected": "Suggestions limitées (ou priorisées) à la Martinique 972xx ; la « Cité Eucalyptus » du François trouvée",
+    "actual": "Suggestions de Wignehies (59), Montendre (17), Cayenne (973) mêlées aux résultats du François ; « Cité Eucalyptus » absente",
+    "suspect": "apps/mobile/src/components/booking-location-field.tsx / API de géocodage (pas de filtre code postal 972)"
+   }
+  ]
+ },
+ {
+  "id": "CLI-02",
+  "status": "PASS",
+  "evidence": "Photo JPEG poussée dans la galerie (adb push + media scan), choisie via le sélecteur Android à l'étape 1 ('Photo sélectionnée. Elle sera ajoutée au dossier après confirmation'), présente dans le dossier INT-BE11C3 ; 'Partager avec les artisans' → confirmation → 'Retirer de l'offre' ; 'Ajouter une photo privée' → 2e pièce ; ouverture d'une pièce = URL signée Supabase dans l'onglet Chrome (image 320×240). Serveur : 2 lignes documents image/jpeg. Retrait de l'offre et PNG non rejoués. Shots android-23-photo-picker, android-28-photo-partagee, android-28-photo-privee, android-28-doc-ouvert.",
+  "defects": []
+ },
+ {
+  "id": "CLI-03",
+  "status": "PASS",
+  "evidence": "Demande urgente 97240 visible dans les offres de l'artisan éligible (and-artisan, zone 97240, toutes catégories) puis attribution unique : après acceptation le dossier client passe à 'Artisan attribué'/'Devis à valider', serveur artisan_id=and-artisan. Côté client en attente : 'Recherche d'un artisan — Votre demande est transmise. Vous serez informé lorsqu'un artisan sera attribué.' Absence d'artisan (zone sans artisan) et réattribution non rejouées sur Android. Shots android-27-dossier-client, android-43-missions-offres, android-54-client-demandes.",
+  "defects": []
+ },
+ {
+  "id": "CLI-04",
+  "status": "PARTIAL",
+  "evidence": "Rendez-vous fixé par l'artisan sur Android : créneau passé (2026-11-01) → 'Indiquez un créneau futur avec une heure de fin après l'heure de début.' ; 2026-11-23 09:00–10:00 + note → carte '23 nov. 2026, 09:00 – 10:00', serveur intervention_appointments starts_at 13:00Z (heure Antilles) reminder_version=1. Le client Android voit le créneau dans son dossier. MANQUES natifs : le client ne peut ni proposer ni demander un changement de créneau ; la 'Note pour le client' saisie par l'artisan n'est pas affichée au client ; saisie de date/heure en texte libre (AAAA-MM-JJ, HH:MM) sans sélecteur ; l'éditeur reste ouvert après enregistrement sans confirmation. Modification du créneau non rejouée. Shots android-46-rdv-passe, android-46-rdv-ok, android-55-client-devis.",
+  "defects": [
+   {
+    "title": "La note de rendez-vous destinée au client n’est pas affichée au client",
+    "steps": "Artisan : dossier attribué > Fixer le rendez-vous > Note pour le client « AND rdv test » > Enregistrer. Client : ouvrir le même dossier",
+    "expected": "La carte Rendez-vous du client affiche le créneau ET la note",
+    "actual": "Seul « 23 nov. 2026, 09:00 – 23 nov. 2026, 10:00 » est affiché ; la note (présente en base intervention_appointments.note) n’apparaît nulle part",
+    "suspect": "apps/mobile/src/app/dossier/[id].tsx (carte Rendez-vous en lecture : n’affiche que starts_at/ends_at)"
+   }
+  ]
+ },
+ {
+  "id": "CLI-05",
+  "status": "PARTIAL",
+  "evidence": "Client Android, dossier accepté : carte 'Arrivée de l'artisan' ; destination vérifiée par 'Rechercher cette adresse' → 'Confirmer Cité Espérance 97240 Le François' → 'Destination confirmée'. Pendant que l'artisan partage sa position (session web, points Fort-de-France→Le François toutes les 9 s, API 200) l'écran Android affiche sans action 'Environ 37 min · itinéraire IGN, sans trafic en temps réel' puis 'Environ 9 min' ; à l'arrêt du partage : 'Estimation d'arrivée indisponible pour le moment.' Tiers : dossier d'un autre client → 'Ce dossier est introuvable.' MANQUE : aucune carte en natif (texte seulement) ; étape 'en route' non affichée explicitement au client. Partage GPS depuis l'appareil Android : voir ART-08. Shots android-64-destination, android-65-eta-client, android-65-eta-client-2.",
+  "defects": []
+ },
+ {
+  "id": "CLI-06",
+  "status": "PARTIAL",
+  "evidence": "Côté client Android après attribution : statut 'Artisan attribué', conversation ouverte avec l'artisan (messages échangés), rendez-vous et suivi d'arrivée. MANQUE natif : aucune identité de l'artisan (nom, société, SIRET, note) n'est affichée dans le dossier ni dans la conversation (libellé générique 'INTERLOCUTEUR') ; pas de téléphone ni bouton d'appel. Shots android-55-client-devis, android-49-chat-realtime.",
+  "defects": [
+   {
+    "title": "Identité de l’artisan attribué absente du dossier client natif",
+    "steps": "Client : ouvrir un dossier « Artisan attribué » puis la conversation",
+    "expected": "Nom/société de l’artisan attribué visibles (coordonnées minimales après attribution)",
+    "actual": "Aucun nom ; la conversation étiquette l’autre partie « INTERLOCUTEUR »",
+    "suspect": "apps/mobile/src/app/dossier/[id].tsx et app/dossier/messages.tsx (le détail renvoyé par /api/interventions/:id n’est pas exploité pour l’identité)"
+   }
+  ]
+ },
+ {
+  "id": "CLI-07",
+  "status": "PASS",
+  "evidence": "Client Android : devis v1 108,50 € TTC lu (lignes HT + total TTC) ; 'Refuser ce devis' désactivé sans motif ; motif saisi → confirmation → 'Devis refusé', serveur quote bb6b4da3 rejected, dossier revenu à assigned. Devis v2 (2 lignes) : 'Accepter ce devis' → alerte 'Le montant total est de 109,04 € TTC' → 'Devis accepté 109,04 €', serveur quote 181ca9b3 accepted (accepted_at posé), intervention accepted. Avenant en cours de travaux non rejoué. Le taux/montant de TVA n'est pas détaillé sur la carte devis (HT par ligne + total TTC seulement). Shots android-55-client-devis, android-56-devis-refuse, android-63-accepter-devis, android-63-devis-accepte.",
+  "defects": []
+ },
+ {
+  "id": "CLI-08",
+  "status": "PARTIAL",
+  "evidence": "Client Android : liste 'Mes demandes' (carte statut + montant), recherche par numéro de commande, dossier avec progression 5 étapes, historique des devis (v1 refusé 108,50 €, v2 accepté 109,04 €), compte rendu signé ('Remis et signé par Andy ClientUn le 21 nov. 2026, 22:58', serveur OK), pièces (2 photos demande + avant.jpg/apres.jpg) ouvertes par URL signée dans l'onglet Chrome. MANQUES natifs : pas de devis/facture PDF ni de versions de documents, pas de filtre/historique des dossiers clos distinct. Shots android-78-client-historique, android-74-client-termine, android-28-doc-ouvert, android-75-signature.",
+  "defects": []
+ },
+ {
+  "id": "CLI-09",
+  "status": "PARTIAL",
+  "evidence": "Profil natif : prénom vide → 'Enregistrer' désactivé ; 'And'→'Andy' enregistré, en-tête 'Andy ClientUn', serveur profiles.first_name=Andy. Préférences de notification : case 'Mission retirée' décochée + Enregistrer → notification_preferences.muted_kinds=['mission_reassigned'] version 1 ; canaux E-mail/SMS désactivés ('aucun fournisseur configuré'). Sécurité : e-mail + 'Demander un lien pour mon mot de passe' (non déclenché : pas d'e-mail externe). MANQUE natif : 'Adresses enregistrées' ne fait que renvoyer au site ('Ouvrir mon carnet d'adresses'), téléphone non modifiable dans la feuille. Shots android-30-profil-modifie, android-31-adresses, android-34-notif-prefs-saved.",
+  "defects": [
+   {
+    "title": "[mineur] Préférences de notification non filtrées par rôle",
+    "steps": "Client > Profil > Notifications > Préférences",
+    "expected": "Seuls les événements pertinents pour un particulier",
+    "actual": "Le client voit « Mission qui m’est attribuée », « Mission retirée », « Compte professionnel approuvé/suspendu », « Approbation interne requise », « Nouveau membre dans l’organisation »",
+    "suspect": "apps/mobile/src/app/notification-preferences.tsx / lib/notification-preferences-contract.ts (liste complète des kinds renvoyée par /api/notifications/preferences)"
+   }
+  ]
+ },
+ {
+  "id": "CLI-10",
+  "status": "N/A_NATIVE",
+  "evidence": "Aucun écran ni action d'avis/notation dans l'application native (apps/mobile/src : aucune route ni composant avis ; dossier terminé INT-BE11C3 côté client : seules actions = régler, signer le compte rendu, conversation, assistance, pièces). L'avis se dépose sur le portail web. Par ailleurs l'avis exige un dossier payé (paiement bloqué, FIN-01). Shot android-74-client-termine.",
+  "defects": []
+ },
+ {
+  "id": "ART-01",
+  "status": "PASS",
+  "evidence": "Artisan Android (and-artisan approuvé) : Accueil 'Bonjour And' avec carte Disponibilité, 'Tableau de bord · Vue d'ensemble', 'Voir les offres et missions', 'Missions récentes' ; onglets dédiés Accueil/Missions/Devis/Messages/Profil ; Missions = offres disponibles + missions affectées ; Devis = filtres Tous/Envoyés/Acceptés/Refusés ('Devis envoyé · 108,50 € TTC') ; aucun onglet client/entreprise. Session restaurée après redémarrage vérifiée côté client. Shots android-42-artisan-accueil, android-43-missions-offres, android-50-artisan-devis, android-50-artisan-messages.",
+  "defects": []
+ },
+ {
+  "id": "ART-02",
+  "status": "N/A_NATIVE",
+  "evidence": "Candidature artisan : l'écran natif 'Candidature' n'ouvre que le portail web /#join dans l'onglet Chrome ('Le dossier de candidature s'ouvre sur le portail DomDépannage') ; aucune saisie identité/société en natif. Shots android-13-candidature, android-13-candidature-web.",
+  "defects": []
+ },
+ {
+  "id": "ART-03",
+  "status": "N/A_NATIVE",
+  "evidence": "Dépôt de justificatifs artisan : non implémenté dans l'application native par conception (portail web). Côté admin natif, la fiche artisan affiche 'Justificatifs — Aucun justificatif renseigné' en lecture (shot android-103-admin-fiche-artisan).",
+  "defects": []
+ },
+ {
+  "id": "ART-04",
+  "status": "PARTIAL",
+  "evidence": "Disponibilité : bascule OFF/ON vérifiée serveur (artisan_profiles.available false→true) et texte 'Vous êtes indisponible…'/'Vous recevez des offres.' — MAIS seulement en touchant le LIBELLÉ ; toucher l'interrupteur lui-même ne fait rien (défaut ci-dessous). Capacité : 'Limiter à 4 missions' → 'Maximum actuel … : 4', serveur capacity_limit=4 version 1. Zones/catégories : non modifiables en natif (portail web). Shots android-41-indispo, android-42-artisan-accueil-indispo, android-52-capacite-4.",
+  "defects": [
+   {
+    "title": "[majeur] Android : toucher l’interrupteur de disponibilité (le curseur) ne change rien ; seul le libellé bascule",
+    "steps": "Connecté artisan approuvé > Accueil (ou Missions, ou Profil) > carte Disponibilité > toucher le curseur de l’interrupteur à droite du libellé (testé adb input tap ET Maestro tapOn point 795,504 ; glisser le curseur : idem)",
+    "expected": "L’interrupteur bascule et POST /api/artisan set_availability est envoyé",
+    "actual": "Aucun changement visuel ni serveur (artisan_profiles.available inchangé, 5 essais sur 3 écrans). Un appui sur le texte « Disponible pour de nouvelles missions » bascule correctement (false/true confirmés en base). L’arbre d’accessibilité montre deux nœuds checkable imbriqués (ligne [87..864] et curseur [727..864] marqué NAF) : le curseur interne consomme l’appui sans appeler onValueChange. Le curseur n’a en outre aucun libellé d’accessibilité et n’est pas aligné à droite.",
+    "suspect": "apps/mobile/src/components/artisan-availability.tsx:37 (<Host matchContents><Switch label=… onValueChange> de @expo/ui sur Android) ; même composant dans apps/mobile/src/app/dossier/[id].tsx (Switch « J’accuse réception du compte rendu »)"
+   }
+  ]
+ },
+ {
+  "id": "ART-05",
+  "status": "PASS",
+  "evidence": "Missions > Offres disponibles (3 offres 97240 dont la mienne) ; fiche offre : 'Le François · 972**', 'Demande urgente', 'Estimation client 80–180 €', 'Estimation après commission 72–162 €' (10 %), 'L'adresse précise reste dans le dossier attribué', photo partagée par le client visible (seule la photo partagée). 'Accepter la mission' → dossier 'Devis à préparer', serveur status=assigned artisan_id=and-artisan. Refus : offre Éclairage (fixture and-client2 INT-C49E0F) → 'Refuser cette offre', bouton désactivé sans motif, motif saisi → retirée de la liste ; serveur mission_declines(reason='AND indisponible ce jour, test refus'), dossier resté requested. Concurrence entre deux artisans non rejouée. Shots android-43-missions-offres, android-44-offre, android-45-mission-acceptee, android-60-refus-offre.",
+  "defects": []
+ },
+ {
+  "id": "ART-06",
+  "status": "PARTIAL",
+  "evidence": "Avant attribution l'offre n'affiche que 'Le François · 972**' ; après acceptation le dossier artisan affiche l'adresse complète 'Cité Espérance, 97240, Le François' et la destination confirmée par le client. Contact : conversation du dossier (message envoyé/reçu). MANQUE natif : le téléphone de contact du client n'est pas affiché à l'artisan, pas de bouton d'appel ni d'ouverture d'itinéraire, pas de distance ; l'interlocuteur est nommé 'INTERLOCUTEUR' sans identité. Shots android-44-offre, android-45-mission-acceptee, android-48-chat-artisan-envoye.",
+  "defects": []
+ },
+ {
+  "id": "ART-07",
+  "status": "PASS",
+  "evidence": "Devis v1 : envoi vide refusé ('Renseignez les libellés, quantités, prix et le taux de TVA applicable' — TVA non présélectionnée) ; 1 × 'AND remplacement prise' 100 € HT, TVA 8,5 % → confirmation → 'Devis envoyé 108,50 €', serveur quotes bb6b4da3 total_cents=10850 sent. Après refus client (motif reçu en notification 'Devis refusé' + message 'Devis refusé : AND trop cher…'), l'éditeur réapparaît : v2 à 2 lignes (90 € + 10,50 € saisi avec virgule) TVA 8,5 % → serveur quotes 181ca9b3 subtotal 10050, tax 854, total 10904, status sent ; v1 reste 'Devis refusé'. Shots android-47-devis-vide, android-47-devis-envoye, android-62-devis-v2, android-62-devis-v2-envoye.",
+  "defects": []
+ },
+ {
+  "id": "ART-08",
+  "status": "PASS",
+  "evidence": "Actions artisan par étape sur INT-BE11C3 : accepté → 'Partager ma position pendant le trajet' : refus de la permission → 'La permission de localisation est nécessaire…' ; autorisation → partage actif, serveur intervention_tracking shared=true lat 14.6036983 lon -61.0730983 (adb emu geo fix), nouveau fix → lat 14.6129983 seq 3 ; touche HOME → shared=false, position effacée (arrêt en arrière-plan). 'Signaler mon départ' désactivé une fois en route, 'Signaler mon arrivée' → travel_stage=on_site, 'Démarrer l'intervention' + confirmation → in_progress. Aucune action client (accepter devis, payer) proposée à l'artisan. Shots android-66-permission-refusee, android-67-partage-actif, android-68-arrivee, android-69-en-cours.",
+  "defects": [
+   {
+    "title": "[mineur] Premier partage de trajet : après avoir accordé la permission, erreur « Revenez sur cet écran pour démarrer le partage. »",
+    "steps": "Artisan, dossier accepté, permission de localisation jamais accordée > « Partager ma position pendant le trajet » > boîte Android « While using the app »",
+    "expected": "Le partage démarre dès le retour de la boîte de permission",
+    "actual": "Message d’erreur « Revenez sur cet écran pour démarrer le partage. » ; il faut toucher une seconde fois le bouton (le partage démarre alors). Le serveur avait déjà passé travel_stage à en_route. Shot android-67-partage-revenez.",
+    "suspect": "apps/mobile/src/components/mission-tracking.tsx start() : test AppState.currentState !== \"active\" juste après requestForegroundPermissionsAsync (l’app n’est pas encore repassée active sur Android)"
+   }
+  ]
+ },
+ {
+  "id": "ART-09",
+  "status": "PASS",
+  "evidence": "Dossier en cours : 'Enregistrer le compte rendu' vide → 'Ajoutez un compte rendu détaillé et votre nom.' ; 'Clôturer' désactivé sans compte rendu ; photo avant + photo après choisies (source Appareil photo/Photothèque → Photothèque), texte + nom → 'Compte rendu enregistré' ; 'Clôturer l'intervention' + confirmation → 'Règlement attendu 109,04 €', serveur status=completed completed_at posé, documents avant.jpg/apres.jpg (owner artisan). Reprise hors ligne non rejouée. Shots android-70-rapport-vide, android-71-rapport-rempli, android-72-rapport-enregistre, android-73-cloture.",
+  "defects": []
+ },
+ {
+  "id": "ART-10",
+  "status": "N/A_NATIVE",
+  "evidence": "Profil artisan natif : identité (Informations personnelles), disponibilité et capacité (ART-04), sécurité, notifications. Aucun écran de profil professionnel (zones, catégories, société) ni de performance/réputation en natif (portail web). Shot android-41-indispo.",
+  "defects": []
+ },
+ {
+  "id": "ART-11",
+  "status": "BLOCKED",
+  "evidence": "Dossier terminé côté artisan Android : 'Règlement attendu 109,04 €' et 'L'intervention est terminée. Le règlement du client reste à confirmer par la plateforme ; ce statut ne prouve pas un versement à l'artisan.' ; offre : 'Estimation après commission 72,00 € à 162,00 €' (10 %). Payé/net/versement non vérifiables : aucun paiement possible (FIN-01, compte Stripe Connect TEST non validable — hCaptcha) ; par ailleurs aucun écran natif de règlements/versements. Shot android-73-cloture.",
+  "defects": []
+ },
+ {
+  "id": "ART-12",
+  "status": "N/A_NATIVE",
+  "evidence": "Entreprise prestataire et techniciens : aucune route ni écran natif (apps/mobile/src/app) ; non implémenté dans l'application native par conception (portail web).",
+  "defects": []
+ },
+ {
+  "id": "ENT-01",
+  "status": "PASS",
+  "evidence": "Manager Android (and-manager, propriétaire de 'AND acda08e Organisation') : en-tête 'Compte entreprise', onglets Accueil/Sites/Dossiers/Messages/Profil ; Sites > Organisations : seule 'AND acda08e Organisation' listée ('Seules les organisations accessibles à votre compte apparaissent ici') ; fiche organisation : rôle 'Propriétaire', accès 'Tous les sites autorisés', suivi entreprise (interventions, approbations, contrats), sites actifs/archives. Aucune organisation d'autres agents visible. Création/renommage d'organisation : portail web. Shots android-90-manager-home, android-91-manager-sites, android-91-manager-org, android-99-ent-accueil.",
+  "defects": []
+ },
+ {
+  "id": "ENT-02",
+  "status": "N/A_NATIVE",
+  "evidence": "Membres/droits/délégations : la fiche organisation native affiche seulement le rôle ('Propriétaire') et le périmètre ('Tous les sites autorisés') ; pas d'invitation ni de gestion des membres en natif (portail web). Shot android-91-manager-org.",
+  "defects": []
+ },
+ {
+  "id": "ENT-03",
+  "status": "PARTIAL",
+  "evidence": "Manager Android (and-manager, propriétaire de 'AND acda08e Organisation') : liste 'Sites actifs' (AND Site Eucalyptus · Bureaux · adresse), bouton 'Afficher les archives', ouverture du site, demande rattachée au site (INT-B668C5 site_id=a92a91f9…). MANQUE natif : création/archivage de site (le site a été créé en fixture ; la création se fait sur le portail web). Shots android-91-manager-org, android-92-site.",
+  "defects": []
+ },
+ {
+  "id": "ENT-04",
+  "status": "PARTIAL",
+  "evidence": "Fiche site native : nom, type 'Bureaux · Actif', adresse et accès, budget déclaré 5 000,00 € (mention 'ni une dépense constatée ni un règlement'), horaires ; 'Modifier les informations' : consignes d'accès saisies → affichées, serveur sites.access_notes='AND badge accueil, portail bleu' settings_version 1→2. MANQUES natifs : équipements, plans de maintenance, zones, contacts, documents du site (portail web). Shots android-92-site, android-92-site-edit, android-92-site-enregistre.",
+  "defects": []
+ },
+ {
+  "id": "ENT-05",
+  "status": "N/A_NATIVE",
+  "evidence": "Vues sectorielles (syndic, restauration, bureaux, ERP) : aucune route native ; la fiche site native est générique (type 'Bureaux', adresse, budget, horaires). non implémenté dans l'application native par conception (portail web). Shot android-92-site.",
+  "defects": []
+ },
+ {
+  "id": "ENT-06",
+  "status": "N/A_NATIVE",
+  "evidence": "Vues sectorielles (syndic, restauration, bureaux, ERP) : aucune route native ; la fiche site native est générique (type 'Bureaux', adresse, budget, horaires). non implémenté dans l'application native par conception (portail web). Shot android-92-site.",
+  "defects": []
+ },
+ {
+  "id": "ENT-07",
+  "status": "N/A_NATIVE",
+  "evidence": "Vues sectorielles (syndic, restauration, bureaux, ERP) : aucune route native ; la fiche site native est générique (type 'Bureaux', adresse, budget, horaires). non implémenté dans l'application native par conception (portail web). Shot android-92-site.",
+  "defects": []
+ },
+ {
+  "id": "ENT-08",
+  "status": "N/A_NATIVE",
+  "evidence": "Vues sectorielles (syndic, restauration, bureaux, ERP) : aucune route native ; la fiche site native est générique (type 'Bureaux', adresse, budget, horaires). non implémenté dans l'application native par conception (portail web). Shot android-92-site.",
+  "defects": []
+ },
+ {
+  "id": "ENT-09",
+  "status": "N/A_NATIVE",
+  "evidence": "Vues sectorielles (syndic, restauration, bureaux, ERP) : aucune route native ; la fiche site native est générique (type 'Bureaux', adresse, budget, horaires). non implémenté dans l'application native par conception (portail web). Shot android-92-site.",
+  "defects": []
+ },
+ {
+  "id": "ENT-10",
+  "status": "N/A_NATIVE",
+  "evidence": "Vues sectorielles (syndic, restauration, bureaux, ERP) : aucune route native ; la fiche site native est générique (type 'Bureaux', adresse, budget, horaires). non implémenté dans l'application native par conception (portail web). Shot android-92-site.",
+  "defects": []
+ },
+ {
+  "id": "ENT-11",
+  "status": "PARTIAL",
+  "evidence": "Demande pour un site sur Android : 3 étapes ; validation 'Choisissez une intervention à planifier ou une demande urgente.' ; choix 'Demande urgente' ('prise en charge prioritaire… La disponibilité et les délais seront précisés après prise en charge') → 'Demande transmise · INT-B668C5', serveur urgency=urgent site_id renseigné ; recherche entreprise : compteur '1 en cours · 1 urgentes'. MANQUE : seulement deux niveaux (planifier/urgent), aucun SLA ni délai contractuel affiché ou suivi en natif. Shots android-93-site-demande, android-93-site-demande-validation, android-93-site-demande-3, android-93-site-demande-envoyee, android-99-ent-recherche.",
+  "defects": [
+   {
+    "title": "[mineur] Demande de site : code postal/commune à ressaisir et adresse dupliquée",
+    "steps": "Manager > site « Cité Eucalyptus, 97240 Le François » > Nouvelle demande pour ce site > étape 2",
+    "expected": "Code postal et commune préremplis depuis l’adresse du site ; adresse affichée une seule fois",
+    "actual": "Champs Code postal et Commune vides et obligatoires ; récapitulatif et dossier affichent « Cité Eucalyptus, 97240 Le François, 97240 Le Francois » ; libellé grand public « Tout ou partie du logement » pour un site professionnel",
+    "suspect": "apps/mobile/src/app/organisation/demande.tsx / lib/enterprise-request-draft.ts"
+   }
+  ]
+ },
+ {
+  "id": "ENT-12",
+  "status": "PARTIAL",
+  "evidence": "Règle simple du site (fixture approval_rules : propriétaire requis ≥ 200 €). Devis artisan 542,50 € TTC sur INT-B668C5. Sur Android (manager propriétaire) : 'Accepter ce devis' → refus affiché 'Ce devis doit d'abord être approuvé par votre organisation (règle d'approbation du site)', dossier resté quoted ; Organisation > Approbations : filtre Toutes/En attente/Approuvée/Refusée, ligne 'En attente · AND Site Eucalyptus · 542,50 € TTC', détail avec 'Règle du site : propriétaire requis à partir de 200,00 €'. Décision prise côté web (POST /api/professional decide_approval 200) car aucune action native ; après actualisation Android : 'Approuvée', 'Décision du 21 nov. 2026, 23:14', note de décision ; puis 'Accepter ce devis' sur Android → 'Devis accepté', serveur accepted. Circuit avancé non configuré ('Aucun circuit avancé n'est requis'). Shots android-94-ent-dossier, android-95-ent-accept-avant-approbation, android-96-ent-approbations, android-96-ent-approbation-detail, android-97-ent-approuvee, android-98-ent-devis-accepte.",
+  "defects": [
+   {
+    "title": "Approbation simple en attente : aucune action Approuver/Refuser dans l’app native",
+    "steps": "Manager propriétaire > Sites > organisation > Consulter les approbations > ligne En attente > Consulter le détail",
+    "expected": "Le propriétaire requis par la règle peut approuver ou refuser (avec commentaire) depuis le mobile",
+    "actual": "L’écran est en lecture seule : statut, montant, règle, puis carte « Circuit d’approbation — Aucun circuit avancé n’est requis » ; aucune action. Le devis reste bloqué tant que la décision n’est pas prise sur le web.",
+    "suspect": "apps/mobile/src/app/approbation/[id].tsx (aucun appel à /api/professional decide_approval ; seules les actions du circuit avancé NativeApprovalWorkflow existent)"
+   }
+  ]
+ },
+ {
+  "id": "ENT-13",
+  "status": "N/A_NATIVE",
+  "evidence": "Android manager : Organisation > 'Consulter les contrats' ouvre une liste native en lecture ('Aucun résultat dans cette sélection' pour l'organisation de test) ; aucune création de contrat ni grille tarifaire en natif (portail web). Shot android-99-ent-contrats.",
+  "defects": []
+ },
+ {
+  "id": "ENT-14",
+  "status": "N/A_NATIVE",
+  "evidence": "Budgets et alertes : seul le 'Budget du site 5 000,00 €' déclaré est affiché en lecture sur la fiche site ('ni une dépense constatée ni un règlement') ; exercices budgétaires et alertes : portail web. Shot android-92-site.",
+  "defects": []
+ },
+ {
+  "id": "ENT-15",
+  "status": "N/A_NATIVE",
+  "evidence": "Reporting et exports : aucun écran natif ; seuls des compteurs de recherche entreprise ('1 en cours · 1 urgentes'). non implémenté dans l'application native par conception (portail web). Shot android-99-ent-recherche.",
+  "defects": []
+ },
+ {
+  "id": "ENT-16",
+  "status": "N/A_NATIVE",
+  "evidence": "Factures, payeur délégué, intégrations : aucun écran natif. non implémenté dans l'application native par conception (portail web).",
+  "defects": []
+ },
+ {
+  "id": "ADM-01",
+  "status": "N/A_NATIVE",
+  "evidence": "Admin Android (compte super-admin de recette, lecture seule) : Accueil 'Administration' sans KPI (3 raccourcis : interventions, annuaire, messages). Tableau global et KPI : portail web. Shot android-100-admin-accueil.",
+  "defects": []
+ },
+ {
+  "id": "ADM-02",
+  "status": "PARTIAL",
+  "evidence": "Admin Android : Annuaire > Artisans, recherche 'And Artisan' → fiche native (téléphone, société, 'Artisan approuvé', 'Candidature approuvée', SIRET, zones 97240, activités, justificatifs) avec action 'Suspendre l'artisan' ; composant de relecture de candidature présent (artisan-application-review.tsx). Décision/suspension NON exercée (lecture seule pour ne pas altérer la recette). Création/correction de candidature : web. Shots android-102-admin-annuaire, android-103-admin-fiche-artisan.",
+  "defects": []
+ },
+ {
+  "id": "ADM-03",
+  "status": "PARTIAL",
+  "evidence": "Admin Android : onglet Dossiers = recherche d'interventions paginée ('59 intervention(s) · page 1'), filtres, ouverture d'un dossier en lecture (conversation, assistance, pièces). Dispatch, réaffectation et escalades : aucune action native (portail web). Shots android-101-admin-dossiers, android-104-admin-dossier.",
+  "defects": []
+ },
+ {
+  "id": "ADM-04",
+  "status": "PARTIAL",
+  "evidence": "Admin Android : Annuaire Clients/Artisans/Organisations avec recherche par nom ou identifiant ('59 résultat(s) · page 1'), fiches en lecture, lien 'Sites et accès de l'organisation'. Aucune modification en natif. Shot android-102-admin-annuaire.",
+  "defects": []
+ },
+ {
+  "id": "ADM-05",
+  "status": "N/A_NATIVE",
+  "evidence": "Back-office non implémenté dans l'application native par conception (portail web) : l'espace admin natif se limite à Accueil (raccourcis), Dossiers (recherche en lecture), Annuaire (lecture), Messages, Profil ; aucune entrée finance, avis, file d'assistance, paramètres, rôles/audit ou garantie. Shots android-100-admin-home, android-100-admin-accueil.",
+  "defects": []
+ },
+ {
+  "id": "ADM-06",
+  "status": "N/A_NATIVE",
+  "evidence": "Back-office non implémenté dans l'application native par conception (portail web) : l'espace admin natif se limite à Accueil (raccourcis), Dossiers (recherche en lecture), Annuaire (lecture), Messages, Profil ; aucune entrée finance, avis, file d'assistance, paramètres, rôles/audit ou garantie. Shots android-100-admin-home, android-100-admin-accueil.",
+  "defects": []
+ },
+ {
+  "id": "ADM-07",
+  "status": "N/A_NATIVE",
+  "evidence": "Back-office non implémenté dans l'application native par conception (portail web) : l'espace admin natif se limite à Accueil (raccourcis), Dossiers (recherche en lecture), Annuaire (lecture), Messages, Profil ; aucune entrée finance, avis, file d'assistance, paramètres, rôles/audit ou garantie. Shots android-100-admin-home, android-100-admin-accueil.",
+  "defects": []
+ },
+ {
+  "id": "ADM-08",
+  "status": "N/A_NATIVE",
+  "evidence": "Back-office non implémenté dans l'application native par conception (portail web) : l'espace admin natif se limite à Accueil (raccourcis), Dossiers (recherche en lecture), Annuaire (lecture), Messages, Profil ; aucune entrée finance, avis, file d'assistance, paramètres, rôles/audit ou garantie. Shots android-100-admin-home, android-100-admin-accueil.",
+  "defects": []
+ },
+ {
+  "id": "ADM-09",
+  "status": "N/A_NATIVE",
+  "evidence": "Back-office non implémenté dans l'application native par conception (portail web) : l'espace admin natif se limite à Accueil (raccourcis), Dossiers (recherche en lecture), Annuaire (lecture), Messages, Profil ; aucune entrée finance, avis, file d'assistance, paramètres, rôles/audit ou garantie. Shots android-100-admin-home, android-100-admin-accueil.",
+  "defects": []
+ },
+ {
+  "id": "ADM-10",
+  "status": "N/A_NATIVE",
+  "evidence": "Back-office non implémenté dans l'application native par conception (portail web) : l'espace admin natif se limite à Accueil (raccourcis), Dossiers (recherche en lecture), Annuaire (lecture), Messages, Profil ; aucune entrée finance, avis, file d'assistance, paramètres, rôles/audit ou garantie. Shots android-100-admin-home, android-100-admin-accueil.",
+  "defects": []
+ },
+ {
+  "id": "FIN-01",
+  "status": "BLOCKED",
+  "evidence": "Android client, dossier INT-BE11C3 terminé (devis accepté 109,04 €) : 'Prochaine action > Régler sur Stripe en mode test' affiché ; appui → POST /api/payments/checkout 409, message à l'écran 'Le paiement n'est pas encore ouvert : le compte de règlement de l'artisan doit d'abord être validé par la plateforme. Rien n'a été débité…' (puis 'Le compte de règlement de l'artisan doit être validé avant paiement.' une fois le compte créé), aucun navigateur ouvert, statut resté 'À régler'. Serveur : platform_checkouts ba1168cd amount_cents=10904 (= devis accepté) status=preparing, fee non calculé (attendu 10 % = 1090 c), intervention completed paid_at=null. Bloqué par un prestataire externe : le compte Stripe Connect TEST de and-artisan doit avoir la capacité stripe_transfers active ; l’onboarding hébergé Stripe (connect.stripe.com, mode test) s’arrête sur un hCaptcha dès l’étape téléphone (tentative Playwright, shots android-connect-01..05) ; les comptes TEST déjà validés ne sont pas réutilisables (contrainte unique profiles.stripe_account_id). Déblocage : un humain termine le formulaire Stripe de test pour and-artisan (~3 min) puis on rejoue « Régler sur Stripe en mode test ». Shots android-76-paiement-non-ouvert, android-76-paiement-non-ouvert-2.",
+  "defects": []
+ },
+ {
+  "id": "FIN-02",
+  "status": "BLOCKED",
+  "evidence": "Aucun paiement TEST abouti possible sur Android (voir FIN-01) : webhook, montant payé et commission 10 % non vérifiables. Vérifié seulement : refus 409 sans débit, montant figé côté serveur 10904 c, statut inchangé après retour sur l'écran. Bloqué par un prestataire externe : le compte Stripe Connect TEST de and-artisan doit avoir la capacité stripe_transfers active ; l’onboarding hébergé Stripe (connect.stripe.com, mode test) s’arrête sur un hCaptcha dès l’étape téléphone (tentative Playwright, shots android-connect-01..05) ; les comptes TEST déjà validés ne sont pas réutilisables (contrainte unique profiles.stripe_account_id). Déblocage : un humain termine le formulaire Stripe de test pour and-artisan (~3 min) puis on rejoue « Régler sur Stripe en mode test ».",
+  "defects": []
+ },
+ {
+  "id": "FIN-03",
+  "status": "BLOCKED",
+  "evidence": "Retour de paiement Stripe → application non exerçable sans session Checkout (voir FIN-01 : compte Connect TEST de l'artisan non validable, hCaptcha Stripe). Observé à la place : après le refus 409, un redémarrage de l'app restaure la session mais ouvre directement le dossier avec une carte 'Retour du paiement — Règlement en attente de confirmation.' (défaut ci-dessous). Shots android-76-paiement-non-ouvert-2, android-79-restart-retour-paiement.",
+  "defects": [
+   {
+    "title": "Faux « Retour du paiement — Règlement en attente de confirmation » après un checkout refusé",
+    "steps": "Client, dossier terminé dont l’artisan n’a pas de compte Stripe validé > « Régler sur Stripe en mode test » → erreur 409 affichée, aucun navigateur ouvert > fermer complètement l’app (force-stop) > rouvrir",
+    "expected": "Retour à l’espace normal ; aucune mention d’un retour de paiement puisqu’aucune session Stripe n’a été ouverte",
+    "actual": "L’app saute l’accueil, ouvre le dossier INT-BE11C3 (sans flèche retour) et affiche « Retour du paiement · Règlement en attente de confirmation. » + « Vérifier le règlement » qui reste indéfiniment en attente ; platform_checkouts.status=preparing, aucun paiement",
+    "suspect": "apps/mobile/src/app/dossier/[id].tsx pay() : deviceDrafts.write(paymentReturnKey…) est exécuté AVANT l’appel /api/payments/checkout et n’est pas effacé si l’appel échoue ; apps/mobile/src/app/index.tsx redirige ensuite vers /dossier/[id]?retourPaiement=1"
+   }
+  ]
+ },
+ {
+  "id": "FIN-04",
+  "status": "BLOCKED",
+  "evidence": "Échec/remboursement/litige : aucun paiement TEST possible sur Android (FIN-01, compte Stripe Connect de l'artisan non validable — hCaptcha Stripe) ; aucun écran natif de remboursement/litige.",
+  "defects": []
+ },
+ {
+  "id": "FIN-05",
+  "status": "N/A_NATIVE",
+  "evidence": "Factures et avoirs : aucun écran natif (pas de document facture dans le dossier ; pièces = photos uniquement). non implémenté dans l'application native par conception (portail web) ; dépend en outre d'un paiement (FIN-01 bloqué).",
+  "defects": []
+ },
+ {
+  "id": "FIN-06",
+  "status": "BLOCKED",
+  "evidence": "Commission affichée avant paiement uniquement : offre artisan 'Estimation après commission 72–162 €' pour 80–180 € (10 %, PLATFORM_FEE_BPS=1000). Commission réelle et reversement non vérifiables sans paiement (FIN-01 bloqué) ; platform_checkouts.fee_cents=null.",
+  "defects": []
+ },
+ {
+  "id": "FIN-07",
+  "status": "N/A_NATIVE",
+  "evidence": "Abonnements/premium : fonction désactivée (web) et aucune entrée dans l'application native.",
+  "defects": []
+ },
+ {
+  "id": "FIN-08",
+  "status": "N/A_NATIVE",
+  "evidence": "Moyens de paiement enregistrés : aucune entrée native (Profil : Aide, Messages, Sécurité, Mes données, Notifications, Informations personnelles, Adresses → web). non implémenté dans l'application native par conception (portail web).",
+  "defects": []
+ },
+ {
+  "id": "SYS-01",
+  "status": "PASS",
+  "evidence": "Android contre la recette déployée (Supabase recette) : comptes réels créés (and-client, and-client2, and-artisan, and-manager), dossiers persistants INT-BE11C3 et INT-B668C5 relus en base après chaque action (interventions, quotes, documents, intervention_appointments, intervention_tracking, mission_declines, support_tickets, approvals), fichiers réels (4 JPEG en stockage privé, URL signées), persistance après redémarrage de l'app.",
+  "defects": []
+ },
+ {
+  "id": "SYS-02",
+  "status": "PASS",
+  "evidence": "A (and-artisan) se déconnecte → accueil public, onglet Activité 'Connectez-vous…', lien profond exp://…/--/dossier/<id> déconnecté → accueil public sans donnée. B (and-client) se connecte : ne voit que ses demandes ; lien profond vers le dossier d'un autre client (INT-C49E0F) → 'Ce dossier est introuvable.' ; recherche 'INT-C49E0F' → 'Aucune commande de ce numéro dans votre compte.' 6 alternances client/artisan sans fuite de données d'un rôle à l'autre (onglets et listes propres à chaque rôle). Redémarrage (force-stop) : session and-client restaurée. Réponse tardive de A après connexion de B non provoquée. Shots android-53-apres-logout, android-53-deeplink-logged-out, android-57-tiers-dossier, android-58-lookup-tiers, android-79-restart-session.",
+  "defects": []
+ },
+ {
+  "id": "SYS-03",
+  "status": "PARTIAL",
+  "evidence": "Android : le manager ne voit que son organisation et ses dossiers de site ; le client particulier ne peut pas ouvrir un dossier tiers ('Ce dossier est introuvable'). Organisation tierce et membre retiré non rejoués sur Android.",
+  "defects": []
+ },
+ {
+  "id": "SYS-04",
+  "status": "PASS",
+  "evidence": "Chat : artisan Android envoie 'AND bonjour, devis envoye depuis Android' (bouton désactivé si vide) ; message du client reçu ; motif de refus de devis relayé dans la conversation. Notifications in-app : artisan → 'Nouveau message · Non lue' (INT-BE11C3), 'Devis refusé' ; 'Marquer comme lue' → '0 non lues', 'Voir la conversation' ouvre le fil ; filtres Toutes/Non lues. Préférences enregistrées (voir CLI-09). Push système non testable dans Expo Go (push_enabled=false, e-mail/SMS 'aucun fournisseur configuré'). Onglet Messages : liste des conversations sans indicateur de non-lu. Shots android-48-chat-artisan-envoye, android-49-chat-realtime, android-51-artisan-notifs.",
+  "defects": []
+ },
+ {
+  "id": "SYS-05",
+  "status": "PASS",
+  "evidence": "Écran Conversation ouvert côté artisan sur Android avec un brouillon non envoyé ('AND brouillon artisan') ; message client posté depuis le web (POST /api/messages 201) → apparu sous 'INTERLOCUTEUR' en <7 s sans quitter l'écran, brouillon conservé (rafraîchissement 5 s). Shot android-49-chat-realtime.",
+  "defects": []
+ },
+ {
+  "id": "SYS-06",
+  "status": "PARTIAL",
+  "evidence": "Android : photos privées liées au dossier, ouvertes uniquement par URL signée Supabase (/storage/v1/object/sign/…) dans l'onglet Chrome ; photo partagée seule visible dans l'offre avant attribution. Expiration du lien, versions et rétention non testées. Shots android-28-doc-ouvert, android-44-offre.",
+  "defects": []
+ },
+ {
+  "id": "SYS-07",
+  "status": "PARTIAL",
+  "evidence": "Android : recherche par numéro de commande côté client (trouvé / 'Aucune commande de ce numéro dans votre compte') ; recherche entreprise avec compteurs ('1 en cours · 1 urgentes'), filtres et pagination ('1 résultat(s) · page 1 sur 1') ; listes d'approbations/contrats paginées ('Page 1'). Pagination au-delà de la première page non exercée (jeu de données propre trop petit). Shots android-58-lookup-ok, android-99-ent-recherche.",
+  "defects": []
+ },
+ {
+  "id": "SYS-08",
+  "status": "PARTIAL",
+  "evidence": "Android Pixel 6 API 34 (Expo Go, build 15). Taille de police système 150 % : contenus des écrans Dossier et Profil lisibles et réagencés (boutons sur 2 lignes) mais la barre d'onglets coupe les libellés au milieu des mots (défaut). Rotation : user_rotation=1 → l'app reste en portrait (ROTATION_0, capture 1080×2400). Libellés d'accessibilité (arbre uiautomator = ce que lit TalkBack) : boutons, onglets (état sélectionné), champs (libellé = content-desc), cartes de service ('… Fourchette indicative de 150 à 350 euros') correctement nommés ; manques listés en défauts. TalkBack non activé réellement ; distribution (APK/Play) non testée : app lancée dans Expo Go. Shots android-80-font-150-dossier, android-80-font-150-profil, android-81-rotation.",
+  "defects": [
+   {
+    "title": "Police système 150 % : libellés de la barre d’onglets coupés au milieu des mots",
+    "steps": "Android > Réglages > Taille de police maximale (font_scale 1.5) > ouvrir l’espace client",
+    "expected": "Libellés entiers (réduction, ellipse ou plafonnement maxFontSizeMultiplier)",
+    "actual": "« Demand/es », « Message/s » sur deux lignes ; icônes de la barre partiellement rognées",
+    "suspect": "apps/mobile/src/components/mobile-chrome.tsx (barre d’onglets : Text sans maxFontSizeMultiplier / numberOfLines)"
+   },
+   {
+    "title": "[mineur] Accessibilité : états non exposés",
+    "steps": "Inspecter l’arbre d’accessibilité : formulaire Nouvelle demande (type de panne, urgence), éditeur de devis (taux de TVA), interrupteur de disponibilité",
+    "expected": "Option choisie annoncée comme sélectionnée ; interrupteur nommé",
+    "actual": "Les boutons de choix (type de panne, urgence, TVA) n’exposent aucun état sélectionné ; le curseur de l’interrupteur @expo/ui est un nœud cliquable sans libellé (NAF)",
+    "suspect": "apps/mobile/src/components/ui.tsx Action (accessibilityState.selected absent) ; components/artisan-availability.tsx"
+   }
+  ]
+ },
+ {
+  "id": "SYS-09",
+  "status": "N/A_NATIVE",
+  "evidence": "Exploitation, sauvegarde et restauration : sans objet pour l'application native (opérations serveur).",
+  "defects": []
+ },
+ {
+  "id": "SYS-10",
+  "status": "N/A_NATIVE",
+  "evidence": "Diagnostic photo IA : fonction désactivée ; aucun écran natif (la photo de la demande est simplement jointe au dossier).",
+  "defects": []
+ }
+]

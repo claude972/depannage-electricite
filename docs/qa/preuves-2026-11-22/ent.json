@@ -1,0 +1,283 @@
+[
+ {
+  "id": "ENT-01",
+  "status": "FAIL",
+  "evidence": "Existing organisation: ent-owner logs in and lands on #overview with 'Organisation active : QA q09ed11 Organisation', own counters only; a manager with no membership (ent-invitee before acceptance, ent-signup) gets 'Aucune organisation active', workspace organizations=0, GET /api/organizations?organization_id=<cohort org> 403, site settings 404, reports 404 (no inherited context). Creation from scratch: (1) public signup UI (#auth > Créer un compte > 'Professionnel / syndic'): short password blocked client-side; submit with qa-q09ed11-ent-signup@qa.invalid -> POST /api/auth/signup 422 'Indiquez une adresse e-mail valide.' (Supabase Auth code email_address_invalid for the reserved .invalid domain; a deliverable mailbox + confirmation e-mail would be required, which the QA rules forbid) -> signup itself BLOCKED, account then created with the auth admin API as a fixture. (2) Logged in through the UI, that manager cannot create an organisation: Membres says 'Ajoutez un premier site pour créer votre organisation' but Sites & contrats shows no 'Nouveau site' form, only 'L'ajout d'un site requiert un droit d'écriture sur toute l'organisation. Vous n'êtes pas membre de cette organisation.' (ent-t01-first-login.png). Server path works: POST /api/sites without organization_id -> 201, DB organizations 'Mon organisation' (2f9f1df8) + owner membership + site 'ent Siège Signup'; after reload the UI shows 'Mon organisation', role Propriétaire, 'Nouveau site' available, report limited to its own site, cohort org still 403/404.",
+  "defects": [
+   {
+    "title": "A manager without organisation cannot create the first site / organisation from the UI (dead end)",
+    "steps": "Log in as a manager account with no organisation membership > Membres (reads: 'Ajoutez un premier site pour créer votre organisation') > Sites & contrats",
+    "expected": "A 'Nouveau site' form that creates the organisation on first save (the API supports it: POST /api/sites without organization_id = 201 and creates 'Mon organisation')",
+    "actual": "No form: 'L'ajout d'un site requiert un droit d'écriture sur toute l'organisation. Vous n'êtes pas membre de cette organisation.'; DB shows no organisation for the user",
+    "suspect": "components/role/enterprise-space.tsx:2776 (SiteForm rendered only when c.authority.canWriteOrganization, which is false when there is no organisation)",
+    "severity": "high"
+   },
+   {
+    "title": "Public signup cannot be qualified with synthetic addresses",
+    "steps": "#auth > Créer un compte, role Professionnel / syndic, e-mail qa-...@qa.invalid",
+    "expected": "Account created (or an explicit message that the domain is not accepted)",
+    "actual": "422 'Indiquez une adresse e-mail valide.' although the address is syntactically valid; BLOCKED locally: needs a deliverable mailbox and the confirmation e-mail (external provider)",
+    "suspect": "lib/features/auth/signup.ts:33 (maps Supabase email_address_invalid to the generic message)",
+    "severity": "low"
+   }
+  ]
+ },
+ {
+  "id": "ENT-02",
+  "status": "FAIL",
+  "evidence": "Owner UI (Membres): invalid e-mail blocked; invitation for ent-invitee as Lecture limited to 'ent Restaurant Le Lagon' created (POST /api/organizations 200, 64-char code shown once, list 'En attente', 'Aucun e-mail automatique'). Code used by another account = 403, unknown code = 409. After acceptance the member sees only the restaurant (header 'Votre accès : Sites sélectionnés : ent Restaurant Le Lagon (lecture)', 1 site, 1 dossier; API restaurant 200, office settings/energy/dossier 404, office site-operations 403, report limited to the restaurant, write 403). Role change to Gestionnaire in UI (200, DB role=manager) still read-only until the owner ticks 'écriture pour ent Restaurant Le Lagon' (POST /api/organizations/site-access 200) -> write 200 and Add buttons appear. Removal in UI with the member's page open ('Confirmer le retrait', DB row gone): immediately settings/dossier/documents/counters/reports 404, site-operations 403, write 403; on window focus without reload the open page switches to 'Aucune organisation active' / 'Ce site est introuvable ou n'est plus accessible.' Re-invitation (Lecture, all sites) created in UI; accepted through the API it restores read access (office 200, write 403). Org-wide viewer ent-viewer: no write control on office/syndic/ERP sheets ('Lecture seule…' notices), members page 'Seul le propriétaire… gère les membres', new request 'Création de demande non autorisée', and 403 on every write (areas, contacts, energy, settings, site-operations, co-ownership, budget, compliance, contract, approval rule, create site, invitation, cancel, new request); 0 intruder rows in DB; no horizontal overflow at 390 px. FAIL: the invitation cannot be accepted through the UI link (defect 1). Not covered: ownership transfer, invitation revocation/expiry.",
+  "defects": [
+   {
+    "title": "Invitation link cannot be accepted in the UI (logged in: refused page; logged out then login: silently dropped)",
+    "steps": "Owner creates an invitation and copies the link /#join-organization/<code>. (a) Invitee already logged in opens the link in a new tab. (b) Invitee logged out opens the link, clicks 'Se connecter pour accepter' (sessionStorage courant-invitation-code is set, notice 'elle sera acceptée juste après la connexion'), signs in with the invited address",
+    "expected": "Membership created and organisation shown",
+    "actual": "(a) 'Cette page ne fait pas partie de votre espace - Le lien demandé correspond à un autre rôle ou à une autre organisation.' (b) lands on #overview 'Aucune organisation active'; no POST /api/organizations/invitations/accept is sent within 15 s, the stored code is removed, no message, invitation stays pending (reproduced twice; ent-t02-join-loggedin.png, ent-t02-join-after-login-2.png). The same code POSTed to /api/organizations/invitations/accept returns 200",
+    "suspect": "components/courant-app.tsx:664-677 (auto-accept effect: acceptInvitation goes through run(); on a false result the pending code is cleared, likely racing with the login/refresh in progress) and components/app/session.ts:35 ('join-organization' is a public-only view, so the role guard rejects it for a signed-in manager)",
+    "severity": "high"
+   },
+   {
+    "title": "Access journal shows raw event keys",
+    "steps": "Owner > Membres > Historique des accès after invite / role change / removal",
+    "expected": "French labels",
+    "actual": "'invitation_created', 'invitation_accepted', 'member_role_changed', 'member_site_access_changed', 'member_removed'",
+    "suspect": "components/role/enterprise-space.tsx:4809-4811 (label map keyed by command names such as create_invitation, not by the event names returned by the server)",
+    "severity": "low"
+   }
+  ]
+ },
+ {
+  "id": "ENT-03",
+  "status": "FAIL",
+  "evidence": "5 sites created in the UI (syndic, restaurant, office, ERP + one office to archive): POST /api/sites 201 each, DB rows with type/budget; empty name blocked by required field. Edit in 'Paramètres du site': empty name refused ('Nom requis'), name/address saved (settings_version 2), budget edited through 'Modifier le budget' (150000 cents in DB), opening slot + access notes persisted after reload. Archive: with 2 open requests the UI archive returns 409 with the generic message (defect 2); after cancelling them (one via UI 'Annuler la demande' > 'Confirmer l'annulation') 'Archiver le site…' > 'Confirmer l'archivage' -> 200, DB archived_at set. Then: 'Mes sites 4', portfolio 'Sites actifs' lists 4, 'Sites archivés' lists 'ent Site archivé Dostaly'; opening it shows badge 'Archivé', 'Site archivé : ses paramètres et son historique restent consultables', no write button, tab 'Passées' lists INT-3E8CAC and INT-CC286D (Annulée). New request refused in UI ('Le site est archivé et ne peut plus recevoir de demande.') and API (409); settings write 409; save_equipment 409. FAIL: other writes still succeed on the archived site (defect 1).",
+  "defects": [
+   {
+    "title": "Archived site is still writable through /api/professional (budget, compliance record, approval rule)",
+    "steps": "Owner, after archiving site e3fc1567: POST /api/professional {action:set_site_budget, site_id, budget_cents:7}; {action:save_compliance,...}; {action:set_approval_rule,...}",
+    "expected": "409/403 as for settings, equipment and new requests (archived = strictly read-only)",
+    "actual": "HTTP 200 for the three; DB sites.budget_cents changed to 7 on the archived site (restored to 150000 afterwards the same way)",
+    "suspect": "app/api/professional/route.ts (set_site_budget / save_compliance / set_approval_rule and their RPCs do not check sites.archived_at, unlike write_site_settings in supabase/migrations/20261107144129_site_lifecycle.sql)",
+    "severity": "medium"
+   },
+   {
+    "title": "Archiving a site with open requests fails with a misleading generic message",
+    "steps": "Owner: site with a request in status requested > Paramètres du site > Archiver le site… > Confirmer l'archivage",
+    "expected": "Explicit reason (open interventions must be closed first)",
+    "actual": "409 'L'état du dossier a changé ou cette action n'est plus disponible. Actualisez la page.'; refreshing does not help",
+    "suspect": "supabase/migrations/20261107144129_site_lifecycle.sql write_site_settings ('Site still has open interventions' raised as P0001, mapped to the generic conflict message); components/features/site-lifecycle/site-lifecycle-panels.tsx",
+    "severity": "low"
+   },
+   {
+    "title": "Top 'Site' scope selector still lists the archived site",
+    "steps": "After archiving, look at the scope selector in any enterprise view",
+    "expected": "Archived site absent or marked archived",
+    "actual": "'ent Site archivé Dostaly' still offered as an ordinary scope",
+    "suspect": "components/role/enterprise-space.tsx (scope selector built from all workspace sites)",
+    "severity": "low"
+   }
+  ]
+ },
+ {
+  "id": "ENT-04",
+  "status": "FAIL",
+  "evidence": "All functions work for the owner on 'ent Bureaux Pointe Simon' (d91634e1): floor 'ent Étage 2' + child zone 'ent Zone serveurs' (POST areas 200, parent_id set, edit -> version 2); contact 'Marie ent Gardienne' principal (empty form and phone 'abc' refused with messages, edit -> version 2); equipment 'ent TGBT bureaux' (save_equipment 200; empty designation blocked; state edited to Dégradé); site piece ent-plan.pdf kind Plan (POST documents 201; .txt refused 'Formats autorisés : PDF, JPEG, PNG et WebP.'); settings notes + opening slot (200). Everything re-read after reload and in DB (site_areas, site_contacts, site_documents). Equipment/zone linked to dossier INT-9DC5DD ('Rattacher', asset-links 200, persisted). Viewer: data visible, no write control ('Ajout de pièces réservé aux gestionnaires'), replayed writes 403; other organisation 403/404. No overflow at 390 px. FAIL only for the rendering defect below (medium): the sheet shows several dead loading panels. Not covered: replace/archive of a piece, document download.",
+  "defects": [
+   {
+    "title": "Site sheet renders 4-11 zombie copies of 'Paramètres du site' / 'Consommation électrique' stuck in loading",
+    "steps": "Owner: Sites & contrats > 'Fiche du site ent Bureaux Pointe Simon' (or direct #site/d91634e1-...), wait 6-16 s; reload the page",
+    "expected": "One settings panel and one energy panel, loaded",
+    "actual": "DOM holds 5 'Lecture des paramètres du site…' + 5 'Chargement des consommations…' placeholders that never resolve next to the single live panel (6 energy headings after navigation, 12 after a reload); console: 'Encountered two children with the same key <siteId>:<userId>:<generation>'. Screenshot ent-fiche-dup-panels.png",
+    "suspect": "components/role/enterprise-space.tsx:3340, 3363 and 3444 - SiteSettingsPanel, SiteEnergyPanel and SiteContactsPanel are siblings sharing the identical key `${site.id}:${userId}:${generation}`",
+    "severity": "medium"
+   },
+   {
+    "title": "Sheet shortcuts land on the wrong 'Pilotage professionnel' tab",
+    "steps": "Site sheet > Règle d'approbation > 'Configurer la règle', or Échéances & conformité > 'Ajouter'",
+    "expected": "Approbations tab (rule form) / Audits et maintenance tab (deadline form), site preselected",
+    "actual": "Both open #contracts on the 'Contrats cadres' tab; the user must click the right tab and pick the site again",
+    "suspect": "components/role/enterprise-space.tsx (go('contracts') without target tab from SiteSheet)",
+    "severity": "low"
+   }
+  ]
+ },
+ {
+  "id": "ENT-05",
+  "status": "PASS",
+  "evidence": "Syndic site 'ent Résidence Eucalyptus' (f41d197d): the 'Copropriété' panel exists only for the syndic type (GET co-ownership on the office site = 422). AG 'ent AG ordinaire 2026' saved as 'Tenue' with agenda, minutes and 2 decisions (POST /api/sites/:id/co-ownership 200, record 5a6eb176, edited -> version 2); empty title and end before start refused. Fund call 'ent Appel travaux éclairage T4' 1 250,50 EUR, 'Émis (déclaratif)', linked to the AG (record d9add1e5, amount_cents 125050, meeting_id set); amount '-12,5x' and missing source document refused. Both re-read after reload and through GET kind=meeting / kind=fund_call. Common parts declared through 'Étages, zones et parties communes' (kind 'Partie commune' offered). Viewer: 'Lecture seule : vous pouvez consulter ces dossiers', no button, replayed write 403; other organisation 403/404. Honest limits displayed and returned (sends_notices=false, collects_funds=false, legal_validation=false). No feature gate: panel and /api/site-operations answer 200. Not covered: archive of a record, consolidated multi-site view (the report states none is computed).",
+  "defects": []
+ },
+ {
+  "id": "ENT-06",
+  "status": "PARTIAL",
+  "evidence": "No restaurant-specific dashboard exists: the generic dashboard is scoped with the 'Site' selector. Urgent request INT-17104C created from the restaurant sheet wizard (POST /api/interventions 201, urgency urgent, +25 % notice). Scoped dashboard: 'Interventions en cours 1 dont 1 urgente', row 'Coupure de courant / Urgent / Recherche en cours'; POST /api/enterprise/overview site-scoped = open 1 urgent 1; site sheet 'Interventions' lists INT-17104C 'Urgent'. Ticket then accepted by ent-artisan, quoted from the contract grid (DEV-99F497 195,30 EUR), accepted, started and completed in the UI (DB completed). Missing versus the acceptance hint: the ticket list/dashboard shows no due time; the deadline exists only in the manually opened SLA case (ENT-11), which I did not manage to link to the ticket through the picker. The scope selection is not kept after a page reload (back to 'Tous les sites'). No gate: /api/site-operations 200 for this site.",
+  "defects": [
+   {
+    "title": "Category label differs between screens",
+    "steps": "Open the SLA ticket picker (Opérations du site > Délais > Ouvrir un dossier de délai > Choisir un ticket du site) for a 'Coupure de courant' request",
+    "expected": "Same label everywhere",
+    "actual": "Picker shows 'INT-17104C · Panne générale' while lists and dossier say 'Coupure de courant'",
+    "suspect": "components/features/site-operations/sla-panel.tsx (own category label map)",
+    "severity": "low"
+   },
+   {
+    "title": "Intervention address repeats postal code and city",
+    "steps": "Create a request from a site whose address already contains '97200 Fort-de-France'",
+    "expected": "Address shown once",
+    "actual": "'Rue Ernest Deproge, 97200 Fort-de-France, 97200 Fort-de-France' in dossier summary and lists",
+    "suspect": "components/role/enterprise-space.tsx (address + postal_code + city concatenation)",
+    "severity": "low"
+   }
+  ]
+ },
+ {
+  "id": "ENT-07",
+  "status": "PARTIAL",
+  "evidence": "Restaurant site: equipment 'ent Chambre froide positive' (criticité critique, état Dégradé, location) and 'ent Éclairage de sécurité salle' saved in Opérations du site > Équipements (save_equipment 200) and re-read in later sessions. Ticket INT-17104C explicitly linked to the cold room from the dossier ('Rattacher', POST asset-links 200, shown 'Équipement · lié le 21/11/2026'). Maintenance plan 'ent Contrôle chambre froide mensuel' tied to the equipment, shown 'Échéance dépassée'. Limits: the restaurant block 'Équipements critiques (cuisine, froid, éclairage)' is only an informational notice (blocker tag ENT-07: 'Aucune télémesure ni alerte automatique n'est raccordée : l'état affiché est celui déclaré'); the equipment card lists neither its linked tickets nor its controls (link readable from the dossier side only); the category list has no kitchen/cold entry (used 'Autre équipement'). No feature flag or 'fermée' state: GET /api/site-operations 200.",
+  "defects": []
+ },
+ {
+  "id": "ENT-08",
+  "status": "PASS",
+  "evidence": "Office site: building breakdown floor 'ent Étage 2' > zone 'ent Zone serveurs' persisted (see ENT-04). Maintenance plan 'ent Vérification TGBT trimestrielle' on equipment 'ent TGBT bureaux', every 3 months, due 10/12/2026 (save_maintenance_plan 200); periodicity without N refused ('Indiquez une fréquence avec sa valeur…'). Visit recorded 20/11/2026 (record_maintenance_visit 200) -> 'Visites enregistrées 1', next due recomputed to 20 févr. 2027, plan version 2; plan present in later sessions and in GET /api/site-operations. Dashboard: generic one scoped by site (no office-specific dashboard); organisation deadline record shown in 'Échéances à 30 jours'. Viewer: no control in the operations tabs, write 403. No gate ('site-operations' 200). Note: maintenance plans (Opérations du site) and 'Échéances & conformité' records are two separate lists; an overdue plan does not appear in the dashboard deadline counter.",
+  "defects": []
+ },
+ {
+  "id": "ENT-09",
+  "status": "PASS",
+  "evidence": "Office site: 2 declared periods saved in the UI (Sept 1 200,5 kWh 310,40 EUR invoice ent-FAC-09; Oct 1 034,25 kWh without cost, meter reading ent-REL-10) -> POST /api/sites/:id/energy 200, DB site_energy_periods consumption_wh 1200500 / 1034250, cost_cents 31040 / null; edit -> version 2. Refusals: inverted period ('La fin de période précède son début.'), kWh with 5 decimals, overlapping period = 409 with explicit message and the draft kept. After reload: 2 234,75 kWh, 'coûts incomplets'; filter Sept only -> 1 200,5 kWh / 310,40 EUR (no prorata). Consolidation in Rapports (office + restaurant, 01/09-31/10): 2 234,75 kWh, restaurant 'aucun compteur déclaré', total 'non calculable : couverture incomplète'; 'Exporter en CSV' -> rapport-energie.csv: meter row 2234750 Wh, 2 readings, 1 missing cost, cost sum 'non disponible'; comparison with a period of different length refused. Viewer read-only, write 403. The duplicated loading panels of ENT-04 affect this section of the sheet.",
+  "defects": [
+   {
+    "title": "Declared meter name is lower-cased in the consolidation",
+    "steps": "Rapports > Consommation d'énergie (consolidé) with a meter saved as 'ent Compteur général'",
+    "expected": "Name as typed",
+    "actual": "'ent compteur général' on screen and in the CSV",
+    "suspect": "components/features/energy-consolidation (normalised key displayed)",
+    "severity": "low"
+   }
+  ]
+ },
+ {
+  "id": "ENT-10",
+  "status": "PASS",
+  "evidence": "ERP site 'ent ERP Salle Polyvalente' (f79aa699), Opérations du site > Contrôles ERP: declarative control 'ent Vérification éclairage de sécurité 2026' with 2 points, one 'Réserve' (save_erp_checklist 200, id 4dd87a48) -> Contrôles 1 / Réserves ouvertes 1; empty title/points refused. Edit with 'Réserve levée le' 21/11/2026 -> Réserves ouvertes 0, 'Levée le 21 nov. 2026', Historique tab lists créé v1 / modifié v2; persisted after reload. Audit record 'ent Audit électrique annuel ERP' due 05/12/2026 created in Pilotage > Audits et maintenance (save_compliance 200, DB compliance_records c4363b1b) appears in the ERP-only block 'Audits & réserves', in 'Échéances & conformité' and in the dashboard 'Échéances à 30 jours 1'. Wording stays declarative (no certification claimed). Viewer: no control, write 403. Not covered: reserve document, archiving a control, 'Marquer terminé'.",
+  "defects": []
+ },
+ {
+  "id": "ENT-11",
+  "status": "PASS",
+  "evidence": "Calendar 'ent Calendrier bureaux' America/Martinique, Monday 08:00-18:00 (save_sla_calendar 200; time zone 'Mars/Olympus' refused 'Fuseau horaire inconnu.'). Rule 'ent Urgence cuisine' on the restaurant: urgent, response 60 min, resolution 240 min (save_sla_policy 200; empty name refused). Case ent-SLA-INT-17104C opened Mon 16/11 09:00, response 09:30 -> Réponse 'Respecté' (30 min, due 10:00), resolution due 13:00. Future date refused ('La date d'un fait constaté ne peut pas être dans le futur.'). Pause 10:00 -> 'En pause'; resume before the pause start = 422; resume 10:30 -> due time moved to 13:30; resolution 14:30 -> 'Dépassé', elapsed 5 h. KPI 'Dossiers suivis 1 / Dépassés 1', same after reload, in GET /api/site-operations (elapsed_minutes 300, breached; response met) and in Rapports > Respect des SLA (1 cas en dépassement on the restaurant). Graded urgency: wizard 'Demande urgente', 'Urgent' tags, dashboard 'dont 1 urgente'. Not covered: linking the case to the ticket (picker listed INT-17104C, selection not completed), other weekdays, closed days.",
+  "defects": []
+ },
+ {
+  "id": "ENT-12",
+  "status": "FAIL",
+  "evidence": "Rule 200 EUR TTC set in the UI for the office site (set_approval_rule 200, DB threshold_cents 20000). Urgent request INT-9DC5DD created from the site sheet, accepted by ent-artisan in the UI, quote DEV-67C110 325,50 EUR sent -> approval created pending, dashboard 'Devis à approuver 1', nav badge, dossier 'Acceptation suspendue à l'approbation' with no accept button; API accept_quote before approval = 409 'Ce devis doit d'abord être approuvé…'. Viewer: no decision/accept control, decide_approval 403, accept_quote 403, set_approval_rule 403. UI refusal without comment blocked ('Un commentaire est obligatoire en cas de refus.', nothing sent). Revised quote DEV-37C1A8 303,80 EUR approved in the UI with a comment (200, DB approved + note, history row), second decision 409, then 'Accepter le devis' > 'Confirmer l'acceptation' -> 200, DB quote accepted / intervention accepted, persisted after reload; history keeps version 1 (rejected) and version 2. FAIL: the mandatory rejection comment is not enforced by the server (defect 1), which is how DEV-67C110 ended rejected with an empty note during my API probe.",
+  "defects": [
+   {
+    "title": "Server accepts a quote rejection without comment",
+    "steps": "Owner with a pending approval: POST /api/professional {action:'decide_approval', approval_id:'5ff92d49-…', decision:'rejected', note:'  '}",
+    "expected": "422: comment mandatory for a rejection (as the UI states)",
+    "actual": "HTTP 200, approvals.status=rejected with note '' and quote DEV-67C110 set to rejected; history shows 'Refusé … —'",
+    "suspect": "app/api/professional/route.ts:22-27 (note: z.string().trim().max(2000).default('') without a rule for decision=rejected) and the decide RPC",
+    "severity": "medium"
+   },
+   {
+    "title": "Dossier keeps the previous approval state after a decision taken in the same session",
+    "steps": "Owner: Devis & approbations > DEV-37C1A8 > Approuver + comment > Enregistrer (200), then go to #detail/9dc5dd42 without reloading the browser",
+    "expected": "'Accepter le devis' available",
+    "actual": "Dossier still shows 'décision en attente / Acceptation suspendue à l'approbation'; a new session shows 'Accepter le devis'. Observed once, not re-run. Wording also reads 'décision approuvé' / 'décision refusé'",
+    "suspect": "components/role/enterprise-space.tsx DossierView (approval state read from the cached workspace, not refreshed after decide_approval)",
+    "severity": "medium"
+   },
+   {
+    "title": "Duplicate React key in the dossier quote block",
+    "steps": "Owner opens a dossier with two quote versions and clicks 'Accepter le devis'",
+    "expected": "No console error",
+    "actual": "Next dev overlay: 'Encountered two children with the same key 37c1a89d-…' at components/role/enterprise-space.tsx (2016:27)",
+    "suspect": "components/role/enterprise-space.tsx:2016 (ContractSourceLine key={displayed.id} collides with a sibling)",
+    "severity": "low"
+   }
+  ]
+ },
+ {
+  "id": "ENT-13",
+  "status": "PASS",
+  "evidence": "Framework contract 'ent Contrat cadre maintenance 2026' (ref ent-CC-2026-01, Actif, 01/06/2026-31/05/2027) saved in Sites & contrats > Contrats cadres (save_contract 200, DB contracts f897e2ad), listed after reload; end before start produced no request. Price grid 'ent Grille maintenance 2026': draft with 2 lines (65,00 EUR/h, 40,00 EUR/visit; amount 'abc' refused), published -> 'Publiée', frozen; 'Préparer une nouvelle version' -> version 2 at 70,00 EUR/h published; API keeps v1 'superseded' at 6500 and v2 'published' at 7000. Grid authorised for dossier INT-17104C ('Autoriser…' > 'Confirmer', POST quote-grid/access 200); ent-artisan sees only that grid ('Grille contractuelle du client … version 2'), applies 2 h + 1 visit -> draft 140 + 40 = 180 EUR HT, quote DEV-99F497 195,30 EUR TTC sent and accepted by the owner. Viewer: no control in Grilles, site-operations write 403; other organisation 403. Not verified: the contract-source line of the quote on the owner dossier (not seen in the page text), using an old version after v2.",
+  "defects": [
+   {
+    "title": "Grid authorisation offered before an artisan is assigned, then fails as 'dossier introuvable'",
+    "steps": "Owner opens a dossier in status 'Recherche d'un artisan', picks a published grid > Autoriser… > Confirmer",
+    "expected": "Control disabled with a reason, or an explicit message",
+    "actual": "POST /api/interventions/:id/quote-grid/access 404 'Ce dossier est introuvable.'; works once the artisan is assigned",
+    "suspect": "supabase/migrations/20261107173813_contract_quote_pricing.sql:116-118 (no_data_found when artisan_id is null) and the grid block of DossierView in components/role/enterprise-space.tsx",
+    "severity": "low"
+   },
+   {
+    "title": "'Publier (irréversible)' publishes on a single click",
+    "steps": "Opérations du site > Grilles > 'Publier (irréversible)' on a draft",
+    "expected": "Confirmation step for an irreversible action",
+    "actual": "Published and frozen immediately",
+    "suspect": "components/features/site-operations/grids-panel.tsx",
+    "severity": "low"
+   },
+   {
+    "title": "Viewer / delegated payer sees a grid read error in the dossier",
+    "steps": "ent-viewer opens dossier INT-17104C",
+    "expected": "Grid block hidden or read-only",
+    "actual": "Alert 'Les grilles n'ont pas pu être lues. Réessayez.' with a retry button",
+    "suspect": "components/features/quote-grid (owner-only read surfaced as an error)",
+    "severity": "low"
+   }
+  ]
+ },
+ {
+  "id": "ENT-14",
+  "status": "PARTIAL",
+  "evidence": "Office site > Opérations du site > Budget: exercise 'ent Exercice 2026' 01/01-31/12/2026 (save_fiscal_year 200; end before start refused; overlapping exercise = 409). Lines Maintenance 200 EUR + Dépannages 250 EUR (save_budget_line 200; amount '-5' refused) -> 'Budget saisi 450,00 EUR, Devis acceptés 303,80 EUR (1 dossier), Réglé 0,00, Écart 146,20 EUR', identical after reload and in GET /api/site-operations; lowering Dépannages to 50 EUR -> 'Budget saisi 250,00 / Écart -53,80 EUR'. Site sheet reference budget: 4 000,00 EUR, engaged 303,80, remaining 3 696,20 (7,6 %), matching the accepted quote in DB (30380 cents). Viewer write 403. PARTIAL: no alert was observed for the overrun (only the negative gap; the 'Alertes' column of the site list was not captured and no notification was seen), one exercise only, paid amount untestable without Stripe.",
+  "defects": [
+   {
+    "title": "Overlapping budget exercise refused with a generic message",
+    "steps": "Budget > Ajouter un exercice with dates overlapping the existing exercise",
+    "expected": "Message saying exercises cannot overlap",
+    "actual": "409 'L'état du dossier a changé ou cette action n'est plus disponible. Actualisez la page.'",
+    "suspect": "app/api/site-operations/route.ts save_fiscal_year error mapping",
+    "severity": "low"
+   }
+  ]
+ },
+ {
+  "id": "ENT-15",
+  "status": "PASS",
+  "evidence": "Rapports (owner): 'Budget et engagements par site' = Restaurant 3 000,00 / 195,30 / 0,00 / 1; Bureaux 4 000,00 / 303,80 / 0,00 / 1; three other sites 0; Total 19 000,00 EUR, 499,10 EUR accepted, 0,00 paid, 2 interventions. 'Télécharger le rapport CSV' -> rapport.csv with the same 5 rows (3000.00;195.30 / 4000.00;303.80 …). GET /api/reports accepted_cents 19530 + 30380. DB accepted quotes 30380 + 19530 = 49910 cents on 2 interventions -> screen = CSV = DB. Scope selector restricts the report to the restaurant (3 000 / 195,30 / 1). Scoped member sees only his site in the report; other organisation 404. Energy consolidation and its CSV: see ENT-09. SLA consolidated: 1 case breached on the restaurant = site panel. No overflow at 390 px. Not covered: pagination/volume (2 dossiers), the 'Exporter' button of the interventions list.",
+  "defects": [
+   {
+    "title": "Report CSV exports raw activity codes",
+    "steps": "Rapports > Télécharger le rapport CSV",
+    "expected": "French activity labels as on screen",
+    "actual": "Column 'Activité' contains restaurant / office / syndic / erp",
+    "suspect": "lib (professional_report CSV builder behind app/api/reports/route.ts)",
+    "severity": "low"
+   }
+  ]
+ },
+ {
+  "id": "ENT-16",
+  "status": "PARTIAL",
+  "evidence": "Dossier INT-17104C taken to 'completed' through the artisan UI (start, report with before/after photos, 'Terminer'). Owner dossier: 'Règlement — Devis et avenants acceptés (calcul serveur) 195,30 EUR'. Delegated payer: owner designates Qa Lecteur in the UI ('Désigner…' > 'Confirmer', POST /api/interventions/:id/payer 200, payer_id = viewer, version 1; block shows 'Payeur délégué actuel : Qa Lecteur'). The delegate sees 'Vous êtes le payeur délégué de ce dossier' and the pay button, GET payer can_checkout=true / can_manage=false, cannot change the delegation (403) and gains no other right (budget 403, cancel 403). Third parties (other organisation owner, a non-member): GET payer 404, POST payer 403, invoices 404. Payment BLOCKED locally: clicking 'Régler le devis et les avenants acceptés' -> POST /api/payments/checkout 503 'Le paiement Stripe est en cours de configuration. Aucun montant n'a été débité.' (STRIPE_SECRET_KEY absent; nothing paid). Facturation view and GET /api/invoices: 'Aucune facture émise', 'Aucun règlement enregistré' — invoice issue and its link to the payer cannot be exercised without the payment provider. Integrations not tested.",
+  "defects": [
+   {
+    "title": "Pay button offered although online payment is not configured",
+    "steps": "Owner or delegated payer opens a completed dossier with no Stripe key on the server",
+    "expected": "Unavailable state announced before the click",
+    "actual": "Button active; the unavailability only appears after the click (503 message, which is honest)",
+    "suspect": "components/role/enterprise-space.tsx settlement block / lib/features/payments/configuration.ts",
+    "severity": "low"
+   }
+  ]
+ },
+ {
+  "id": "SYS-03",
+  "status": "PASS",
+  "evidence": "Manager of another organisation (ent-other-owner, org a8937c3b) against the cohort organisation: sites (settings, areas, contacts, energy, documents, records, co-ownership, asset-links) 404; site-operations, approval-policy, members, site-access 403; dossier 404; document history 404; reports 404; counters POST /api/enterprise/overview and /overview/professional 404; payer 404; every write 403/404 (areas, contacts, energy, settings, site-operations, co-ownership, budget, compliance, contract, approval rule, create site in that org, invitation, cancel, new request). Removed member (ent-invitee, removed in the UI while his page was open): immediately settings 404, dossier 404, site documents 404, counters 404, reports 404, site-operations 403, write 403; UI switches to 'Aucune organisation active' on focus. Member limited to one site: other sites and their dossiers 404, report limited to his site. Invitation code used by another account 403. DB check after all probes: 0 rows named 'INTRUS', office budget and rule unchanged. The UI of the other organisation's manager was not browsed for leaks beyond these API reads.",
+  "defects": []
+ }
+]

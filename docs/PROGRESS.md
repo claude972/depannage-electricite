@@ -71,3 +71,10 @@ Lecture intégrale et comparaison SHA-256 de la cinquième archive : 17 membres,
 - Plan réécrit en phases 0–11 ; sécurité avant parcours réels, poste opérateur tôt, matching minimal dans le socle, trois back-offices suivis séparément. Tableau CSV : les 76 capacités ont une affectation et une cible de vérification.
 - Vérifications fraîches : npm run typecheck réussi ; npm test 11 réussis. Aucun build, test cloud, SQL distant, navigateur ou paiement exécuté dans cette révision.
 - Aucun code applicatif modifié, aucune infrastructure/secret/donnée distante modifié ; pas de push ni déploiement pendant cette préparation.
+
+## Qualification des 76 capacités — 21 et 22 novembre 2026
+
+- Données commerciales validées par le propriétaire publiées (zone 972xx, garantie plateforme, commission 10 %, règles de prix, identité TTBM SARL) ; voir `docs/DECISIONS.md`.
+- Recette web (Playwright), Android (émulateur Pixel 6 API 34, Expo Go) et iOS (simulateur iOS 27.2, Expo Go) ; sept paiements Stripe TEST à 10 % dont un sur Android et un sur iOS.
+- Douze commits de correction (`f36ce54e` à `bda85303`) ; suite unitaire 2 178 réussis, 0 échec.
+- Matrice : 118 PASS sur 228 cellules (web 56/76, Android 32, iOS 30 ; 53 cellules sans objet en natif). Objectif de 90 % non atteint ; reliquats et décisions attendues dans `docs/qa/RAPPORT_QUALIFICATION_2026-11-22.md`.

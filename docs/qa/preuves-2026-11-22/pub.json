@@ -1,0 +1,162 @@
+[
+ {
+  "id": "PUB-01",
+  "status": "PASS",
+  "evidence": "Playwright 1280+390. Home '/' h1 'Un problème électrique ?'; header/footer/bottom-bar links reach /#pricing, /#help, /#legal, /#privacy, /#about, /#join, /prestations, /conseils, /suivi, /#auth (all 200, correct h1, no horizontal overflow at 390 and 1280, 0 page errors). CTAs: 'Décrire ma panne urgente' -> /#new/urgent (urgent preselected), 'Plus tard' -> /#new/scheduled, service cards -> /prestations/<slug> wizard. Home price cards show the validated ranges. Refusals: anonymous GET/POST /api/interventions -> 401; anonymous deep link /#detail/<id> shows 'Connectez-vous pour accéder à cet espace'. 'Appelez-nous' opens a dialog 'Le numéro d’assistance n’est pas disponible pour le moment.' (phone not supplied by owner: residual). Shots pub-home-1280/390, pub-390-home.",
+  "defects": []
+ },
+ {
+  "id": "PUB-02",
+  "status": "PASS",
+  "evidence": "/#pricing shows: 'Tarification : Au barème horaire, avec un devis précis avant travaux', 'Devis précis remis avant travaux', 'Majoration d’urgence : +25 %', 'Zone desservie : Martinique entière (codes postaux 972xx)'. Grid rows match GET /api/public/indicative-prices 200 (version 1, cents 15000-25000 / 15000-35000 / 8000-18000 / 8000-20000 / 12000-28000) = coupure 150–250, tableau 150–350, prise 80–180, éclairage 80–200, recherche 120–280; request observed on page load. Footnote 'hors majoration d’urgence (+25 %)'. Same range reused in wizard and stored on booking (POST /api/bookings 201 estimate.version 1, 15000/25000). 390/1280 no overflow. RESIDUAL (not a defect): API says source='existing_baseline', publication_available=false -> the grid is the code baseline v1, not an operator-published version; no hourly rate figure is published (only the rule). Urgent-surcharge notice missing in service-wizard recap: see PUB-FLOW.",
+  "defects": []
+ },
+ {
+  "id": "PUB-03",
+  "status": "PASS",
+  "evidence": "/#pricing/zones scrolls to and focuses the check. After 'Vérifier' the result IS visible (aria-live block, 77px, dark text on light panel): 97240/97200/97290 -> 'Le code postal 97240 figure dans la zone publiée par l’exploitant.' + informative note (data-coverage-status=covered); 75001 and 97100 -> 'Le code postal 75001 ne figure pas dans la zone publiée par l’exploitant. Vous pouvez tout de même déposer une demande.' (not_covered); '123', letters, empty -> red role=alert 'Saisissez un code postal de cinq chiffres.' with aria-invalid, no API call. Enter key works. API: 200 {status:covered,version:1} / 200 not_covered / 422 for bad or extra params. Shots pub-cov-97240, pub-cov-75001, pub-cov-invalid. Observation (by design 'informative, never blocks'): request form accepts 75001/Paris without any out-of-zone notice, and an artisan can declare 75001 as intervention zone.",
+  "defects": []
+ },
+ {
+  "id": "PUB-04",
+  "status": "PASS",
+  "evidence": "/#help/contact: callback form present (GET /api/public/callback {available:true}). Client validation without POST: empty/letters/short -> 'Saisissez un numéro de téléphone valide (avec son indicatif si nécessaire).'; no reason -> 'Choisissez l’objet de la demande.'; no consent -> 'Cochez la case de consentement pour envoyer la demande.'. Server refusal: '00000000' -> POST 422 -> 'Le numéro ou la demande n’a pas été accepté : vérifiez la saisie.'; consent:false -> 422; foreign Origin -> 403. Nominal '+596 696 00 00 71' / 'Une demande déjà déposée' -> POST 200 {received:true}, UI 'Votre demande de rappel a bien été reçue…'. Operator queue: admin GET /api/support/callbacks?status=open 200 total 1 item +596696000071 existing_request 2026-11-22T02:02:12Z, and admin UI /#support-queue panel 'Demandes de rappel' shows '+596696000071 · Une demande déjà déposée · reçue le 21/11/2026 22:02' (left open, not closed). Unapproved artisan GET /api/support/callbacks -> 403. Assistance entry 'Se connecter pour écrire à l’assistance' present. RESIDUAL expected: contact e-mail and phone show 'À renseigner par l’exploitant'. Shots pub-callback-validation, pub-callback-done, pub-callback-admin-queue.",
+  "defects": []
+ },
+ {
+  "id": "PUB-05",
+  "status": "FAIL",
+  "evidence": "/#help: 7 FAQ entries all expand (details/summary), answers read; home FAQ 5 entries + 4 'comment on trouve' entries expand. Keyboard reachable (SUMMARY tab stops with 3px outline). 390/1280 no overflow. Content otherwise consistent with published data (devis avant travaux, paiement sur la plateforme). FAIL only for stale wording after the 2026-11-21 publication (minor, see defects).",
+  "defects": [
+   {
+    "title": "FAQ garantie still conditional on a publication that has happened",
+    "steps": "Open /#help, expand 'Où consulter les conditions de garantie ?'",
+    "expected": "Answer states the published warranty (Garantie de la plateforme: satisfaction / ré-intervention / remboursement) or simply points to the Garantie section",
+    "actual": "'Les conditions de garantie de la plateforme figurent dans l’aide, rubrique Garantie, après publication par l’exploitant.' while v2 is published on the same page",
+    "suspect": "components/role/public-lists.ts:38"
+   },
+   {
+    "title": "Signed-in client help: same stale warranty answer",
+    "steps": "Log in as a client, open /#help, expand 'Que couvre la garantie ?'",
+    "expected": "Published warranty summary",
+    "actual": "'…figurent dans l’aide publique, section « Garantie », après publication par l’exploitant.'",
+    "suspect": "components/role/client-space.tsx:168-169"
+   },
+   {
+    "title": "Signed-in client help card says operator details are not yet published",
+    "steps": "Log in as a client, open /#help, aside card 'Contact et informations légales'",
+    "expected": "Reflect that identity/legal info is published (link to Mentions légales); only e-mail/phone pending",
+    "actual": "'Les coordonnées de l’exploitant seront publiées avant l’ouverture commerciale. Cette version ne fournit pas de ligne d’urgence.' (shot pub-client-help)",
+    "suspect": "components/role/client-space.tsx:2409"
+   },
+   {
+    "title": "Public help says no call is promised next to the callback form (minor inconsistency)",
+    "steps": "Open /#help",
+    "expected": "Wording consistent with the open 'Être rappelé' form",
+    "actual": "'Une fois connecté, l’assistance répond dans votre espace. Aucun appel, email ni SMS n’est promis.' shown on the page that also offers a phone callback",
+    "suspect": "components/role/public-site.tsx (help view, 'Vous ne trouvez pas votre réponse ?')"
+   }
+  ]
+ },
+ {
+  "id": "PUB-06",
+  "status": "PASS",
+  "evidence": "/#help/garantie scrolls to 'Conditions de garantie' (in viewport). Shows 'Garantie de la plateforme' with Satisfaction / Ré-intervention / Remboursement paragraphs and stamp 'Version 2 publiée par l’exploitant le 21 novembre 2026.'; text identical to GET /api/public/warranty-terms 200 {published:{version:2,title:'Garantie de la plateforme',published_at:2026-11-22T01:54:22Z}}. Home link 'Garantie et assistance' and footer 'Garantie' reach it. 390/1280 no overflow. Not covered here: the warranty claim itself from a completed dossier (other group).",
+  "defects": []
+ },
+ {
+  "id": "PUB-07",
+  "status": "PARTIAL",
+  "evidence": "/#join shows 'Commission de la plateforme : 10 % du montant de l’intervention réglé sur la plateforme.'; CTA 'Créer mon compte artisan' opens /#auth signup with role 'Artisan électricien' preselected and the approval notice. Validation: empty -> native required; password <10 -> native minlength; phone '0123' -> 'Indiquez un numéro de téléphone en +596, +590 ou +33…' (aria-invalid). UI SIGNUP COULD NOT BE COMPLETED: POST /api/auth/signup with qa-pub-artisan-…@qa.invalid -> 422 'Indiquez une adresse e-mail valide.' (Supabase rejects the reserved synthetic domain; a direct Supabase signup probe returned 429 over_email_send_rate_limit). Signup requires an e-mail confirmation link ('Un lien envoyé par e-mail confirme le compte'); using a deliverable domain would send real external e-mail (forbidden by harness rules), so the confirm-by-admin-API step was never reachable. Login with unknown/unconfirmed account -> 'Connexion impossible. Vérifiez votre email, votre mot de passe et la confirmation de votre compte.'. Fallback: artisan user created with the auth admin API (metadata role=artisan, trigger gave profile role artisan, artisan_approved=false), then everything through the UI: dashboard banner 'compte artisan pas encore approuvé', /#application Brouillon 1/5; bad SIRET blocked (no call); save draft POST /api/artisan 200 -> DB application_status=draft; reload persists; corrected name + zones (invalid '123' -> 'Saisissez un code postal à 5 chiffres.') + 2 skills -> DB updated; missions page 'Aucune offre… candidature non approuvée', GET /api/artisan/missions eligible:false; submit -> 'Candidature soumise', DB submitted. Admin UI /#admin-artisan/<id>: 'Soumis, à examiner' -> 'Demander des corrections' + confirm -> POST /api/admin/artisans 200, DB changes_requested; artisan sees 'Modifications demandées', corrects, resubmits -> DB submitted (2026-11-22T02:10:08Z). Unapproved artisan on /api/admin/artisans, /api/admin/coverage -> 403. Left in state 'submitted' (not approved). Missing: real UI signup + e-mail confirmation (needs a test mailbox or a deliverable test domain / SMTP on the recette Supabase project), document upload.",
+  "defects": [
+   {
+    "title": "Admin artisan detail shows 'Inscription : Date non transmise' while the directory row shows 'Inscrit le 21 nov. 2026' (minor, admin)",
+    "steps": "Admin > Artisans > Examiner on a candidate",
+    "expected": "Same registration date as the list",
+    "actual": "'Date non transmise' in the detail identity block",
+    "suspect": "components/role/admin-space.tsx (artisan detail, ~line 1852 loadAdminDirectoryItem mapping)"
+   }
+  ]
+ },
+ {
+  "id": "PUB-08",
+  "status": "PARTIAL",
+  "evidence": "/#legal shows: 'TTBM, SARL'; 'Cité Eucalyptus, 97240 Le François'; SIREN 929507762; SIRET 92950776200011; 'RCS Fort-de-France'; 'Brafa Claude Thierry, gérant'; Responsable du traitement 'TTBM SARL'; Version 0.1.0. 390/1280 no overflow. Source: shared/commercial-facts.ts (owner-validated constants); GET /api/public/operator-profile returns {published:null} (admin profile is only a draft). RESIDUAL expected, not defects: Adresse de contact, Hébergeur (nom/adresse/contact), Titulaire des droits, Contact pour l’exercice des droits = 'À renseigner par l’exploitant'; no VAT number (label 'Numéro SIREN et numéro de TVA' shows only the SIREN); notice 'Mentions légales à compléter' lists them correctly. PARTIAL only because the matrix asks for 'sans placeholders'.",
+  "defects": []
+ },
+ {
+  "id": "PUB-09",
+  "status": "PARTIAL",
+  "evidence": "/#about shows 'Nom de l’exploitant et forme juridique : TTBM, SARL', 'Personnes responsables : Brafa Claude Thierry, gérant', 'Zone d’intervention couverte : Martinique entière (codes postaux 972xx)'; no invented figures, ratings or delays. CTAs to request and join work. 390/1280 no overflow. RESIDUAL expected: 'Équipe' and 'Coordonnées de contact' = 'À renseigner par l’exploitant', contact e-mail/phone pending; notice says so accurately.",
+  "defects": []
+ },
+ {
+  "id": "PUB-10",
+  "status": "PASS",
+  "evidence": "/#privacy lists data, third parties, controls; controller 'TTBM SARL'. Signed in as own client (qa-pub-…-client@qa.invalid): Profile: bad phone -> inline error, no call; valid edit -> PATCH /api/profile 200 'Profil mis à jour.', DB first_name 'Pub-Modifié', persists after reload; PATCH with role/artisan_approved -> 422 'Unrecognized keys', DB role still client. Notification prefs (/#profile/parametres): untick 'Nouveau message' + 'Devis reçu' -> POST /api/notifications/preferences 200 muted_kinds [message_received, quote_received], persists after reload; external channels honestly marked 'Indisponible : aucun fournisseur configuré'. Mes données: 'Télécharger mes données' downloads mes-donnees-2026-11-22.json (account, addresses, requests(1 = my INT-24E2FB), booking_locations, messages, documents, support, erasure_requests, payment_reminders), no other user's id/e-mail. Erasure: Annuler -> no call; Confirmer -> POST /api/profile/data 200 ticket cc05368a… state requested / not_started, UI 'Demande d’effacement enregistrée… Aucune donnée n’a été effacée', button no longer offered, persists after reload, ticket 'Demande d’effacement de données personnelles — Ouverte' in /#support; auth user still exists (200). Other client sees rows:[] on the same endpoint. RESIDUAL expected: rights contact, retention durations, DPO = 'À renseigner / à publier'.",
+  "defects": [
+   {
+    "title": "Client notification preferences list event types that cannot concern a 'Particulier' (minor)",
+    "steps": "Client > Paramètres du compte > Préférences de notification",
+    "expected": "Only events relevant to the client role",
+    "actual": "24 toggles incl. 'Mission qui m’est attribuée', 'Compte professionnel approuvé/suspendu', 'Approbation interne requise', 'Nouveau membre dans l’organisation'",
+    "suspect": "app/api/notifications/preferences/route.ts:38 (returns all NOTIFICATION_KINDS regardless of role)"
+   },
+   {
+    "title": "React duplicate-key console error on client settings",
+    "steps": "Client > /#profile/parametres, watch console",
+    "expected": "No console error",
+    "actual": "'Encountered two children with the same key live:<userId>…' — AccountDataPanel, SavedPaymentMethodsPanel and SubscriptionsPanel are siblings with the identical key",
+    "suspect": "components/role/client-space.tsx:2270, 2276, 2277"
+   }
+  ]
+ },
+ {
+  "id": "SYS-02",
+  "status": "PASS",
+  "evidence": "Same tab, client A (own pub client) then client B (own pub client2). A on /#detail/<INT-24E2FB>; an /api/interventions refresh was delayed 4 s by route interception, then 'Se déconnecter': lands /#home, auth cookie removed (0 cookies), localStorage empty, no A text on screen; late A response did not repaint anything. Anonymous after logout: /api/interventions 401, /api/interventions/<A> 401, /api/profile/data 401; browser Back and deep link /#detail/<A> show only 'Connectez-vous pour accéder à cet espace'. With a pending request draft (sessionStorage courant-request-draft holding A's address/phone): logout empties sessionStorage; B logging in afterwards gets no draft. B in same tab: profile/requests/messages/documents/support/settings show 0 A data ('Aucune demande', 'Aucune conversation'); /#detail/<A> -> 'Dossier absent de vos demandes récentes'; API as B: GET /api/interventions/<A> 404 'Ce dossier est introuvable.', list does not contain A, /api/messages?intervention_id=<A> 404, erasure/requests sections rows:[]; DB row of A unchanged (requested, client_id A). SW cache courant-pwa-public-v10 holds only /offline.html, /offline-request.html, /offline-request.js (no API/private data). Shots pub-sys02-*.",
+  "defects": []
+ },
+ {
+  "id": "SYS-08",
+  "status": "FAIL",
+  "evidence": "Keyboard only: login (/#auth) Tab -> e-mail (7 stops) -> password -> Enter; wrong password -> role=alert message, focus stays on password; correct -> /#profile; logout reachable by Tab + Enter. Public request flow by keyboard: home -> 'Décrire ma panne urgente' (25 stops) -> Enter -> focus moved to step title; category by Space (aria-pressed), textarea, Continuer by Enter, address fields, radios by arrow keys, recap reached with the 25 % notice, 'Créer mon compte et continuer' by Enter -> /#auth. Every stop had a visible indicator (3px solid outline, or focus-within outline on the home search row). 'Appelez-nous' dialog traps focus and closes with Esc. 390 and 1280: no horizontal overflow on home, pricing(+zones), help(+garantie), legal, about, join, privacy, auth, /prestations, /conseils, /suivi, #new steps, 5 wizard steps. PWA: /manifest.webmanifest 200 application/manifest+json (DomDépannage, standalone, start_url '/', lang fr, icons 192/512/maskable all 200); service worker /sw.js registered, activated and controlling. Offline (context offline): navigation and /suivi render 'La connexion est indisponible… Aucun dossier personnel n’est enregistré dans le cache hors connexion' with 'Réessayer' / 'Préparer une demande hors connexion'; back online OK. FAIL for the skip link (below). Not covered: screen-reader pass, contrast audit, native/store distribution decision.",
+  "defects": [
+   {
+    "title": "Skip link 'Aller au contenu' throws the user back to the home page on every hash-routed page",
+    "steps": "Open /#auth (or /#pricing, /#legal…), press Tab once (skip link gets focus), press Enter",
+    "expected": "Focus moves to the main content of the current page; page unchanged",
+    "actual": "URL becomes /#main, the hash router treats it as an unknown view and renders Home ('Un problème électrique ?'); the login/pricing/legal page is lost and focus is on BODY. Reproduced on /#auth, /#pricing, /#legal; on /prestations only the URL gains #main and focus still lands on BODY (shot pub-skiplink-auth-after)",
+    "suspect": "app/layout.tsx:59 (<a class='skip-link' href='#main'>) vs hash routing in components/courant-app.tsx:676 (parseHash on hashchange); <main id='main'> also lacks tabindex=-1"
+   },
+   {
+    "title": "After 'Créer mon compte et continuer' focus falls on BODY on the auth page (minor)",
+    "steps": "Finish the #new recap by keyboard and press Enter on 'Créer mon compte et continuer'",
+    "expected": "Focus on the auth heading or first field, as the request steps do",
+    "actual": "document.activeElement is BODY",
+    "suspect": "components/app/forms.tsx (auth view mount, no focus management)"
+   }
+  ]
+ },
+ {
+  "id": "PUB-FLOW",
+  "status": "FAIL",
+  "evidence": "Anonymous request flow up to the account wall, 1280 and 390, address 'Cité Eucalyptus, 97240 Le François'. Path A (/#new form from home CTAs): urgent -> recap 'Votre demande, en clair.' shows 'Intervention en urgence : majoration de 25 %, indiquée sur le devis précis remis avant travaux.' (visible); scheduled -> no notice; bad postal code/phone/empty address blocked by native validation; 'Créer mon compte et continuer' -> /#auth with 'Votre brouillon est conservé…', draft in sessionStorage (courant-request-draft), survives reload. Path B (service page /prestations/<slug> 5-step wizard): step errors OK ('Indiquez si l’intervention est urgente.', 'Choisissez un créneau souhaité.', name/e-mail/phone, address 5 chars, 'Indiquez un code postal à 5 chiffres.', 'Choisissez un mode de règlement.'); card hold honestly unavailable; reload offers 'Reprendre ma demande' and restores step 5; 'Créer mon compte' -> /#auth/signup prefilled; 'J’ai déjà un compte' + login -> confirmation screen WITH the 25 % notice -> 'Envoyer ma demande' -> POST /api/bookings 201 -> INT-24E2FB (DB: requested, urgency urgent, outage, 97240). FAIL: the wizard's own recap (step 5, before the account) shows no surcharge notice when 'Urgent' is chosen.",
+  "defects": [
+   {
+    "title": "Service booking wizard recap omits the 'majoration de 25 %' notice for an urgent request",
+    "steps": "/ -> card 'Coupure de courant partielle' -> 'Demander cette intervention' -> Est-ce urgent ? Oui -> coordinates -> address 97240 -> payment 'Après intervention' -> step 5 Récapitulatif",
+    "expected": "Recap (and ideally the side summary) shows 'Intervention en urgence : majoration de 25 %…' as the /#new recap and the post-login confirmation do",
+    "actual": "Recap shows only 'Urgence : Urgent' and 'Estimation indicative 150 € – 250 €'; no text containing '25 %' or 'majoration' anywhere in the wizard, at 1280 and 390 (shots pub-wizard-recap-urgent-1280 / -390). The visitor is asked to create an account before ever seeing the surcharge",
+    "suspect": "components/role/public-booking.tsx:523-532 (recap <dl>, URGENCY_NOTICE never imported) and :380-385 (side summary); compare components/app/forms.tsx:526 and components/role/booking-confirm.tsx:157"
+   },
+   {
+    "title": "/#new form loses everything on reload before the account step (minor inconsistency)",
+    "steps": "/#new/urgent, fill the 3 steps to the recap, reload",
+    "expected": "Draft kept like the service wizard ('Reprendre ma demande') and as the privacy page states ('Un brouillon de demande non envoyé peut être conservé localement')",
+    "actual": "Back to an empty step 1; sessionStorage/localStorage empty until 'Créer mon compte et continuer' is pressed",
+    "suspect": "components/app/forms.tsx (request form saves the draft only on the final action)"
+   }
+  ]
+ }
+]

@@ -1,0 +1,191 @@
+[
+ {
+  "id": "FIN-01",
+  "status": "PASS",
+  "evidence": "iOS Expo Go, Astra client logged in by touch; dossier INT-A9155E found with 'Retrouver une commande' (status 'À régler', 108,50 €); 'Régler sur Stripe en mode test' opened Stripe Checkout (Sandbox, 108,50 €) in the in-app Safari sheet; card 4242 4242 4242 4242 12/30 123 typed by touch, 'Payer'. After closing the sheet the dossier shows 'Terminée et réglée' / 'Règlement confirmé par la plateforme 108,50 €' + card 'Retour du paiement · Règlement confirmé.'; bottom line 'Règlement confirmé par la plateforme · 108,50 € · 22 nov. 2026 à 01:03' (Martinique time). Server: interventions a9155ec4 status=paid paid_at 05:03:49Z; payments 89d7b2ae status=paid method=stripe total_cents=10850. Shots ios2-p-stripe1..6, ios2-p-app-after-close, ios2-p-paid-p1..3. Declined card not replayed on iOS (single reserved dossier).",
+  "defects": []
+ },
+ {
+  "id": "FIN-02",
+  "status": "PASS",
+  "evidence": "Server read-back after the iOS payment: platform_checkouts 60943585 amount_cents=10850 fee_bps=1000 fee_cents=1085 (10 %) status=paid paid_at 2026-11-22T05:03:49Z account acct_…Qn8R (Connect TEST); the earlier checkout 759f6f77 (fee_bps 1700) stays 'expired' and unpaid; payments row paid, intervention paid. The paid state reached the app without any client-side assertion (the app re-reads the server; the return URL carries no status). Stripe dashboard / transfer object not inspected.",
+  "defects": []
+ },
+ {
+  "id": "FIN-03",
+  "status": "PARTIAL",
+  "evidence": "Return verified with the sheet's close control: after Stripe success the in-app browser lands on the recette portal return page; closing it ('OK') shows the dossier already paid with 'Retour du paiement · Règlement confirmé.'; kill + relaunch (simctl terminate + exp:// reopen): session restored, dossier still 'Terminée et réglée', NO stale 'Retour du paiement' card (shot ios2-p-relaunch-dossier). NOT verified: the automatic return link 'Revenir à mon dossier dans l’application mobile' — in Expo Go it raises 'Safari ne peut pas ouvrir la page car l’adresse n’est pas valide.' because the scheme depannageelectrique:// is only registered in a dev/store build (Expo Go limitation, shot ios2-p-return-invalid). Needs a development build to close.",
+  "defects": [
+   {
+    "title": "After a successful Stripe payment the in-app browser shows a red error and a login form",
+    "steps": "iOS app, client, completed dossier > Régler sur Stripe en mode test > pay with 4242… > Stripe redirects to the portal return page inside the in-app browser (no web session there)",
+    "expected": "A neutral confirmation page (\"Paiement transmis, revenez dans l’application\") with one clear return button; no error styling, no login form",
+    "actual": "Red alert \"Connectez-vous pour relire l’état de votre retour Stripe. Aucun statut n’est déduit du lien.\" + web login form + web tab bar; the only way back is a small link at the very top (\"Revenir à mon dossier dans l’application mobile\") or the sheet close button. Shot ios2-p-web-return.png",
+    "suspect": "web return handling of the mobile checkout return (component rendering the \"Retour du paiement\" region for unauthenticated visitors; apps/mobile/src/lib/payment-return.ts only matches depannageelectrique://dossier/<id>?retourPaiement=1)"
+   },
+   {
+    "title": "Unpaid dossier with an EXPIRED earlier checkout is labelled \"Paiement non abouti\" on native",
+    "steps": "iOS, Astra client, dossier INT-A9155E before paying (previous platform_checkouts row status=expired, never paid)",
+    "expected": "Neutral wording such as \"Session de paiement expirée\" / \"À régler\" (commit 9b3929c8 introduced the expired-session notice)",
+    "actual": "Card and bottom line show \"Paiement non abouti · 108,50 €\" (shot ios2-p-dossier-unpaid-p1/p3); payments row status before payment was not captured, so the exact server status behind the label is unconfirmed",
+    "suspect": "apps/mobile/src/app/dossier/[id].tsx payment status label mapping"
+   }
+  ]
+ },
+ {
+  "id": "ART-11",
+  "status": "PASS",
+  "evidence": "After a cold bundle reload (02:30), Astra artisan on iOS, paid dossier INT-A9155E: 'Dossier réglé · Règlement confirmé par la plateforme · 108,50 €' then 'Montant réglé · 108,50 €', 'Commission plateforme (10 %) · − 10,85 €', 'Net à percevoir · 97,65 €' and the sentence 'Votre part nette est transférée par Stripe sur votre compte de règlement… (transfert automatique). Le virement vers votre compte bancaire suit ensuite le calendrier de versement de Stripe ; la plateforme ne le confirme pas ici.' (shot ios2-art11-artisan). Values match the server: platform_checkouts 60943585 amount 10850, fee_bps 1000, fee_cents 1085 → net 9765. Same dossier as the Astra client: only 'Règlement confirmé par la plateforme · 108,50 €', no commission/net line (0 match in the view tree, shot ios2-art11-client). Earlier in this pass (older bundle, 01:13) the breakdown was absent — fixed by the new bundle. No separate payouts list/history screen natively; Stripe transfer object not inspected.",
+  "defects": []
+ },
+ {
+  "id": "CLI-10",
+  "status": "N/A_NATIVE",
+  "evidence": "After the payment the paid dossier INT-A9155E was read to the bottom on iOS (shots ios2-p-paid-p1..p3): no review prompt, no 'avis' action; server reviews for the dossier = []. Source grep of apps/mobile/src for reviews/avis endpoints returns nothing (only the admin artisan-application review). Reviews are web-only.",
+  "defects": []
+ },
+ {
+  "id": "CLI-01",
+  "status": "PASS",
+  "evidence": "Re-check on iOS (ios-client, new bundle): step 1 'Oui, c’est urgent' shows 'Intervention en urgence : majoration de 25 %, indiquée sur le devis précis remis avant travaux.'; 'Non, je peux planifier' hides it (maestro assertNotVisible, shot ios2-u-scheduled-no-notice); recap 'Prise ou interrupteur · Urgent … 80,00 € à 180,00 €' repeats the 25 % notice (shot ios2-u-recap). 'Ma position' (simulated GPS) prefilled '51bis Rue Lubin, 97240 Le François'. Request confirmed (ref in SYS-07 entry). Earlier defect 'recap does not state +25 %' is FIXED. Address-step map is still blank (defect kept).",
+  "defects": [
+   {
+    "title": "Address-step map still blank on iOS Expo Go: 2-pt grey strip, no « Carte indisponible ici… » fallback",
+    "steps": "iOS, ios-client > Demandes > Nouvelle demande > step 2 Adresse d’intervention (also after \"Ma position\")",
+    "expected": "Leaflet map rendered, or the fallback text « Carte indisponible ici… »",
+    "actual": "White 262-pt-high area with a 2-pt vertical grey strip on the left; accessibility tree: container booking-map-dom.tsx [33,536][369,798] but map region is [33,536][35,546] (2 pt wide); zoom buttons exist in the tree but nothing is drawn. Shots ios2-u-step2.png, ios2-u-step2-map.png",
+    "suspect": "apps/mobile/src/components/booking-map-dom.tsx (DOM component width collapses) / booking-location-field.tsx (fallback condition never true)"
+   },
+   {
+    "title": "« Nouvelle demande » reopens on yesterday’s confirmation screen",
+    "steps": "iOS, ios-client (last request INT-B11824 submitted the previous day, app killed/relaunched and account switched since) > Demandes > Nouvelle demande",
+    "expected": "A blank request form (or the saved draft)",
+    "actual": "Screen « Votre demande est transmise · INT-B11824 » with « Commencer une autre demande »; one extra tap is needed. Shot ios2-u-step1.png",
+    "suspect": "apps/mobile/src/app/demande-client.tsx (persisted submitted state not cleared)"
+   }
+  ]
+ },
+ {
+  "id": "SYS-07",
+  "status": "PARTIAL",
+  "evidence": "iOS: (1) client 'Mes demandes' > 'Retrouver une commande' INT-A9155E → result card 'INT-A9155E · … · À régler' + 'Ouvrir la commande' opens the right dossier (shot ios2-p-search), repeated after relaunch; (2) manager 'Interventions entreprise': text search + status filters + 'N résultat(s) · page 1 sur 1', no-match search → '0 résultat(s) · Aucune intervention ne correspond à cette sélection.' + reset (shots ios2-ent-search, -none, -filters); contracts list shows 'Page 1'. Not verified: a second page (no data set > 1 page available to my accounts), unknown order-number message, artisan Missions list has no search (14 missions reached by scrolling only).",
+  "defects": []
+ },
+ {
+  "id": "SYS-03",
+  "status": "PASS",
+  "evidence": "ios-manager (owner of 'IOS QA ie08a2b Organisation') on iOS, in-app routes opened by link: another organisation's site (AND Site a92a91f9) → 'Ce site est introuvable.' + Réessayer; another client's dossier (a9155ec4) → 'Ce dossier est introuvable.'; another organisation (b97f0990) → 'Vous n’avez pas accès à cette action.'. Same refusals at API level with the manager's bearer token: GET /api/sites/a92a91f9/settings → 404, GET /api/interventions/a9155ec4 → 404. Organisations tab lists only the own organisation. Shots ios2-sys03-site, ios2-sys03-dossier, ios2-sys03-organisation. Member revocation while the app is open not exercised.",
+  "defects": []
+ },
+ {
+  "id": "ENT-01",
+  "status": "PASS",
+  "evidence": "ios-manager by touch: tabs Accueil/Sites/Dossiers/Messages/Profil; 'Sites' → 'Organisations · Seules les organisations accessibles à votre compte apparaissent ici.' with the single entry 'IOS QA ie08a2b Organisation' → screen 'Propriétaire · Votre accès : Tous les sites autorisés de l’organisation' + Suivi entreprise (Rechercher les interventions / Consulter les approbations / Consulter les contrats) + Sites actifs. Opening a foreign organisation id is refused ('Vous n’avez pas accès à cette action.'). Shots ios2-ent-orgs, ios2-ent-org, ios2-sys03-organisation. Organisation creation/member management are not native.",
+  "defects": []
+ },
+ {
+  "id": "ENT-03",
+  "status": "PARTIAL",
+  "evidence": "Organisation screen lists 'Sites actifs' (IOS2 Site Eucalyptus · Bureaux · Cité Eucalyptus, 97240 Le François) + 'Afficher les archives'; 'Ouvrir le site' → 'Nouvelle demande pour ce site': step 2 shows 'IOS2 Site Eucalyptus · Cité Eucalyptus, 97240 Le François · Adresse enregistrée pour ce site.' (prefilled, with 'Intervenir à une autre adresse'); request INT-F6C454 created, server site_id=29d9751b, address 'Cité Eucalyptus' 97240 Le François. Missing natively: site creation/archiving (site created as fixture via service role). Shots ios2-ent-org, ios2-ent-req2, ios2-ent-req-sent.",
+  "defects": []
+ },
+ {
+  "id": "ENT-04",
+  "status": "PASS",
+  "evidence": "Site record on iOS: 'IOS2 Site Eucalyptus · Bureaux · Actif', Adresse et accès, Budget du site 5 000,00 € ('Budget déclaré… ni une dépense constatée ni un règlement'), Horaires 'Aucun horaire renseigné.'; 'Modifier les informations' → form Nom/Adresse/Consignes d’accès; typed 'ios2 badge accueil' → 'Les informations du site ont été enregistrées.'; server sites.access_notes='ios2 badge accueil', settings_version 1→2. Foreign site → 'Ce site est introuvable.'. Opening hours and budget are not editable natively. Shots ios2-ent-site, ios2-ent-site-edit, ios2-ent-site-saved.",
+  "defects": [
+   {
+    "title": "Buttons in the last ~90 pt above the tab bar cannot be tapped (opaque band)",
+    "steps": "iOS, manager, Site record: « Modifier les informations » sits at y 707–755 pt when the page opens; tap it. Same for « Continuer » at the end of request step 1/2 (client and manager).",
+    "expected": "A visible button is tappable, or the page leaves enough bottom padding so it rests above the band",
+    "actual": "The scroll content is clipped by a white band from ~681 pt down to the tab bar (WhatsApp button zone): the button is cut in half and a tap on its centre does nothing; the user must scroll further first. Shots ios2-u-step2.png (first capture), ios2-ent-site.png",
+    "suspect": "apps/mobile/src/app/(espace)/_layout.tsx / Screen component bottom inset (contentContainer paddingBottom smaller than the overlay height)"
+   }
+  ]
+ },
+ {
+  "id": "ENT-11",
+  "status": "PARTIAL",
+  "evidence": "Site request on iOS, 3 steps: step 2 without a choice → 'Choisissez une intervention à planifier ou une demande urgente.'; 'Demande urgente' shows 'Intervention en urgence : majoration de 25 %…' + 'La disponibilité et les délais seront précisés après prise en charge.'; recap 'IOS2 Site Eucalyptus · Tableau électrique · Urgent · 150,00 € – 350,00 €' + 25 % notice; sent → 'Demande transmise · INT-F6C454'; server urgency=urgent, site_id set, status requested. Missing: only two levels (planifier/urgent), no SLA/contractual delay shown natively. Minor: the validation message stays displayed after a choice is made. Shots ios2-ent-req2-validation, ios2-ent-req2-urgent, ios2-ent-req3, ios2-ent-req-sent.",
+  "defects": []
+ },
+ {
+  "id": "ENT-13",
+  "status": "PARTIAL",
+  "evidence": "Native read-only screen exists: Organisation > 'Consulter les contrats' → 'Contrats · Page 1 · données limitées au périmètre de votre compte.' → 'Aucun résultat dans cette sélection.' (the iOS organisation has no contract; no contract fixture was created, so the contrat/[id] detail was not opened). No native creation/renewal. Shot ios2-ent-contracts.",
+  "defects": []
+ },
+ {
+  "id": "ENT-15",
+  "status": "PARTIAL",
+  "evidence": "Organisation > 'Rechercher les interventions' → 'Interventions entreprise': counters '1 en cours · 1 urgentes' ('Périmètre autorisé… actualisé le 22 nov. 2026 à 02:02'), search field, filters by status (Tous/Demande transmise/Artisan affecté/Devis envoyé/Devis accepté/En cours/Terminée/Réglée/Annulée), '1 résultat(s) · page 1 sur 1' listing INT-F6C454's card; search 'zzzinexistant' → '0 résultat(s)' + 'Aucune intervention ne correspond à cette sélection.' + 'Réinitialiser la recherche et les filtres'. No report/export (CSV/PDF) natively. Shots ios2-ent-search, ios2-ent-search-none, ios2-ent-filters.",
+  "defects": []
+ },
+ {
+  "id": "MOBILE-FIXES-2",
+  "status": "PARTIAL",
+  "evidence": "iOS Expo Go, bundle reloaded cold at 02:14 (no red screen during the whole pass; one silent Fast Refresh at 01:47 reset the dossier screen to its top). (a) Keyboard: primary buttons are now REACHABLE by scrolling with the keyboard open — quote editor decimal pad ('Envoyer le devis'), offer refusal ('Confirmer le refus'), Aide > code postal ('Vérifier' → 'Dans la zone publiée'), site edit ('Enregistrer'), report signature ('Signer le compte rendu' stays visible) — but the « Terminer » bar is NOT displayed on any pad/multiline field (hierarchy has no 'Terminer' element; shots ios2-art-quote-kbd, ios2-aide-kbd, ios2-art-refuse-kbd, ios2-ent-site-kbd), so the decimal/number pad cannot be closed and the button is still hidden until the user scrolls → FAIL for the bar. (b) Conversation opens at the latest message, composer visible, on client and artisan (shots ios2-chat-client, ios2-chat-artisan) → OK. (c) Artisan Missions: assigned missions listed first, offers below (ios-artisan and Astra artisan; shots ios2-art-missions, ios2-p-art-missions) → OK. (d) Quote editor preview 'Total HT · 500,00 € / TVA 8,5 % · 42,50 € / Total TTC · 542,50 €' (before rate: 'TVA · choisissez un taux') = sent quote 1df3dd39 subtotal 50000 tax 4250 total 54250 and the 'Devis proposé' card → OK. (e) Address step: still an empty area with a 2-pt strip, neither map nor « Carte indisponible ici… » → FAIL (see CLI-01). (f) Tracking card: with GPS cleared, 'Partager ma position' then shows French text 'L’état du dossier a changé ou cette action n’est plus disponible. Actualisez la page.'; no raw English/CoreLocation string seen → OK (the exact kCLError case could not be forced).",
+  "defects": [
+   {
+    "title": "« Terminer » keyboard bar never appears on iOS",
+    "steps": "iOS Expo Go (iOS 27 simulator), after a cold reload: artisan dossier > Préparer le devis > tap « Prix unitaire HT » (decimal pad); or Aide > Code postal (number pad); or any multiline field",
+    "expected": "An accessory bar with « Terminer » above the keyboard that closes it; tab bar back afterwards",
+    "actual": "No accessory bar (no element « Terminer » / « Terminer la saisie » in the accessibility tree); the pad has no return key so it stays open and covers « Envoyer le devis » / « Vérifier » until the user scrolls the content",
+    "suspect": "apps/mobile/src/components/ui.tsx:57-73 (InputAccessoryView nativeID app-keyboard-done + Field inputAccessoryViewID) mounted in apps/mobile/src/app/_layout.tsx:55 — InputAccessoryView is likely not rendered under the New Architecture/Expo Go; consider a KeyboardAvoiding sticky bar driven by Keyboard events instead"
+   },
+   {
+    "title": "Tracking card offers « Signaler mon arrivée » while departure was never signalled",
+    "steps": "iOS artisan, accepted mission 7a3954da, tap « Partager ma position pendant le trajet »",
+    "expected": "Arrival action consistent with the Déplacement block (disabled until « Signaler mon départ »)",
+    "actual": "Inside « Partage du trajet » an enabled « Signaler mon arrivée » appears while the Déplacement block below shows « Signaler mon arrivée » disabled; then the card shows « L’état du dossier a changé… Actualisez la page. ». Shot ios2-art-track2",
+    "suspect": "apps/mobile/src/app/dossier/[id].tsx tracking card actions"
+   }
+  ]
+ },
+ {
+  "id": "SYS-08",
+  "status": "PARTIAL",
+  "evidence": "Re-check on iOS: Dynamic Type extra-extra-large (simctl ui content_size) → tab labels Profil/Demandes/Messages/Aide stay on one line, unclipped, content text scales (shots ios2-dyn-xxl, ios2-dyn-xxl-list); size restored to 'large'. Switches: tapping the switch control itself toggles 'J’accuse réception du compte rendu' (val 0→1, then 'Remis et signé par Ios ClientQA le 22 nov. 2026 à 01:48') and artisan 'Disponible pour de nouvelles missions' (server available false→true). Chat labels 'Artisan · Ios Artisan' / 'Client · Ios ClientQA' / 'VOUS'. Accessibility attributes from maestro hierarchy: switches expose label + value (0/1), tabs expose label + selected, radio options expose 'radio button, checked/unchecked', back button 'Back' (English label), steps expose bare digits '1'..'5' separate from their titles. Still open: « Terminer » bar absent (see MOBILE-FIXES-2), opaque band above the tab bar swallowing taps (see ENT-04), blank map. Real VoiceOver gestures and dark mode not run.",
+  "defects": [
+   {
+    "title": "Header back button is announced « Back » (English) in a French app",
+    "steps": "iOS, any pushed screen (Intervention, Site, Offre) — read the accessibility tree",
+    "expected": "« Retour »",
+    "actual": "accessibilityText « Back » (id BackButton)",
+    "suspect": "apps/mobile/src/app/_layout.tsx Stack screenOptions (headerBackTitle / headerBackAccessibilityLabel not set)"
+   }
+  ]
+ },
+ {
+  "id": "ENT-12",
+  "status": "PASS",
+  "evidence": "Fixture rule approval_rules(site 29d9751b, owner required ≥ 200 €). ios-artisan sent on iOS a quote 542,50 € TTC on INT-F6C454 → approvals dc0c0402 pending. ios-manager on iOS: Organisation > Consulter les approbations (filters Toutes/En attente/Approuvée/Refusée) → 'En attente · IOS2 Site Eucalyptus · Devis proposé · 542,50 € TTC' → detail 'Règle du site : propriétaire requis à partir de 200,00 €' with the NEW block 'Votre décision': comment field '(obligatoire pour refuser, facultatif pour approuver)' + Approuver + Refuser. 'Refuser' with an empty comment does nothing (approval stays pending, focus goes to the comment field). Comment typed + 'Approuver' → alert 'Approuver ce devis ?' → 'Approbation enregistrée. Le devis peut maintenant être accepté depuis le dossier de l’intervention.' / 'Approuvée' / 'Décision du 22 nov. 2026 à 02:28' / note shown; server approvals status=approved decided_by=ios-manager note saved. Then 'Consulter le dossier de l’intervention' > 'Accepter ce devis' > Confirmer → 'Devis accepté', server quote accepted 06:29:47Z. Before approval, acceptance is refused by the API (409 'Ce devis doit d’abord être approuvé par votre organisation…', quote stayed 'sent'); on the iOS screen I did not see that message after tapping accept (my confirm tap may have missed — not re-run). A refusal WITH comment was not committed (single approval). Shots ios2-ent-approvals, ios2-ent-approval-detail, ios2-ent-refuse-nocomment2, ios2-ent-approved, ios2-ent-quote-accepted.",
+  "defects": [
+   {
+    "title": "Approval « Refuser » with an empty comment gives no error message",
+    "steps": "iOS manager > Approbation detail > leave the comment empty > tap « Refuser »",
+    "expected": "Inline message such as « Indiquez un commentaire pour refuser »",
+    "actual": "Nothing visible happens except the keyboard opening on the comment field; no message, approval stays pending (shot ios2-ent-refuse-nocomment2)",
+    "suspect": "apps/mobile/src/app/approbation/[id].tsx / native-approval-workflow component"
+   }
+  ]
+ },
+ {
+  "id": "ADM-02",
+  "status": "PARTIAL",
+  "evidence": "Recette super-admin on iOS (tabs Accueil/Dossiers/Annuaire/Messages/Profil): Annuaire > Artisans > search 'Ios Artisan' > 'Ouvrir la fiche' → 'Artisan approuvé', 'Candidature approuvée', company, SIRET, zones 97240/97200, activities, 'Justificatifs · Aucun justificatif renseigné.', action 'Suspendre l’artisan' present (NOT pressed, read-only pass). Approve/reject/suspend decisions and a pending application were not exercised. Shots ios2-adm-art-search, ios2-adm-art-fiche.",
+  "defects": []
+ },
+ {
+  "id": "ADM-03",
+  "status": "PARTIAL",
+  "evidence": "Admin 'Dossiers' on iOS: 'Interventions' list '75 intervention(s) · page 1' with status, category, commune/urgency, date; search 'INT-F6C454' → '1 intervention(s) · page 1' (Tableau électrique · Le François · Urgent · Devis accepté) + 'Réinitialiser la recherche et les filtres'; 'Afficher les filtres' available. Read-only: the dossier detail was not opened and no admin action (reassign, cancel) was tried; next-page control not reached. Shots ios2-adm-dossiers, ios2-adm-int-search.",
+  "defects": []
+ },
+ {
+  "id": "ADM-04",
+  "status": "PARTIAL",
+  "evidence": "Admin 'Annuaire' on iOS: segments Clients / Artisans / Organisations, search by name or identifier, '67 résultat(s) · page 1' for clients; artisan search 'Ios Artisan' returns the record and its 'Fiche' (account info, phone, creation date, application). Read-only; Organisations segment, client record and page 2 not opened; no write action pressed. Shots ios2-adm-annuaire, ios2-adm-art-search, ios2-adm-art-fiche.",
+  "defects": []
+ }
+]

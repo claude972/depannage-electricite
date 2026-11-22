@@ -1,0 +1,118 @@
+[
+ {
+  "id": "ART-04",
+  "status": "PASS",
+  "evidence": "Re-test Android (bundle rechargé 03:27Z, commit 77f6cc61). Profil artisan : appui sur le CURSEUR (930,1528) → 'Vous êtes indisponible', artisan_profiles.available true→false ; 2e appui → true ; appui sur le LIBELLÉ → false puis true (4 bascules, serveur relu à chaque fois). Accueil artisan en police 150 % : appui curseur → false, glissement du curseur → true. Zones/catégories toujours non modifiables en natif (inchangé, hors périmètre du correctif). Shots android-retest-19-avail-thumb-off, -20-avail-on.",
+  "defects": []
+ },
+ {
+  "id": "FIN-03",
+  "status": "PARTIAL",
+  "evidence": "Défaut du faux retour de paiement corrigé, rejoué 2 fois (INT-BE11C3 puis INT-D490AE, dossiers terminés non réglés) : 'Régler sur Stripe en mode test' → message 'Le paiement n’est pas encore ouvert : le compte de règlement de l’artisan doit d’abord être validé… Rien n’a été débité', aucun navigateur ouvert (POST /api/payments/checkout = 409 confirmé en session web, platform_checkouts status=preparing 13020 c) ; force-stop + relance → session restaurée sur 'Mes demandes' (espace normal), aucune carte 'Retour du paiement' ni à l’accueil ni dans le dossier. Retour réel depuis Stripe Checkout NON rejoué (aucune session Stripe ouvrable, compte Connect de l’artisan non validé). Shots android-retest-09-pay-409, -10-restart-after-409, -32-pay-409-new, -33-restart-after-409-new.",
+  "defects": []
+ },
+ {
+  "id": "CLI-06",
+  "status": "PASS",
+  "evidence": "Client Android, dossiers INT-BE11C3 et INT-D490AE après attribution : carte 'Votre artisan · And Artisan' + bouton 'Appeler l’artisan · +596696000000' (appui → composeur Android prérempli +596 696 00 00 00) ; absente avant attribution (dossier 'Recherche d’un artisan'). Conversation : en-tête 'Avec votre artisan · And Artisan', message de l’artisan étiqueté 'Artisan · And Artisan', le mien 'VOUS'. Société/SIRET/note de l’artisan toujours non affichés (nom + téléphone seulement). Shots android-retest-07-client-votre-artisan, -08-dialer, -17-chat-client-labels.",
+  "defects": []
+ },
+ {
+  "id": "ART-06",
+  "status": "PASS",
+  "evidence": "Artisan Android, dossier INT-D490AE attribué : carte 'Client · Andy ClientUn' + 'Appeler le client · +596696000000' (appui → composeur prérempli), adresse complète 'Cite Esperance, 97240, Le Francois'. Conversation : 'Avec le client · Andy ClientUn', message client étiqueté 'Client · Andy ClientUn'. Toujours pas d’ouverture d’itinéraire ni de distance (non couverts par le correctif). Shots android-retest-21-artisan-dossier-top, -22-artisan-call-client-dialer, -23-chat-artisan-labels.",
+  "defects": []
+ },
+ {
+  "id": "CLI-04",
+  "status": "PARTIAL",
+  "evidence": "Note de rendez-vous corrigée : artisan Android fixe 2026-11-24 14:00–15:30 + note 'android-retest sonnez au portail vert' (serveur intervention_appointments starts_at 18:00Z, note enregistrée) ; carte artisan 'Note pour le client · …' ; client Android (INT-D490AE) : carte Rendez-vous '24 nov. 2026, 14:00 – 15:30' + 'Note de l’artisan · android-retest sonnez au portail vert' ; idem INT-BE11C3 ('AND rdv test'). Restent (non modifiés) : le client ne peut ni proposer ni demander un changement de créneau, saisie date/heure en texte libre, l’éditeur reste ouvert après enregistrement sans confirmation. Shots android-retest-24-artisan-rdv-saved, -25-artisan-rdv-note, -06-client-rdv-note, -29-client-note-new-dossier.",
+  "defects": []
+ },
+ {
+  "id": "CLI-05",
+  "status": "PARTIAL",
+  "evidence": "Inchangé côté client (pas de carte en natif, non rejoué). Partage de trajet côté artisan : voir ART-08 (premier partage après autorisation corrigé).",
+  "defects": []
+ },
+ {
+  "id": "ART-08",
+  "status": "PASS",
+  "evidence": "Permission de localisation révoquée (pm revoke FINE+COARSE, granted=false), dossier INT-D490AE rouvert : 'Partager ma position pendant le trajet' → boîte Android → 'While using the app' → partage démarré sans second appui ('Arrêter le partage' affiché, aucun message 'Revenez sur cet écran'), serveur intervention_tracking shared=true lat 14.6036983 lon -61.0730983 seq 1. Puis 'Signaler mon arrivée', 'Démarrer l’intervention' + confirmation → in_progress ; compte rendu (2 photos de la photothèque + texte + nom) → 'Clôturer l’intervention' → completed. Shots android-retest-26-permission-dialog, -27-share-after-grant.",
+  "defects": []
+ },
+ {
+  "id": "PUB-10",
+  "status": "PARTIAL",
+  "evidence": "Libellé corrigé : Profil > Mes données → 'Gérer mes données sur le site (connexion requise)' + 'Le site s’ouvre dans le navigateur : votre session de l’application n’y est pas transmise, vous devrez vous y connecter.' Le comportement reste le même (pas de gestion native des données, reconnexion sur le web) : désormais annoncé. Shot android-retest-05-mes-donnees.",
+  "defects": []
+ },
+ {
+  "id": "PUB-03",
+  "status": "PASS",
+  "evidence": "Aide > Zone desservie : 75001 + 'Vérifier' → clavier refermé (mInputShown true→false), résultat entièrement visible 'Hors de la zone publiée — Le code postal 75001 ne figure pas…'. Shot android-retest-03-coverage-75001.",
+  "defects": []
+ },
+ {
+  "id": "PUB-04",
+  "status": "PASS",
+  "evidence": "Accueil public : bouton WhatsApp → alerte (FERMER / VOIR L’AIDE) ; touche Retour Android → alerte fermée, accueil affiché. Shot android-retest-01-whatsapp-alert.",
+  "defects": []
+ },
+ {
+  "id": "SYS-08",
+  "status": "PARTIAL",
+  "evidence": "Police système 150 % (font_scale 1.5, restaurée à 1.0) : barre d’onglets client (Profil/Demandes/Messages/Aide) et artisan (Accueil/Missions/Devis/Messages/Profil) : libellés entiers sur une ligne, plus de coupure au milieu d’un mot. Reste : les icônes de la barre sont encore rognées à droite à 150 % (défaut mineur ci-dessous). États sélectionnés désormais exposés (type de panne, urgence, capacité : [sel] dans l’arbre). TalkBack réel et distribution toujours non testés. Shots android-retest-18-font150-client-tabs, -28-font150-artisan-tabs.",
+  "defects": [
+   {
+    "title": "[mineur] Police 150 % : icônes de la barre d’onglets rognées",
+    "steps": "adb shell settings put system font_scale 1.5 > ouvrir l’espace client ou artisan",
+    "expected": "Icônes entières",
+    "actual": "Les glyphes (Profil, Demandes, Aide, Accueil…) sont coupés sur leur bord droit ; les libellés, eux, sont corrects",
+    "suspect": "apps/mobile/src/components/mobile-chrome.tsx MobileIcon (glyphe de police agrandi par l’échelle système dans une boîte de taille fixe : allowFontScaling={false} ou maxFontSizeMultiplier manquant)"
+   }
+  ]
+ },
+ {
+  "id": "SYS-01",
+  "status": "PASS",
+  "evidence": "Régression du parcours central après correctifs : client Android crée INT-D490AE (Éclairage, urgent, 97240 ; serveur requested/urgent, estimation 8000–20000 c) → artisan accepte + devis 130,20 € TTC (session web) → client Android 'Accepter ce devis' + confirmation → 'Devis accepté 130,20 €', serveur quote accepted, intervention accepted → artisan Android : rendez-vous, partage, arrivée, démarrage, compte rendu, clôture (completed) → client Android signe le compte rendu ('Remis et signé par Andy ClientUn le 21 nov. 2026, 23:54'). Aucun écran rouge ; /tmp/expo-start.log : aucune erreur Android (seulement WARN GoTrueClient lock et navigation.isFocused ; les ERROR présentes sont étiquetées Web). Shots android-retest-14-request-sent, -15-client-quote, -16-quote-accepted, -31-report-signed.",
+  "defects": []
+ },
+ {
+  "id": "PUB-02",
+  "status": "PASS",
+  "evidence": "Aide > Tarifs : 'Au barème horaire… La grille par type de panne figure dans le catalogue : ouvrez l’onglet Services pour consulter les estimations par prestation.' (plus de 'ci-dessous') ; 'Majoration d’urgence +25 %'. Parcours public (Services > Prise qui ne fonctionne plus > Demander) : 'Oui, c’est urgent' → 'Intervention en urgence : majoration de 25 %, indiquée sur le devis précis remis avant travaux.' sous le choix et dans la carte d’en-tête à l’étape Coordonnées ; 'Non, je peux planifier' → aucune mention. Récapitulatif du parcours PUBLIC (invité) non rejoué (nécessite la création d’un compte/contact). Shots android-retest-02-aide-tarifs, -04-public-urgent-notice.",
+  "defects": []
+ },
+ {
+  "id": "CLI-01",
+  "status": "PASS",
+  "evidence": "Client Android connecté, Nouvelle demande (Éclairage, 97240), rejoué deux fois (2e passage après l’interférence d’une autre session sur l’émulateur) : planifiée → aucune mention à l’étape 1 ni au récapitulatif ('Éclairage · À planifier', '80,00 € à 200,00 €. Le devis fixe le prix final.') ; urgente → mention 'Intervention en urgence : majoration de 25 %, indiquée sur le devis précis remis avant travaux.' sous le choix ET au récapitulatif ('Éclairage · Urgent'). Choix exposés comme sélectionnés. Demande urgente INT-D490AE créée (serveur urgency=urgent). L’estimation chiffrée n’intègre pas la majoration (règle rappelée en texte) ; recherche d’adresse non bornée à la zone : non rejouée. Shots android-retest-11-client-urgent-notice, -12-client-recap-urgent, -43-recheck-recap-scheduled, -44-recheck-recap-urgent.",
+  "defects": []
+ },
+ {
+  "id": "ENT-11",
+  "status": "PARTIAL",
+  "evidence": "Demande de site (manager Android, AND Site Eucalyptus) : libellé 'Tout ou partie du site' ; étape 2 = adresse du site préremplie en lecture 'Cité Eucalyptus, 97240 Le François' + 'Adresse enregistrée pour ce site.' ; 'Intervenir à une autre adresse' → champs préremplis (Cité Eucalyptus / 97240 / Le François) ; 'Intervention à planifier' → pas de mention, 'Demande urgente' → mention majoration 25 % ; récapitulatif : adresse affichée une seule fois + 'Urgent' + mention ; envoi → INT-DC26DC, serveur address='Cité Eucalyptus' postal_code=97240 city='Le François' urgency=urgent ; dossier : 'Cité Eucalyptus, 97240, Le François' (une fois). Reste : deux niveaux seulement, aucun SLA/délai contractuel en natif. Shots android-retest-34-site-request-prefill, -35-site-urgent-notice, -36-site-recap-urgent, -37-site-dossier-address-once.",
+  "defects": []
+ },
+ {
+  "id": "ENT-03",
+  "status": "PARTIAL",
+  "evidence": "Re-test limité à la demande rattachée au site : préremplie depuis l’adresse du site, adresse affichée une fois (voir ENT-11, INT-DC26DC site_id=a92a91f9…). Création/archivage de site toujours absents en natif (non rejoué).",
+  "defects": []
+ },
+ {
+  "id": "ENT-04",
+  "status": "PARTIAL",
+  "evidence": "Fiche site relue (nom, 'Bureaux · Actif', adresse, consignes 'AND badge accueil, portail bleu', budget 5 000,00 €) ; la demande créée depuis la fiche reprend l’adresse du site sans ressaisie (ENT-11). Équipements/maintenance/zones/contacts/documents toujours absents en natif (non rejoué).",
+  "defects": []
+ },
+ {
+  "id": "ENT-12",
+  "status": "PASS",
+  "evidence": "Approbation native (commit aa6c83cf) sur INT-DC26DC, devis 542,50 € TTC, règle du site propriétaire ≥ 200 € : manager Android 'Accepter ce devis' → refus 'Ce devis doit d’abord être approuvé par votre organisation' ; Sites > organisation > Consulter les approbations > ligne 'En attente · 542,50 € TTC' > détail : carte 'Votre décision', champ 'Commentaire (obligatoire pour refuser, facultatif pour approuver)', boutons Approuver / Refuser. 'Refuser' sans commentaire → 'Un commentaire est obligatoire pour refuser. Il est transmis au demandeur.' (statut resté En attente). Commentaire saisi + 'Approuver' + confirmation → 'Approbation enregistrée…', statut 'Approuvée', 'Décision du 22 nov. 2026, 00:55', note de décision affichée ; puis dossier > 'Accepter ce devis' → 'Devis accepté', serveur quote accepted 54250 c, intervention accepted. NON rejoué : refus effectif avec commentaire, circuit avancé multi-niveaux, décision par un non-propriétaire. Shots android-retest-38-approval-detail, -40-approval-refuse-empty-msg, -41-approval-approved, -42-site-quote-accepted.",
+  "defects": []
+ }
+]

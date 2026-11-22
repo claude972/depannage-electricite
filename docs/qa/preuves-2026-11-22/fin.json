@@ -1,0 +1,157 @@
+[
+ {
+  "id": "FIN-01",
+  "status": "BLOCKED",
+  "evidence": "Journey played in the real UI on deployed recette (Stripe TEST): client qa-…-fin-client created INT-94F9FD (94f9fd5f-d171-4893-99df-e7ba2bb97e49, 97240 Le François, mode \"Après intervention — paiement sur la plateforme\", POST /api/bookings 201) -> fin-artisan accepted (200) -> quote DEV-E780C4 (e780c434-…): HT 12345 c, TVA 8,5 % 1049 c, TTC 13394 c -> client accepted (quotes.status=accepted) -> artisan started, saved report + before/after photos, finished (interventions.status=completed, paid_at=null) -> client sees \"À régler / Payer 133,94 € sur la plateforme\". Click Pay -> POST /api/payments/checkout 409 {\"error\":\"Le compte de règlement de l’artisan doit être validé avant paiement.\"}, shown in the UI, no redirect, nothing debited. Server: platform_checkouts e195e68c-c185-4947-9dbc-47de90ae82e4 amount_cents=13394 (= accepted quote total, server-frozen), account_id=acct_1UeQ9G…, status=preparing, fee_bps=null, fee_cents=null, session_id=null; payments/payment_attempts: 0 rows; repeated clicks reuse the same row (1 row). Refusals: checkout before acceptance/completion 409 \"Le paiement s’ouvre une fois le devis accepté et l’intervention terminée… Rien n’a été débité.\"; third-party client 404; artisan 404; anonymous 401; extra amount_cents field 422. Config read via admin API /api/platform-operations/finance: commission.checkout_bps=1000, setting_bps=1000, aligned=true, payment_provider {configured:true, mode:\"test\", live_enabled:false}; artisan offer shows \"Estimation après commission 72,00 € – 162,00 €\" on 80–180 € (10 %). NOT verified: amount actually charged and application fee = 10 % (expected 1339 c on 13394 c) — no checkout was ever paid at 1000 bps; all 3 historical paid platform_checkouts have fee_bps=1700 (10850/1845, 10850/1845, 13020/2213). BLOCKER for any paid Checkout: the artisan Connect account must have stripe_transfers=active. In-app onboarding works up to Stripe (POST /api/payments/connect 200, account acct_1UeQ9G…P7 created and stored, redirect to connect.stripe.com/setup/e/…) but Stripe's hosted onboarding immediately shows an hCaptcha image challenge to the automated browser (\"Touchez chaque objet fabriqué par l'homme\", shot fin-st-2.png); I did not solve/bypass it. No Stripe key is available in the harness, the 3 existing artisans with a TEST account (acct_1Ub1On…, acct_1Ub5UL…, acct_1UcWCT…) have no credentials in /Volumes/Stockage/depannage-qa-private/claude-20261116/, and earlier docs do not say how acct_1UcWCT… was onboarded. A human must complete the hosted onboarding once for fin-artisan (273a5ec3-9f66-4608-9dc2-02ebc1d5b5cd) or provide credentials of an onboarded synthetic artisan; INT-94F9FD is ready to pay (note: checkout row created 2026-11-22T02:10Z turns needs_review after 23 h).",
+  "defects": [
+   {
+    "title": "Artisan cannot see whether his Stripe account is ready; label promises a refreshed state that is never shown",
+    "steps": "Artisan > Profil > \"Configurer mes règlements Stripe\" > return to /?connect=returned",
+    "expected": "Account state (to complete / active) displayed, as the hint \"état du compte actualisé à votre retour\" says",
+    "actual": "Notice \"Retour depuis Stripe enregistré. Cette interface n’a pas vérifié l’état de votre compte de règlement…\"; no state anywhere; the client only discovers it at payment time (409)",
+    "suspect": "components/role/artisan-space.tsx:3786-3797 ; components/courant-app.tsx:650-653"
+   },
+   {
+    "title": "To verify: Connect onboarding looks configured for Austria and platform is named \"Elec\"",
+    "steps": "Open the hosted onboarding link for a new artisan account",
+    "expected": "French (FR/Martinique) legal entity context, platform name DomDépannage",
+    "actual": "Page title \"Elec s’appuie sur Stripe\", legal links https://stripe.com/AT/connect-account/legal and /AT/privacy, default phone prefix +43 — suggests STRIPE_CONNECT_COUNTRY=AT on recette (could not confirm without Stripe access)",
+    "suspect": "app/api/payments/connect/route.ts:31-43 (identity.country from STRIPE_CONNECT_COUNTRY) / Stripe platform branding"
+   },
+   {
+    "title": "409 \"compte de règlement\" message lacks the \"Rien n’a été débité\" reassurance used by the other refusals",
+    "steps": "Client clicks Pay while artisan account is not active",
+    "expected": "Same wording as CHECKOUT_REFUSALS[\"Recipient account not ready\"]",
+    "actual": "\"Le compte de règlement de l’artisan doit être validé avant paiement.\" only",
+    "suspect": "lib/features/payments/checkout.ts:91"
+   }
+  ]
+ },
+ {
+  "id": "FIN-02",
+  "status": "PARTIAL",
+  "evidence": "Verified without a paid checkout: (a) redirect alone never marks paid — visiting /?payment=pending&intervention=94f9fd5f… as the client shows \"Retour de paiement reçu. La confirmation définitive arrive par Stripe…\", status stays \"À régler\", DB interventions.status=completed paid_at=null, payments 0 rows; (b) webhook: unsigned POST /api/payments/webhook -> 400 \"Signature de paiement absente.\" (also ?source=connect), forged Stripe-Signature -> 400 \"Signature de paiement invalide.\", no state change; (c) decline then retry on the SAME Stripe TEST Checkout session proven on the card-hold booking path: 4000 0000 0000 0002 -> \"Votre carte a été refusée\", no intervention created; 4242 on same session -> return -> POST /api/bookings/finalize 201 -> INT-88FF28 created, phone_booking_requests authorized_amount_cents=18000 provider_state=requires_capture; (d) historical ledger read back: per payment exactly one payment_settled and at most one commission_withheld (unique indexes platform_ledger_one_commission_*). NOT verified: paid state set by checkout.session.completed webhook, declined-then-paid on a quote payment, duplicate-webhook replay — blocked by Connect onboarding (see FIN-01).",
+  "defects": []
+ },
+ {
+  "id": "FIN-03",
+  "status": "PARTIAL",
+  "evidence": "Return URLs exercised by direct navigation (no real Checkout possible): /?payment=pending -> lands on #detail/94f9fd5f…, honest notice, no confirmation; /?payment=cancelled -> \"Retour depuis la page de paiement sans confirmation. Aucun règlement n’est confirmé pour l’instant…\"; pay button still offered; DB unchanged. Anonymous visitor on /?payment=pending… -> #auth with \"Connectez-vous pour relire l’état de votre retour Stripe. Aucun statut n’est déduit du lien.\" Real Stripe return proven on two other TEST Checkout flows: saved-card setup (/?saved_methods=returned|cancelled, session intact) and card-hold booking (session intact, lands on the new dossier). Follow-up deep link /#detail/<id> survives login (client lands on dossier at 390 px; third-party sees nothing). Success return after an actual payment not verified (blocked).",
+  "defects": [
+   {
+    "title": "Payment return loses the dossier when the session has expired",
+    "steps": "Open /?payment=pending&intervention=<id> without a session, log in as the paying client",
+    "expected": "After login the client lands on #detail/<id> with the server-read payment state",
+    "actual": "Lands on #profile, no notice, return context dropped",
+    "suspect": "components/courant-app.tsx:608-616 (setReturnContext(null) before login; not kept as pending deep link)"
+   }
+  ]
+ },
+ {
+  "id": "FIN-04",
+  "status": "PARTIAL",
+  "evidence": "Decline handled on Stripe TEST (card-hold booking and saved-card setup): message \"Votre carte a été refusée. Essayez une autre carte bancaire.\", nothing created server-side, retry works. Admin Finance > Remboursements (super admin): banner \"Exécution indisponible : fournisseur de paiement non configuré. Une demande approuvée n’est pas un remboursement effectué.\"; /api/platform-operations/me capabilities.refund_execution=false. Creating a refund request (UI form, non-existent payment id) -> POST /api/platform-operations/finance/refund-requests 403 {\"code\":\"platform_mfa_required\",\"error\":\"Vérifiez votre identité avec votre application d’authentification avant de confirmer cette action.\"}; UI shows panel \"Vérification à deux étapes\" + \"Commencer la vérification\" (TOTP enrolment/challenge on the shared admin account — not performed). Empty form -> \"Identifiant de paiement invalide.\". Litiges: open with unknown payment id -> 404 \"Ce dossier est introuvable.\" (no MFA demanded before lookup). 0 refund requests, 0 disputes, 0 refunds in DB. client/artisan get 403 on all /api/platform-operations/finance* reads. Not verified: refund/dispute on a real paid payment (no own paid payment; MFA gate).",
+  "defects": [
+   {
+    "title": "A 404 on a finance write blanks the whole admin Finance screen with a false \"not activated\" message",
+    "steps": "Admin > Finance > Litiges > \"Ouvrir un litige\" with a well-formed but unknown payment UUID > Ouvrir",
+    "expected": "Inline error \"Ce dossier est introuvable.\" in the form, screen unchanged",
+    "actual": "POST /api/platform-operations/finance/disputes 404; the entire Finance view is replaced by \"Cette fonction n’est pas encore activée sur ce service. Rien n’est simulé…\"; \"Actualiser\" does not recover, only a full page reload does (shot fin-adm-dispute-fake.png)",
+    "suspect": "components/app/api.ts:100-103 (contractStateFromError maps any 404 to \"missing\") used by components/features/platform-operations/platform-finance-view.tsx"
+   },
+   {
+    "title": "Refund banner states a wrong reason",
+    "steps": "Admin > Finance > Remboursements on recette",
+    "expected": "Reason consistent with the header (\"Fournisseur de paiement : Mode test\", configured=true), e.g. \"exécution non activée\"",
+    "actual": "\"Exécution indisponible : fournisseur de paiement non configuré.\"",
+    "suspect": "lib/features/platform-operations/config.ts:36 (static REFUND_EXECUTION_MESSAGE)"
+   },
+   {
+    "title": "Card hold is not released when the client cancels the request",
+    "steps": "Client: new request > \"Empreinte bancaire\" > Stripe TEST 4242 (180,00 € authorised) > INT-88FF28 created > \"Annuler la demande\" > confirm",
+    "expected": "Authorisation cancelled at Stripe and the dossier says the hold is released",
+    "actual": "interventions.status=cancelled but phone_booking_requests still status=confirmed, provider_state=requires_capture, authorized_amount_cents=18000, release_checked_at=null; dossier still shows \"Empreinte bancaire enregistrée… seul le montant du devis accepté pourra être prélevé\"; cancel dialog says nothing about the hold",
+    "suspect": "lib/features/guest/card-hold.ts:86-87 (releaseCardHold only when intervention_id is null and status=cancelling) ; app/api/interventions/[id]/actions/route.ts cancel action does not release"
+   }
+  ]
+ },
+ {
+  "id": "FIN-05",
+  "status": "PARTIAL",
+  "evidence": "No invoice could be issued (none exists: platform_invoices 0 rows, counters 0; client dossier shows \"Factures et avoirs de ce dossier — Aucune facture émise.\"). Admin Finance > Paramètres (values read in UI and /api/platform-operations/settings): issuer legal_name \"TTBM SARL\", SIRET 92950776200011, address \"Cité Eucalyptus, 97240 Le François\", vat_number null, \"TVA sur commission = Non configuré\" (commission_vat_rate null), hint \"Vide = non configuré : aucune facture de commission possible.\"; header \"Émetteur plateforme : Configuré\". Factures et avoirs > \"Vérifier les conditions\" (read-only readiness) on existing TEST payment a7a69f49…: basis Commission -> \"Émission impossible — taux de TVA de commission non configuré\" (API missing:[\"platform_commission_vat_rate\"], issuer TTBM SARL in preview); basis Prestation -> \"Émission impossible — coordonnées de facturation manquantes\" (missing:[\"billing_contact\"]); no \"Émettre\" button offered. Numbering/amounts/credit notes not verifiable.",
+  "defects": []
+ },
+ {
+  "id": "FIN-06",
+  "status": "FAIL",
+  "evidence": "Admin Finance > Rapprochement (before my action): Paiements réglés 4 · 455,70 € ; Règlements au registre 4 · 455,70 € ; Écarts 0 ; Commission estimée 0 · 0,00 € ; Commission prélevée (confirmée) 3 · 59,03 € (=1845+1845+2213 c) ; taux paramètre 10.00 % \"Aligné avec le paiement en ligne\" ; Ledger tab lists 7 immutable entries matching DB. Observations fournisseur: fee observations matched/linked_checkout_fee; payout.* 90,05 € observations stay \"À examiner (aggregate_payout_unallocated)\" — no bank payout is allocated to a dossier (payout proof state = to review, not proven). Preuves for a7a69f49…: \"Aucune preuve de capture conservée\". Then I clicked \"Rapprocher les règlements\": POST /api/platform-operations/finance 200 {\"settled_added\":0,\"commission_bps\":1000,\"commission_added\":4,\"remaining_unsettled\":0} with NO MFA step-up; ledger went 7 -> 11 rows: 4 new commission_estimated at 10 % (1085, 1085, 1085, 1302 c; basis rate_source=platform_setting v1) on the 4 historical payments, 3 of which already carry a confirmed commission_withheld at 17 %. Screen now shows both \"Commission estimée (non prélevée) 4 · 45,57 €\" and \"Commission prélevée 3 · 59,03 €\". DISCLOSURE: these 4 immutable rows on pre-existing synthetic TEST payments (a7a69f49, 71707f77, 6f496d43, bdc2cfff) were created by my click and cannot be removed. Commission 10 % recorded once on a new payment: not verifiable (blocked, FIN-01).",
+  "defects": [
+   {
+    "title": "Reconciliation adds an \"estimated, not withheld\" commission to payments whose commission is already confirmed",
+    "steps": "With platform setting commission_bps present, Admin > Finance > Rapprochement > \"Rapprocher les règlements\"",
+    "expected": "No estimate for a payment that already has commission_withheld (commission counted once, at the frozen checkout rate)",
+    "actual": "commission_added=4; payments a7a69f49/71707f77/6f496d43 now have commission_withheld 1845/1845/2213 c (17 %) AND commission_estimated 1085/1085/1302 c (10 %); dashboard shows 45,57 € \"non prélevée\" although 59,03 € was withheld",
+    "suspect": "supabase/migrations/202610310014_platform_operators.sql:287 (loop only excludes existing commission_estimated, not commission_withheld)"
+   },
+   {
+    "title": "Ledger-writing reconciliation is not behind the MFA step-up that protects refund requests",
+    "steps": "Same click as above with a password-only super admin session",
+    "expected": "Same \"platform_mfa_required\" gate as other finance writes, or explicit decision that it is exempt",
+    "actual": "HTTP 200, 4 immutable ledger rows written",
+    "suspect": "app/api/platform-operations/finance/route.ts (POST) / platform reconcile RPC"
+   }
+  ]
+ },
+ {
+  "id": "FIN-07",
+  "status": "PASS",
+  "evidence": "Disabled by configuration and said so: GET /api/subscriptions (artisan and client) 200 {\"state\":\"unavailable\",\"available\":false,\"portal_available\":false,\"offers\":[],\"subscription\":null}; artisan Profil and client Paramètres show \"Abonnement — L’abonnement est facultatif… Les abonnements sont indisponibles pour le moment… Aucun droit existant n’est retiré.\" with no subscribe button; admin Finance > Abonnements: mode Test, \"Offres non publiées tant que le service est désactivé. Aucune offre dans ce mode.\"; POST /api/subscriptions/portal {} -> 422. Subscribe/renew/cancel flows not applicable (no offer). Wording nit: \"votre abonnement éventuel n’a pas pu être lu ici\" reads like an error rather than a disabled service.",
+  "defects": []
+ },
+ {
+  "id": "FIN-08",
+  "status": "PASS",
+  "evidence": "Client > Paramètres du compte > \"Moyens de paiement enregistrés\": \"Ajouter une carte\" disabled until the consent checkbox is ticked; POST /api/payments/methods 200 -> \"Ouvrir la page sécurisée de Stripe\" -> Stripe TEST Checkout (setup) -> 4242 4242 4242 4242 -> return /?saved_methods=returned -> list shows \"Visa •••• 4242 · expire 12/2034\" (GET /api/payments/methods 1 method), persists after reload; notice \"Un retour ne prouve pas qu’une carte a été enregistrée ; seule la liste ci-dessous fait foi\". Decline card 4000 0000 0000 0002 -> Stripe \"Votre carte a été refusée\", back -> \"Enregistrement annulé sur la page Stripe\", still 1 card. Delete: \"Supprimer…\" -> confirm -> POST 200 {\"removed\":true} -> \"Carte supprimée. Aucun moyen de paiement enregistré.\" Isolation: fin-other sees 0 methods; artisan role 403 \"réservée au titulaire du compte client confirmé\". Options offered at booking: \"Après intervention — paiement sur la plateforme\" and \"Empreinte bancaire (aucun débit immédiat)\" (hold of the estimate max 180,00 €, TEST, see FIN-02/FIN-04). Paying a quote with the saved card not verified (blocked, FIN-01).",
+  "defects": [
+   {
+    "title": "Return from Stripe card setup lands on \"Mon profil\", not on the card list",
+    "steps": "Add a card, complete Stripe, return",
+    "expected": "Land on Paramètres du compte > Moyens de paiement enregistrés with the notice",
+    "actual": "URL /?saved_methods=returned#profile shows the profile form with no notice; the card is only visible after opening Paramètres; the ?saved_methods= query stays in the URL so the return notice reappears after reload",
+    "suspect": "return URL built in lib/features/saved-payment-methods/handlers.ts (hash #profile instead of #profile/parametres)"
+   }
+  ]
+ },
+ {
+  "id": "ART-11",
+  "status": "BLOCKED",
+  "evidence": "Only the pre-payment state is verifiable: artisan dossier INT-94F9FD shows \"Terminée, règlement attendu\", panel \"Règlement — Devis initial accepté : 133,94 € — Règlement attendu du client\", follow-up link + QR (\"Ce lien ne déclenche aucun paiement\"; GET /api/payments/link 200 payment_available=false reason=checkout_required; third party 404); /api/payments/status as artisan 200 payment=null artisan_dispute=\"none\"; Performance: \"0,00 € Payé TTC du mois · 0 règlement confirmé · 1 intervention terminée\". Offer card shows \"Estimation après commission 72,00 € – 162,00 €\". Gross / 10 % commission / net (expected 13394 / 1339 / 12055 c) on a paid job and paid/transferred/paid-out states: not verifiable without a paid checkout (FIN-01 blocker). Note: before payment the artisan dossier shows no commission or net for the accepted quote.",
+  "defects": []
+ },
+ {
+  "id": "CLI-10",
+  "status": "BLOCKED",
+  "evidence": "No paid intervention available, so the nominal review could not be posted. Eligibility refusals verified on INT-94F9FD (completed, unpaid): no review form in the client dossier; POST /api/reviews as client 403 \"Vous n’avez pas accès à cette action.\"; third-party client 403; assigned artisan 403; reviews table 0 rows for the dossier; rating missing -> 422.",
+  "defects": [
+   {
+    "title": "Raw English validation text returned by the review API",
+    "steps": "POST /api/reviews without rating",
+    "expected": "French message",
+    "actual": "422 {\"error\":\"Invalid input: expected number, received undefined\"}",
+    "suspect": "app/api/reviews/route.ts:9-15 (validated() without custom message)"
+   }
+  ]
+ },
+ {
+  "id": "ADM-06",
+  "status": "PARTIAL",
+  "evidence": "Read-only: Admin > Avis & Notes (#admin-reviews) loads \"Avis déposés 2, moyenne 4,5/5\" (INT-44B1D4 4/5, INT-5B12D9 5/5) and the moderation list with state Visible, \"Masquer\" action, filters (Tous/Masqués/Contestation ouverte) and the traced history of earlier moderation/contestations with reasons and dates. I did not moderate or contest: both reviews belong to other synthetic accounts and I could not create my own (CLI-10 blocked).",
+  "defects": []
+ },
+ {
+  "id": "FIN-GUEST",
+  "status": "PARTIAL",
+  "evidence": "Guest/on-site settlement as exposed: (1) artisan follow-up link + QR on a completed dossier — relative link to /#detail/<id>, \"Copie impossible : sélectionnez le lien ci-dessus\" fallback in headless (clipboard), never a Checkout; (2) card-hold booking \"Empreinte bancaire\": Stripe TEST authorisation 180,00 € works incl. decline-then-retry, dossier shows \"Empreinte bancaire enregistrée (vérifiée le 21 nov., 22:25). Ce n’est pas un débit\", GET /api/bookings/settlement/status 200 {method:\"card_hold\",status:\"not_started\",available:false,reason:\"not_completed\"}; capture needs the same active artisan account (lib/features/guest/settlement.ts:31) — not run. No \"declare received on site\" action is offered to the artisan on a platform-payment dossier. Leftover: one TEST PaymentIntent of 180,00 € in requires_capture for cancelled INT-88FF28 (see FIN-04 defect).",
+  "defects": []
+ }
+]

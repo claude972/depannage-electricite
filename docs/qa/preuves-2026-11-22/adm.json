@@ -1,0 +1,208 @@
+[
+ {
+  "id": "ART-01",
+  "status": "PARTIAL",
+  "evidence": "Base used: local http://localhost:3000 (dev server stopped before the end of the run; nothing was replayed on the deployed recette). Artisan space walked at 1280 px for an unapproved account (adm-artisan-new) and an approved one (adm-artisan-ok2): Tableau de bord, Missions, Devis, Messages, Profil, Planning, Documents, Dossier de candidature, Performance, Aide, Assistance all load with their own hash, no horizontal overflow, no page error; unapproved account gets the banner + read-only planning + disabled team creation. Role isolation: client and artisan deep links to #admin, #platform-finance, #platform-audit show 'Cette page ne fait pas partie de votre espace'; admin APIs 403. NOT verified: 390 px (my mobile walk script failed on its own selectors, no app conclusion), preview deployment.",
+  "defects": [
+   {
+    "title": "Artisan — erreur console React « two children with the same key » sur la fiche mission",
+    "steps": "Artisan approuvé avec une mission attribuée (adm-artisan-ok2), ouvrir #detail/<id> de INT-AB926E (aussi juste après « Accepter la mission »).",
+    "expected": "Aucune erreur console.",
+    "actual": "console.error « Encountered two children with the same key, ab926edd-… » à chaque chargement : le dossier figure deux fois dans une liste rendue (risque de doublon/omission d’affichage).",
+    "suspect": "components/role/artisan-space.tsx (fusion offres / missions en cours, clé = id d’intervention)"
+   }
+  ]
+ },
+ {
+  "id": "ART-02",
+  "status": "PARTIAL",
+  "evidence": "Base used: local http://localhost:3000 (dev server stopped before the end of the run; nothing was replayed on the deployed recette). Signup UI (#auth > Créer un compte > Artisan électricien): empty/short fields blocked by HTML validation; real creation with a @qa.invalid address refused by the auth provider (POST /api/auth/signup 422), so adm-artisan-new was created through auth-admin (unapproved, no artisan_profiles row) — real signup + e-mail confirmation NOT replayed. Application form driven in the UI: empty save blocked, SIRET strips letters and needs 14 digits, postal '9720' -> 'Saisissez un code postal à 5 chiffres', duplicate -> 'Ce code postal est déjà dans vos zones', draft saved (POST /api/artisan 200, DB draft), values kept after reload, submit -> 'Candidature soumise' (DB submitted), admin 'Demander des corrections' -> banner + 'Modifications demandées', resubmit -> submitted. Editing an approved file asks confirmation and returns to draft (artisan_approved=false).",
+  "defects": [
+   {
+    "title": "Candidature artisan — un code postal hors zone couverte (ex. 75001) est accepté sans avertissement",
+    "steps": "Artisan, #application, « Ajouter un code postal » : saisir 75001, Ajouter, Enregistrer le brouillon puis Soumettre.",
+    "expected": "Refus ou avertissement : la couverture publiée est 97200–97299 (100 codes, v1).",
+    "actual": "75001 est ajouté, enregistré (POST /api/artisan 200, postal_codes=[75001,97240,97200]) et visible tel quel dans la fiche admin « Zone d’intervention ». Seul le format 5 chiffres est contrôlé. Le SIRET n’est contrôlé que sur 14 chiffres (12345678901234 accepté, pas de clé de Luhn).",
+    "suspect": "components/role/artisan-space.tsx (formulaire candidature, ajout de code postal) et app/api/artisan/route.ts (schéma postal_codes)"
+   },
+   {
+    "title": "Inscription web — message trompeur quand le fournisseur d’authentification refuse le domaine e-mail",
+    "steps": "/#auth > Créer un compte > Artisan électricien, e-mail syntaxiquement valide en @qa.invalid, téléphone 0696000000, mot de passe de 31 caractères, Créer mon compte.",
+    "expected": "En recette : création possible avec une adresse de test, ou message indiquant que le domaine n’est pas accepté.",
+    "actual": "POST /api/auth/signup 422 {\"error\":\"Indiquez une adresse e-mail valide.\"} (Supabase email_address_invalid). L’inscription artisan réelle ne peut pas être rejouée de bout en bout sans boîte e-mail réelle (blocage d’environnement) ; le message ne distingue pas format invalide et domaine refusé.",
+    "suspect": "lib/features/auth/signup.ts:34 (email_address_invalid -> EMAIL_MESSAGE)"
+   }
+  ]
+ },
+ {
+  "id": "ART-03",
+  "status": "PASS",
+  "evidence": "Base used: local http://localhost:3000. adm-artisan-new, #documents: .txt refused in UI ('Formats autorisés : PDF, JPEG, PNG et WebP'), Kbis PDF / assurance JPEG / qualification PDF uploaded (POST /api/documents 201 x4) then linked as credentials (POST /api/artisan 200; kinds registration/liability/qualification). Assurance linked with expiry 2020-01-01 shows 'À renouveler / Expiré le 1 janv. 2020'; admin decision 'Modifications demandées' with motif (empty motif blocked: 'Indiquez un commentaire'), Kbis 'Acceptée' — both decisions + motif + history v1 visible to the artisan. Replacement: assurance-v2.jpg linked (expiry 2027-12-31) -> card shows v2 'Valide jusqu’au 31 déc. 2027', counter 3/3 after reload; old credential row kept in DB (history). Own download opens signed URL. Third parties (client adm-third, other artisan adm-artisan-ok): GET /api/documents?id=… 404 'Ce document est introuvable', list empty, GET reviews 404.",
+  "defects": []
+ },
+ {
+  "id": "ART-04",
+  "status": "FAIL",
+  "evidence": "Base used: local http://localhost:3000. Server-side eligibility verified end-to-end with adm-artisan-new: available Non -> GET /api/artisan/missions eligible=false; Oui -> 16 offers = exactly the DB 'requested' interventions in 97200/97240 with categories socket/outage (97224 socket and 97217 diagnostic excluded); radius 'Le François 3 km' -> 3 offers (radius 0 refused: 'entier de 1 à 200 km'), persisted after reload, 'Effacer' -> 16; editing zones/skills on an approved file asks inline confirmation, resets to draft (artisan_approved=false, available=false, eligible=false); after resubmit + admin re-approval with zone 97200 + outage only -> 2 offers (outage, Fort-de-France). FAIL because the offers list on screen is not refreshed when the availability switch is toggled (stale offers shown while unavailable).",
+  "defects": [
+   {
+    "title": "Artisan — la liste « Offres disponibles » n’est pas rechargée après bascule de la disponibilité",
+    "steps": "Artisan approuvé (adm-artisan-new), #missions, disponibilité Oui avec 16 offres affichées. Cliquer l’interrupteur « Disponible pour de nouvelles missions » (POST /api/artisan 200, available=false). Attendre 6 s. Puis rebasculer sur Oui depuis l’état Non.",
+    "expected": "La liste reflète immédiatement l’éligibilité serveur : vide + message « compte non disponible » après Non ; offres rechargées après Oui.",
+    "actual": "Après Non : les 16 offres restent affichées (GET /api/artisan/missions renvoie eligible=false, items=[]). Après Oui (depuis Non) : le message « Aucune offre… compte n’est pas disponible » reste affiché alors que l’API renvoie 16 offres. Seul un rechargement de page corrige. Captures adm-art04-on.png, adm-art04-toggle-on-stale.png.",
+    "suspect": "components/role/artisan-space.tsx (interrupteur de disponibilité : aucun refetch des offres) / components/features/available-missions"
+   }
+  ]
+ },
+ {
+  "id": "ART-10",
+  "status": "PARTIAL",
+  "evidence": "Base used: local http://localhost:3000 (dev server stopped before the end of the run; nothing was replayed on the deployed recette). adm-artisan-ok2 #performance and profile: 'Interventions terminées 1 · novembre 2026' = the single intervention completed in this run (INT-AB926E, DB status completed), 'Payé TTC du mois 0,00 € · 0 règlement confirmé' (no payment exists), note moyenne '—', 'Ponctualité : Non calculée : définition et source de ponctualité non établies' (honest gap, not a computed figure). Capacity preference saved 3 -> 4 (POST /api/artisan 200, DB capacity_limit=4; page states it does not filter offers). NOT verified: revenue by period, reputation and punctuality on a known paid data set (no payment possible locally, and punctuality is not implemented).",
+  "defects": []
+ },
+ {
+  "id": "ART-11",
+  "status": "PARTIAL",
+  "evidence": "Base used: local http://localhost:3000 (dev server stopped before the end of the run; nothing was replayed on the deployed recette). Commission figures shown to the artisan equal 10 %: offer card 'Estimation indicative 80,00 € – 180,00 €' / 'Estimation après commission 72,00 € – 162,00 €', and 80–200 -> 72–180. Stripe Connect: 'Configurer mes règlements Stripe' -> POST /api/payments/connect 503 'Le paiement Stripe est en cours de configuration. Aucun montant n’a été débité.' (honest unavailable state; unapproved account: 'Compte artisan approuvé requis'). After completion both sides show 'Le paiement en ligne n’est pas encore activé' and no payment is requested. BLOCKED (no Stripe key locally): paid / transferred / paid-out states, fees, failed payout, commission invoices.",
+  "defects": []
+ },
+ {
+  "id": "ART-12",
+  "status": "PASS",
+  "evidence": "Base used: local http://localhost:3000. Provider teams are enabled (panel 'Équipe prestataire' in #missions). adm-artisan-ok2 (approved) created 'adm-Equipe Recette' (POST /api/provider-teams 200); creation disabled for the unapproved artisan ('titulaire artisan approuvé'). Invitation: invalid e-mail refused in UI ('Adresse e-mail invalide.'), invite of adm-artisan-ok as Technicien with expiry -> 'En attente · expire le 31 déc. 2026' (no e-mail sent, by design); invitee sees it under 'Invitations reçues', Accepter -> member 'Technicien' (POST /api/provider-team-invitations 200). Owner assigned the technician to active mission INT-3225E8 (POST 200, 'Affecté (adm-ArtisanOk Recette)'); technician sees only that intervention in the team view ('ni prix, ni paiement, ni documents'), acknowledged it with a note ('Prendre en compte'), and has no direct dossier access (GET /api/interventions/<id> 404). Outsiders (other artisan, client): GET team 404, empty list. Minor defect: assignment control offered on a completed mission then refused with a generic 403.",
+  "defects": [
+   {
+    "title": "Équipe prestataire — affectation proposée sur un dossier terminé puis refusée par un 403 générique",
+    "steps": "Artisan titulaire (adm-artisan-ok2), #missions > Équipe prestataire > Ouvrir > Interventions : sur « Prise ou interrupteur · À régler » (INT-AB926E, statut completed) choisir le technicien et cliquer Affecter.",
+    "expected": "Pas de sélecteur d’affectation quand le serveur indique can_assign=false (statuts hors assigned/quoted/accepted/in_progress), ou un message expliquant que le dossier terminé ne peut plus être affecté.",
+    "actual": "Le sélecteur et le bouton sont proposés ; POST /api/provider-teams/<id> 403 {\"error\":\"Vous n’avez pas accès à cette action.\"} alors que l’utilisateur est propriétaire de l’équipe.",
+    "suspect": "components/features/provider-teams (liste Interventions : n’utilise pas permissions.can_assign) ; règle SQL supabase/migrations/20261107172635_provider_teams.sql:162"
+   }
+  ]
+ },
+ {
+  "id": "ADM-01",
+  "status": "PASS",
+  "evidence": "Base used: local http://localhost:3000 (dev server stopped before the end of the run; nothing was replayed on the deployed recette). Dashboard KPIs (snapshot 22:39) vs DB via service role: Interventions 51 = 51 rows; 'Interventions en cours' 35 = rows not paid/cancelled; 'Candidatures à examiner' 1 = 1 artisan_profiles row 'submitted'; 'Prestations payées TTC' 455,70 € = sum of the 4 payments with status paid (108,50 + 130,20 + 108,50 + 108,50). 'Base de calcul des indicateurs' explains each KPI ('Revenu plateforme : non calculé'). Non-admin: /api/admin/dashboard 403.",
+  "defects": []
+ },
+ {
+  "id": "ADM-02",
+  "status": "FAIL",
+  "evidence": "Base used: local http://localhost:3000. Directory: 23 artisans counted, name search 'adm-Nouveau ArtisanNew' -> 1 row 'Soumis, à examiner', filters Tous/Approuvés/Non approuvés, 'Examiner' opens the file (identity, company, masked SIRET, zones, skills, linked pieces with per-piece decision form + history). Per-piece decisions with mandatory motif saved (POST /api/artisan/credentials/<id>/reviews 200, v1) and shown to the artisan. Application decisions through the UI on adm-artisan-new: Demander des corrections (DB changes_requested, artisan banner), after resubmission Approuver (DB approved, artisan_approved=true -> 16 offers after enabling availability), Suspendre (DB suspended, artisan banner 'accès suspendu', GET /api/artisan/missions eligible=false, accept_mission 403, set_availability 403), Réactiver (approved again). adm-artisan-rej submitted then sent back for corrections: eligible=false, accept_mission 403, dossier GET 404. Approval is not blocked by missing/expired pieces (documented rule: only the submitted company file is required). No MFA prompt was shown for these decisions. FAIL on two UI gaps: pieces cannot be opened from the admin file, and application-level decisions carry no motif (no definitive 'refuse' action exists).",
+  "defects": [
+   {
+    "title": "Admin — la fiche candidature ne permet pas d’ouvrir les justificatifs à examiner",
+    "steps": "Admin > Artisans > Examiner (adm-Nouveau ArtisanNew) > « Justificatifs reliés » : Kbis adm-kbis.pdf, assurance, qualification.",
+    "expected": "Un lien/bouton pour ouvrir ou télécharger chaque pièce avant de rendre la décision (acceptée / modifications / refusée).",
+    "actual": "Seul le nom du fichier est affiché ; aucun bouton ni lien (0 lien dans la fiche). L’API l’autorise pourtant : GET /api/documents?id=<id> en session admin renvoie 200 + URL signée. L’opérateur décide donc sans pouvoir voir la pièce depuis l’interface. Capture adm-adm02-pieces-decided.png.",
+    "suspect": "components/role/admin-space.tsx:1455-1460 (documentName(c.document_id) sans action de téléchargement)"
+   },
+   {
+    "title": "Admin — décision de candidature (corrections / approbation / suspension) sans motif saisi",
+    "steps": "Admin > Artisans > Examiner > Décision > « Demander des corrections » > « Confirmer la demande de corrections ».",
+    "expected": "Décision motivée (critère matrice ADM-02) : motif obligatoire transmis à l’artisan et conservé.",
+    "actual": "Aucune zone de motif : POST /api/admin/artisans 200 {success:true} ; l’artisan voit seulement « L’opérateur demande des modifications sur votre candidature » sans explication (seules les décisions par pièce portent un motif). Il n’existe pas non plus d’action « Refuser » définitive : seules approve / request_changes / suspend / reinstate existent.",
+    "suspect": "app/api/admin/artisans/route.ts:4-9 (schéma sans reason) ; components/role/admin-space.tsx (ConfirmAction des décisions)"
+   }
+  ]
+ },
+ {
+  "id": "ADM-03",
+  "status": "PASS",
+  "evidence": "Base used: local http://localhost:3000. Admin > Interventions: search 'INT-AB926E' -> 1 row (GET /api/admin/interventions?limit=25&q=INT-AB926E 200), 'Ouvrir' -> #detail/ab926edd… (deep link reload OK) with participants, journal, thread, reassign panel. Own dossier INT-AB926E created in the UI by adm-client (POST /api/bookings 201), accepted in the UI by adm-artisan-ok. Admin message in thread signed 'Exploitant' (POST /api/admin/messages 200) read by the client in #messages. Reassign: artisan search in panel, empty motif refused ('Indiquez un motif d’au moins 10 caractères'), confirm -> POST /api/interventions/<id>/operations 200, DB artisan_id = adm-artisan-ok2, journal 'Artisan réaffecté · Vous (administrateur)', motif posted in the thread and visible to the client. Old artisan: GET dossier 404, GET messages 404, POST message 403, action 403, dossier gone from 'En cours', notification 'Mission retirée'. New artisan: GET 200 and dossier in 'En cours'. Third-party client: 404. Not covered: escalation variants on a dossier (only support-ticket escalation exists, see ADM-07) and the 'Remettre en attente' variant. Minor: the operator message appears in the journal as the generic label 'Événement du dossier'.",
+  "defects": []
+ },
+ {
+  "id": "ADM-04",
+  "status": "PASS",
+  "evidence": "Base used: local http://localhost:3000. Admin > Clients: header 58 clients = DB profiles client 40 + manager 18; cursor pagination 25/page (page 2 'lignes 26 à 50', no overlap with page 1, GET /api/admin/directory?kind=clients&limit=25&cursor=… 200); filters 'Entreprises clientes' -> 18 rows all enterprise (role=manager), 'Particuliers' -> 40; 1-char search refused in UI ('Saisissez au moins 2 caractères'); search 'adm-Client' -> 1 row; 'Fiche client' shows name/phone/type/date/id + the client's dossiers (INT-AB926E, 'Ouvrir' link) with the notice that address, e-mail and sites are not transmitted to the administration; organisations directory (15) with owner filter (owner_id=…). Non-admin: /api/admin/directory 403 (ADM-09). Note: the client file is not deep-linkable (hash stays #admin-clients).",
+  "defects": []
+ },
+ {
+  "id": "ADM-05",
+  "status": "PARTIAL",
+  "evidence": "Base used: local http://localhost:3000 (dev server stopped before the end of the run; nothing was replayed on the deployed recette). Finance > Paramètres: commission 1000 points de base, version 1 (header '10.00 %'), issuer TTBM SARL, SIRET 92950776200011, address Cité Eucalyptus 97240 Le François, 'TVA sur commission : Non configuré' (GET /api/platform-operations/settings confirms bps 1000 v1, commission_vat_rate null). Rapprochement: 4 paid · 455,70 € = DB; 'Commission estimée 4 · 45,57 €' = exactly 10 % (ledger lines 10,85 on 108,50 and 13,02 on 130,20). Stale-version check: PUT settings with expected_version 99 and the same value -> 409, version and updated_at unchanged. Commission invoice precondition check ('Vérifier les conditions') -> ready:false, missing platform_commission_vat_rate + commission_not_confirmed (API body read; the on-screen wording was not captured). Refunds tab: 'Exécution indisponible : fournisseur de paiement non configuré'. Devis & Factures list loads (not reconciled to DB count). Non-admin 403 on finance/settings/ledger. BLOCKED/not done: invoice or credit-note issuance, refund execution, disputes (no provider, VAT rate intentionally unset).",
+  "defects": []
+ },
+ {
+  "id": "ADM-06",
+  "status": "PARTIAL",
+  "evidence": "Base used: local http://localhost:3000 (dev server stopped before the end of the run; nothing was replayed on the deployed recette). Read-only: 'Avis & Notes' and 'Modération' list the 2 existing reviews with visibility, moderation history, contestations and decisions; filter and hide controls present. NOT exercised: hide/restore with motif — the only reviews belong to other test sets, and creating my own review needs a paid intervention (payment unavailable locally). Non-admin /api/platform-operations/reviews 403.",
+  "defects": []
+ },
+ {
+  "id": "ADM-07",
+  "status": "PASS",
+  "evidence": "Base used: local http://localhost:3000. Ticket created in the UI by adm-client (#support > Nouvelle demande; empty form refused: 'Le sujet doit faire entre 4 et 160 caractères' / 'Le message doit faire entre 10 et 4000 caractères'; POST /api/support 200, linked to INT-AB926E). Admin > File d’assistance: subject search finds it, ticket opened (#support-queue/<id>), internal triage: assign to self (motif mandatory: 'Indiquez un motif de 1 à 500 caractères'; POST /api/support/triage 200 v1), escalate with motif (v2, appears under 'Mes attributions' and 'Escaladées', history with operator ref), reply (POST 200), state -> 'Réponse attendue de l’utilisateur', later 'Résolue' with confirmation. Client read the operator reply and state in the UI, replied ('Répondre et rouvrir' -> Ouverte), then saw 'Résolue'; triage notes never shown to the client. Refusals: client set_status 403; third-party client and another artisan GET ticket 404 and empty list. Operator message in the dossier thread covered in ADM-03.",
+  "defects": [
+   {
+    "title": "File d’assistance — le demandeur est affiché avec un préfixe de dossier « INT- »",
+    "steps": "Admin > File d’assistance : lire la ligne du ticket « adm- question sur le règlement INT-AB926E » créé par adm-client (profil fe5a679f-…).",
+    "expected": "Nom du demandeur ou référence de compte clairement distincte d’une référence d’intervention.",
+    "actual": "« Demandeur INT-FE5A67 » (6 premiers caractères de l’identifiant du profil, préfixés INT-) affiché à côté de « Dossier INT-AB926E » : confusion possible avec un numéro de dossier ; aucun lien vers la fiche client. Dans le ticket, le dossier lié est indiqué « hors de vos dossiers chargés » sans lien.",
+    "suspect": "components/role/support-tickets.tsx (libellé Demandeur) / components/role/support-lists.ts"
+   }
+  ]
+ },
+ {
+  "id": "ADM-08",
+  "status": "PARTIAL",
+  "evidence": "Base used: local http://localhost:3000 (dev server stopped before the end of the run; nothing was replayed on the deployed recette). Read-only as instructed. Coverage: published list version 1 with the 100 codes 97200–97299. Operator profile: 'Brouillon (version 1)' with TTBM / SARL / SIREN 929507762 / SIRET 92950776200011; 'Publier le brouillon enregistré' disabled with 'Publication impossible tant que ces champs … manquent : Adresse e-mail de contact, Adresse e-mail pour les données personnelles, Nom de l’hébergeur, Adresse de l’hébergeur, Coordonnées de contact de l’hébergeur, Titulaire des droits'; 'Rien n’est publié'. Warranty (Garantie view): version 2 published 21/11 21:54, 'Activée', dépôt 'Ouvert'. Indicative price grid v1 read-only. Stale-version conflict proven on commission (409, no change). Non-admin 403 on coverage / warranty-policy / public-profile / settings. Not done by instruction: any versioned modification.",
+  "defects": [
+   {
+    "title": "Admin > Paramètres — « Taux de commission : À définir par l’exploitant » alors que 10 % (1000 pb, v1) est configuré",
+    "steps": "Admin > Paramètres (#admin-settings), bloc « Paramètres de la plateforme » ; comparer avec Finance > Paramètres.",
+    "expected": "Affichage cohérent du taux configuré (10 %) ou renvoi vers Finance > Paramètres.",
+    "actual": "« Aucun réglage n’est modifiable depuis cette interface : les valeurs ci-dessous restent à définir par l’exploitant. Taux de commission : À définir par l’exploitant ; TVA par défaut : À définir » alors que Finance affiche 10.00 % (1000 points de base, version 1) et GET /api/platform-operations/settings renvoie bps=1000. Accessoirement le taux est écrit « 10.00 % » (format non français) dans Finance.",
+    "suspect": "components/role/admin-space.tsx (vue admin-settings, bloc statique) ; components/features/platform-operations/platform-finance-view.tsx (format du taux)"
+   }
+  ]
+ },
+ {
+  "id": "ADM-09",
+  "status": "PARTIAL",
+  "evidence": "Base used: local http://localhost:3000 (dev server stopped before the end of the run; nothing was replayed on the deployed recette). Non-admin (client, artisan): 403 on /api/admin/* (dashboard, overview, artisans GET+POST, directory, interventions, coverage, warranty-policy, messages POST) and /api/platform-operations/* (finance, settings GET+PUT, audit, operators GET+POST, reviews, ledger). Granting a scope in the UI (Opérateurs): invalid id refused, valid request -> 403 platform_mfa_required 'Vérifiez votre identité avec votre application d’authentification' with a 'Commencer la vérification' button — not completed (no authenticator; I did not enrol a factor on the shared admin). Artisan approve/suspend/reassign did NOT ask for MFA. Limited operator tested with a fixture grant inserted by service role (support_read on adm-support, revoked at the end): sees 'File d’assistance' and reads tickets/triage (200), but reply 403, status change 403, finance/audit/operators/admin APIs 403, admin pages refused. Audit: my actions are in audit_log (admin_reassigned, admin_message, artisan_approval x6, artisan_credential_review x2) and support_triage_changed x2 in the platform journal UI; reassignment also in the dossier journal. NOT verified: scope grant/revoke through the UI and its audit entry. Unattributed: audit_log has artisan_approval:939d3ff2…:false (Pub ArtisanCandidat, another group’s fixture) by the shared admin at 22:09:56, one second after one of my per-piece decisions; my scripts have no click path to that action at that moment and the account is shared, but I could not prove who triggered it.",
+  "defects": [
+   {
+    "title": "Journal d’audit (Paramètres) — limité aux 100 derniers événements, sans pagination ni filtre, libellés techniques bruts",
+    "steps": "Admin > Paramètres > Journal d’audit, après une période d’activité (ici 87 événements en 1 h).",
+    "expected": "Retrouver les actions sensibles d’un administrateur (approbation, suspension, réaffectation, décision sur pièce) par filtre acteur/action ou pagination.",
+    "actual": "Tableau de 100 lignes sans contrôle de pagination ni filtre : mes décisions de 22:09–22:19 (artisan_credential_review, artisan_approval) n’étaient déjà plus visibles à 23:43, celles de 22:29–22:37 étaient en fin de liste. Les actions sont affichées en codes bruts (« artisan_approval:<uuid>:false », « admin_message:<uuid> »). Le journal plateforme (#platform-audit, paginé) ne couvre pas ces actions. Les entrées existent bien en base (audit_log).",
+    "suspect": "components/role/admin-space.tsx (journal de la vue admin-settings) ; app/api/admin/overview/route.ts (limite 100)"
+   }
+  ]
+ },
+ {
+  "id": "ADM-10",
+  "status": "PARTIAL",
+  "evidence": "Base used: local http://localhost:3000 (dev server stopped before the end of the run; nothing was replayed on the deployed recette). Admin > Garantie: policy header (v2 published, enabled, dépôt ouvert), published text, 'Aucune demande de suivi enregistrée', 'Aucune demande de garantie à rattacher'. Dossier page shows the 'Suivi après intervention' block. BLOCKED: a warranty request needs a completed AND paid intervention; my INT-AB926E reached 'completed' but payment is unavailable locally, so request, decision and corrective dossier were not exercised.",
+  "defects": [
+   {
+    "title": "Garantie — texte « démonstration / activation requise » affiché alors que la politique v2 est publiée et activée",
+    "steps": "Admin > Garantie (#admin-warranty) et fiche d’un dossier admin (#detail/<id>), bloc « Suivi après intervention ».",
+    "expected": "Texte cohérent avec l’état : version 2 publiée, activée, dépôt ouvert.",
+    "actual": "« Le projet prévoit une garantie d’un an. Le dépôt réel des demandes nécessite l’activation des conditions commerciales par l’exploitant. Aucun droit contractuel n’est attesté par cette démonstration. » affiché sous l’en-tête qui indique « Version 2 publiée le 21 novembre 2026, Activée, Dépôt : Ouvert ». La durée « un an » ne figure pas dans le texte publié.",
+    "suspect": "components/role/admin-space.tsx (bloc « Suivi après intervention ») / components/features/warranty-policy"
+   }
+  ]
+ },
+ {
+  "id": "SYS-06",
+  "status": "PARTIAL",
+  "evidence": "Base used: local http://localhost:3000 (dev server stopped before the end of the run; nothing was replayed on the deployed recette). Private documents: artisan uploads (PDF/JPEG, .txt refused), own download via signed URL, third-party client and other artisan 404 on GET /api/documents?id, empty lists; admin can obtain a signed URL (API only). Credential versions: replaced insurance creates a new credential, previous one kept, decision history v1 shown to both sides. Quote PDF: client 'Générer le PDF du devis' -> 'Document DEV-44D472 généré (révision 1)' (POST /api/quote-documents 201), 'Mettre à jour le PDF' offered. Report photos uploaded by the artisan appear in the dossier. NOT verified: third-party refusal on quote documents and report photos, PDF revision 2, expiry reminders, retention/archiving.",
+  "defects": []
+ },
+ {
+  "id": "SYS-07",
+  "status": "PASS",
+  "evidence": "Base used: local http://localhost:3000. Admin > Interventions: total '51 dossiers' = 51 DB rows; pages 1/2/3 (25+25+1) equal the DB ordered by created_at desc (reference lists identical), Précédent returns the same page 2, Suivant disabled at end; search of an old dossier beyond the first page (INT-468305 of 12 Nov) -> 1 row; status filters = DB counts (requested 17, cancelled 12, paid 4); combined status+category+urgency (requested/outage/urgent) -> 2 = DB; 'zzzz-introuvable' -> 'Aucun dossier ne correspond'; '<script>' refused in UI ('Seuls les lettres, chiffres, espaces, tirets et apostrophes sont acceptés', no request sent). Same cursor pagination verified on Clients (58, pages of 25) and Artisans (name search, approved filters). Dashboard indicators recomputed (ADM-01). Note: filters and page are not kept after a browser reload (list returns to page 1, no filter).",
+  "defects": []
+ },
+ {
+  "id": "SYS-09",
+  "status": "PARTIAL",
+  "evidence": "Base used: local http://localhost:3000 (dev server stopped before the end of the run; nothing was replayed on the deployed recette). Observed only, not exercised: profile offers 'Télécharger mes données' (JSON export) and 'Demander l’effacement' with the statement that approval does not start any erasure; admin support queue has 'Demandes d’effacement' (one request from another agent, 'Effacement non commencé', Examiner) and 'Demandes de rappel'; Finance has reconciliation / provider observations views. /api/admin/data-requests: 403 for client/artisan, 200 for support_read. Needs external infrastructure, not testable in-app: backup and restore target, alert recipient, erasure execution.",
+  "defects": []
+ }
+]
