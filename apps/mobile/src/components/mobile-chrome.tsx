@@ -1,5 +1,5 @@
 import { SymbolView, type SymbolViewProps } from 'expo-symbols';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePalette } from './ui';
 
@@ -33,7 +33,10 @@ export type Glyph = keyof typeof symbols;
 
 export function MobileIcon({ name, color, size = 20 }: { name: Glyph; color: string; size?: number }) {
   const symbol = symbols[name];
-  return <SymbolView name={{ ...symbol, web: symbol.android }} size={size} tintColor={color}
+  // Android : le glyphe est un texte qui suit la taille de police du système ; sa boîte doit grandir avec lui, sinon il est rogné.
+  const { fontScale } = useWindowDimensions();
+  const box = Platform.OS === 'android' ? Math.ceil(size * Math.max(1, fontScale)) : size;
+  return <SymbolView name={{ ...symbol, web: symbol.android }} size={size} tintColor={color} style={{ width: box, height: box }}
     accessible={false} accessibilityElementsHidden importantForAccessibility="no" />;
 }
 

@@ -15,6 +15,7 @@ import { requestDraftKey } from '@/lib/draft-store';
 import { requestContact, requestDraft, type RequestIntent } from '@/lib/request-draft';
 import { bookingReceipt } from '@/lib/phone-booking-draft';
 import { useDeviceDraft } from '@/lib/use-device-draft';
+import { CoverageNotice } from '@/components/coverage-notice';
 import { useSession } from '@/lib/session';
 import { useWorkspace } from '@/lib/use-workspace';
 import { REQUEST_DESCRIPTION_LABEL, requestDescription } from '../../../../shared/request-details';
@@ -148,6 +149,9 @@ function ClientRequest({ actor, token, profile }: { actor: string; token: string
   }
 
   function openConfirmed(id: string) {
+    // Le reçu est acquitté dès l’ouverture du dossier : « Nouvelle demande » repart ensuite d’un formulaire vierge.
+    // Une photo encore à transmettre conserve le reçu pour ne pas perdre l’envoi.
+    if (!draft.value?.confirmedPhoto) draft.edit(() => ({ intent: null, confirmedId: null }));
     router.replace({ pathname: '/dossier/[id]', params: { id } });
   }
 
@@ -192,13 +196,14 @@ function ClientRequest({ actor, token, profile }: { actor: string; token: string
     {progress === 2 && <Card>
       <Copy kind="subtitle">Vérifiez votre demande</Copy>
       <Copy>{categories[chosen]} · {shownUrgency === 'urgent' ? 'Urgent' : 'À planifier'}</Copy>
-      <Copy>{intent?.payload.description ?? description}</Copy>
+      {Boolean((intent?.payload.description ?? description).trim()) && <Copy>{intent?.payload.description ?? description}</Copy>}
       <Copy>{intent?.payload.address ?? address}, {intent?.payload.postal_code ?? postal} {intent?.payload.city ?? city}</Copy>
       {contactPhone && <Copy>Téléphone de contact · {contactPhone}</Copy>}
       {locationBlocked && !bookingOptions.loading && <Copy kind="error">Le repère ou le complément d’accès est conservé dans votre formulaire. Le service ne permet pas encore son envoi.</Copy>}
       {locationBlocked && <ReadState loading={bookingOptions.loading} error={bookingOptions.error} onRetry={bookingOptions.reload} />}
       {locationBlocked && !bookingOptions.loading && !bookingOptions.error && <Action secondary label="Actualiser les options" onPress={bookingOptions.reload} />}
       {(!intent || intent.reviewRequired) && <ReadState loading={catalogue.loading} error={catalogue.error} onRetry={catalogue.reload} />}
+      <CoverageNotice code={intent?.payload.postal_code ?? postal} />
       {range && <Copy>{euros(range.min_cents)} à {euros(range.max_cents)}. Le devis fixe le prix final.</Copy>}
       {shownUrgency === 'urgent' && <Copy>{URGENCY_NOTICE}</Copy>}
       <Copy>Règlement après l’intervention via DomDépannage. Le paiement en ligne apparaît dans votre suivi lorsqu’il est disponible.</Copy>

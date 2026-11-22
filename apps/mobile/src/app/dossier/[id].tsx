@@ -7,15 +7,20 @@ import { Action, BookingProgress, Card, Copy, Field, ReadState, Screen } from '@
 import { NativeApprovalWorkflow } from '@/components/native-approval-workflow';
 import { QuoteEditor } from '@/components/quote-editor';
 import { ReportEditor } from '@/components/report-editor';
-import { AppointmentEditor } from '@/components/appointment-editor';
+import { AppointmentEditor, appointmentOrigin, type AppointmentCommand, type AppointmentSaved } from '@/components/appointment-editor';
+import { DossierDocuments } from '@/components/dossier-documents';
 import { MissionTracking } from '@/components/mission-tracking';
 import { OfferPhotoConsent } from '@/components/offer-photos';
 import { PaymentReturnStatus } from '@/components/payment-return-status';
+import { AdminDossierPanel } from '@/components/admin-dossier-panel';
+import { useWorkspace } from '@/lib/use-workspace';
 import { LabeledSwitch } from '@/components/labeled-switch';
 import { deviceDrafts } from '@/lib/device-drafts';
 import { paymentReturnKey, withPaymentBrowserReturn } from '@/lib/payment-return';
-import { api, useResource } from '@/lib/api';
+import { ApiFailure, api, useResource } from '@/lib/api';
 import { categories, commissionRate, creation, detail, euros, link, operations, paymentSettlement, phoneHref, settlementPayout, signature, success, timestamp } from '@/lib/contracts';
+import { CoverageNotice } from '@/components/coverage-notice';
+import { EnterpriseSlaCard } from '@/components/enterprise-sla-card';
 import { dossierAmount, dossierStep, DOSSIER_STEPS, jobStatus, paymentLabel } from '@/lib/job-presentation';
 import { useSession } from '@/lib/session';
 import { supabaseOrigin } from '@/lib/config';
@@ -31,6 +36,8 @@ export default function Dossier() {
   const token=auth?.access_token, base=id?`/api/interventions/${id}`:null;
   const data=useResource(token?base:null,detail,token,auth?.user.id);
   const ops=useResource(base&&token?base+'/operations':null,operations,token,auth?.user.id);
+  const admin=useWorkspace(true).data?.profile.role==='admin';
+  const manager=useWorkspace(true).data?.profile.role==='manager';
   const paymentOptions=useResource('/api/bookings/options',bookingOptions);
   // ART-11 : commission et net de l’artisan, lus sur le serveur uniquement pour un devis accepté réglé par carte.
   const settledQuote=(()=>{
@@ -67,6 +74,14 @@ export default function Dossier() {
   function operation(body:object) {
     if(!base||!token)return;
     void run(()=>api(base+'/operations',success,{token,method:'POST',body}));
+  }
+  // CLI-04 : même commande serveur pour le client et l’artisan ; l’éditeur reçoit le résultat pour confirmer ou garder la saisie.
+  async function saveAppointment(body:AppointmentCommand):Promise<AppointmentSaved> {
+    if(!base||!token||lock.current)return {ok:false,message:'Une autre action est en cours. Réessayez dans un instant.'};
+    lock.current=true;setBusy(true);setError(null);
+    try{await api(base+'/operations',success,{token,method:'POST',body});return {ok:true};}
+    catch(issue){return {ok:false,message:issue instanceof Error?issue.message:'Le rendez-vous n’a pas pu être enregistré.',conflict:issue instanceof ApiFailure&&issue.status===409};}
+    finally{lock.current=false;setBusy(false);ops.reload();}
   }
   function confirm(title:string, message:string, work:()=>void) {
     Alert.alert(title,message,[{text:'Revenir',style:'cancel'},{text:'Confirmer',onPress:work}]);
@@ -127,6 +142,7 @@ export default function Dossier() {
       <Copy kind="title">{categories[job.category]}</Copy>
       {owner && <Copy kind="muted" selectable>Numéro de commande · {orderReference(job.id)}</Copy>}
       {dossierStep(job.status) >= 0 && <BookingProgress labels={DOSSIER_STEPS} index={dossierStep(job.status)} />}
+      {manager && job.site_id && token && <EnterpriseSlaCard id={job.id} siteId={job.site_id} openedAt={job.created_at} token={token} />}
       {amount && <Card><Copy kind="label">{artisan && amount.label === 'À régler' ? 'Règlement attendu' : artisan && amount.label === 'Devis reçu' ? 'Devis envoyé' : amount.label}</Copy><Copy kind="subtitle" selectable>{amount.value}</Copy>
         {artisan && settlement && <>
           <Copy selectable>Montant réglé · {euros(settlement.amount_cents)}</Copy>
@@ -138,6 +154,7 @@ export default function Dossier() {
       {['requested','assigned','quoted','accepted','in_progress','completed'].includes(job.status) && <Card>
         <Copy kind="subtitle">Prochaine action</Copy>
         {owner && job.status === 'requested' && <Copy>Votre demande est transmise. Vous serez informé lorsqu’un artisan sera attribué.</Copy>}
+        {owner && job.status === 'requested' && job.postal_code && <CoverageNotice code={job.postal_code} />}
         {owner && job.status === 'assigned' && <Copy>L’artisan prépare votre devis. Vous pourrez le relire avant d’accepter les travaux.</Copy>}
         {owner && job.status === 'quoted' && <Action label="Examiner le devis" disabled={!quotes?.length} onPress={() => showSection('quotes')} />}
         {owner && ['accepted','in_progress'].includes(job.status) && <Copy>{job.status === 'accepted' ? 'Votre devis est accepté. Retrouvez le rendez-vous et le suivi ci-dessous.' : 'L’intervention est en cours. Le compte rendu apparaîtra après sa rédaction.'}</Copy>}
@@ -150,7 +167,7 @@ export default function Dossier() {
         {artisan && job.status === 'accepted' && <Action label="Préparer l’intervention" onPress={() => showSection('travel')} />}
         {artisan && job.status === 'in_progress' && <Action label="Compléter le compte rendu" onPress={() => showSection('report')} />}
         {artisan && job.status === 'completed' && <Copy>L’intervention est terminée. Le règlement du client reste à confirmer par la plateforme ; ce statut ne prouve pas un versement à l’artisan.</Copy>}
-        {!owner && !artisan && <Copy>Consultez les informations autorisées du dossier ci-dessous.</Copy>}
+        {!owner && !artisan && <Copy>{admin?'Lecture d’administration : participants, réaffectation et journal figurent ci-dessous.':'Consultez les informations autorisées du dossier ci-dessous.'}</Copy>}
       </Card>}
       {owner && accepted && token && auth && <PaymentReturnStatus key={accepted.id+':'+returnEpoch} id={id} actor={auth.user.id} token={token} quote={accepted.id} fromLink={params.retourPaiement==='1'} onPaid={reload} />}
       {counterpart&&<Card>
@@ -158,6 +175,7 @@ export default function Dossier() {
         <Copy selectable>{counterpart.full_name?.trim()||'Nom non communiqué'}</Copy>
         {counterpart.phone?.trim()?<Action secondary label={(owner?'Appeler l’artisan · ':'Appeler le client · ')+counterpart.phone.trim()} onPress={()=>call(counterpart.phone!.trim())}/>:<Copy kind="muted">Téléphone non communiqué.</Copy>}
       </Card>}
+      {admin&&<Copy kind="muted" selectable>Numéro de commande · {orderReference(job.id)}</Copy>}
       <Copy kind="subtitle">Détails de l’intervention</Copy>
       <Copy>{job.description}</Copy>
       <Copy kind="muted">Estimation initiale indicative · {euros(job.estimate_min_cents)} à {euros(job.estimate_max_cents)}</Copy>
@@ -169,12 +187,16 @@ export default function Dossier() {
           <Copy kind="muted" selectable>Repère GPS · {access.latitude.toFixed(6)}, {access.longitude.toFixed(6)}</Copy>}
       </Card>}
       <Action secondary label="Ouvrir la conversation" onPress={()=>router.push({pathname:'/dossier/messages',params:{id}})}/>
-      <Action secondary label="Écrire à l’assistance" onPress={()=>router.push({pathname:'/dossier/assistance',params:{id}})}/>
+      {!admin&&<Action secondary label="Écrire à l’assistance" onPress={()=>router.push({pathname:'/dossier/assistance',params:{id}})}/>}
       {owner&&['requested','assigned','quoted'].includes(job.status)&&
         <Action secondary label="Annuler ma demande" disabled={busy} onPress={()=>confirm('Annuler la demande ?', 'Le serveur vérifiera que le dossier peut être annulé.',()=>action({action:'cancel'}))}/>}
 
       <ReadState loading={ops.loading} error={ops.error} onRetry={ops.reload}/>
-      {artisan && ops.data && ['assigned','quoted','accepted'].includes(job.status) ? <AppointmentEditor current={ops.data.appointment} busy={busy} save={operation} /> : ops.data?.appointment&&<Card><Copy kind="subtitle">Rendez-vous</Copy><Copy>{timestamp(ops.data.appointment.starts_at)} – {timestamp(ops.data.appointment.ends_at)}</Copy>{ops.data.appointment.note?.trim()&&<><Copy kind="label">Note de l’artisan</Copy><Copy selectable>{ops.data.appointment.note.trim()}</Copy></>}</Card>}
+      {(artisan || owner) && auth && ops.data && ['assigned','quoted','accepted'].includes(job.status) ? <AppointmentEditor key={'rdv:'+auth.user.id+id} current={ops.data.appointment} busy={busy} save={saveAppointment} viewer={artisan?'artisan':'client'} viewerId={auth.user.id} artisanId={job.artisan_id} clientId={job.client_id} history={ops.data.history} /> : ops.data?.appointment ? <Card><Copy kind="subtitle">Rendez-vous</Copy><Copy selectable>{timestamp(ops.data.appointment.starts_at)} – {timestamp(ops.data.appointment.ends_at)}</Copy>
+        {auth && appointmentOrigin(ops.data.appointment.updated_by, auth.user.id, job.artisan_id, job.client_id, false) && <Copy kind="muted">{appointmentOrigin(ops.data.appointment.updated_by, auth.user.id, job.artisan_id, job.client_id, false)}</Copy>}
+        {ops.data.appointment.note?.trim()&&<><Copy kind="label">{ops.data.appointment.updated_by && ops.data.appointment.updated_by === job.client_id ? (owner ? 'Votre précision' : 'Précision du client') : 'Note de l’artisan'}</Copy><Copy selectable>{ops.data.appointment.note.trim()}</Copy></>}
+        {(owner || artisan) && <Copy kind="muted">Le créneau ne peut plus être modifié : l’intervention a démarré ou est clôturée.</Copy>}</Card>
+        : owner && ops.data && job.status === 'requested' ? <Card><Copy kind="subtitle">Rendez-vous</Copy><Copy kind="muted">Le créneau se fixe une fois un artisan attribué.</Copy></Card> : null}
       <View onLayout={event => { sections.current.quotes = event.nativeEvent.layout.y; }} style={{gap:16}}>
       {artisan&&auth&&job.status==='assigned'&&<QuoteEditor key={quoteDraftKey(auth.user.id,id)} draftKey={quoteDraftKey(auth.user.id,id)} busy={busy} onSend={(lines,tax_rate,onSaved)=>confirm('Envoyer le devis ?', 'Le client pourra examiner le devis et décider avant les travaux.',()=>action({action:'send_quote',lines,tax_rate},onSaved))}/>}
       {data.data?.quotes.status==='error'&&<Copy kind="error">Les devis n’ont pas pu être chargés.</Copy>}
@@ -219,10 +241,18 @@ export default function Dossier() {
         </>}
       </Card>}
       </View>
+      {!owner && !artisan && token && auth && <AdminDossierPanel id={id} token={token} actor={auth.user.id} status={job.status} artisanId={job.artisan_id ?? null} clientId={job.client_id ?? null} onChanged={data.reload} />}
       {owner && job.status==='requested' && token && data.data?.documents.status==='ok' && <OfferPhotoConsent id={id} token={token} documents={data.data.documents.items} onUploaded={data.reload} />}
       {data.data?.documents.status==='ok'&&data.data.documents.items.length>0&&<Card><Copy kind="subtitle">Pièces du dossier</Copy>
-        {data.data.documents.items.map(item=><Action key={item.id} label={item.name} disabled={busy} secondary onPress={()=>openDocument(item.id)}/>)}
+        <Copy kind="muted">Pièces privées : chaque ouverture demande au serveur un lien signé temporaire, réservé aux participants autorisés. Une pièce déposée n’est jamais remplacée : une nouvelle version apparaît comme une nouvelle pièce datée.</Copy>
+        {data.data.documents.items.map(item=><View key={item.id} style={{gap:4}}>
+          <Copy selectable>{item.name}</Copy>
+          <Copy kind="muted">{item.mime_type==='application/pdf'?'Document PDF':item.mime_type.startsWith('image/')?'Photo':'Fichier'}{item.created_at?' · ajouté le '+timestamp(item.created_at):''}{item.owner_id?' · par '+(item.owner_id===auth?.user.id?'vous':item.owner_id===job.artisan_id?'l’artisan':item.owner_id===job.client_id?'le client':'un autre participant'):''}</Copy>
+          <Action label={'Ouvrir · '+item.name} disabled={busy} secondary onPress={()=>openDocument(item.id)}/>
+        </View>)}
+        {data.data.documents.limited&&<Copy kind="muted">Les pièces les plus récentes sont affichées.</Copy>}
       </Card>}
+      {token && auth && <DossierDocuments key={'docs:'+auth.user.id+id} id={id} token={token} actor={auth.user.id} artisan={artisan} payments={payments} />}
       {data.data?.payments.status === 'ok' && (data.data.payments.limited || data.data.payments.incomplete) && <Copy kind="muted">L’historique des règlements est partiel. Vérifiez le suivi du règlement avant toute nouvelle tentative.</Copy>}
       {data.data?.quotes.status === 'ok' && data.data.quotes.limited && <Copy kind="muted">Les devis affichés sont limités aux plus récents.</Copy>}
       {data.data?.payments.status === 'error' && <Copy kind="error">Les règlements n’ont pas pu être chargés. Actualisez le dossier pour vérifier leur état.</Copy>}

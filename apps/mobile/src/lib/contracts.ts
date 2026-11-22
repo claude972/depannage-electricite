@@ -39,7 +39,7 @@ const quote = quoteSummary.extend({
   subtotal_cents: cents.optional(), tax_rate: z.coerce.number().min(0).max(100).optional().catch(undefined), tax_cents: cents.optional(),
   total_cents: cents, accepted_total_cents: cents.optional(),
 });
-const attachment = z.object({id, name: z.string(), mime_type: z.string()});
+const attachment = z.object({id, name: z.string(), mime_type: z.string(), owner_id: id.nullish(), created_at: z.string().nullish()});
 const message = z.object({id, author_id: id, body: z.string(), created_at: z.string(), attachment_id: id.nullish()});
 export const payment = z.object({id, quote_id: id.optional(), total_cents: cents, status: z.enum(['pending','paid','failed']), method: z.enum(['stripe','on_site_declared']).optional(), paid_at: z.string().nullish(), created_at: z.string().optional()});
 export type Payment = z.infer<typeof payment>;
@@ -88,7 +88,9 @@ export const phoneHref = (phone: string) => 'tel:' + phone.replace(/[^+\d]/g, ''
 export const operations = z.object({
   participants,
   travel_stage: z.enum(['planned','en_route','on_site']),
-  appointment: z.object({starts_at: z.iso.datetime({ offset: true }), ends_at: z.iso.datetime({ offset: true }), reminder_version: z.number().int().positive(), note: z.string().optional()}).nullable(),
+  appointment: z.object({starts_at: z.iso.datetime({ offset: true }), ends_at: z.iso.datetime({ offset: true }), reminder_version: z.number().int().positive(), note: z.string().optional(), updated_by: id.nullish().catch(null), updated_at: z.string().nullish().catch(null)}).nullable(),
+  // Instantanés serveur des créneaux et comptes rendus successifs (les plus récents d’abord) ; illisible → ignoré.
+  history: z.array(z.object({ id: z.number(), actor_id: id, kind: z.string(), payload: z.unknown(), created_at: z.string() })).optional().catch(undefined),
   report_evidence_required: z.boolean(),
   report: z.object({summary: z.string(), signature_name: z.string(), report_revision: id.nullish(), before_photo_id: id.nullish(), after_photo_id: id.nullish()}).nullable(),
   report_receipt: z.object({signed_at: z.string(), signature_name: z.string()}).nullable(),

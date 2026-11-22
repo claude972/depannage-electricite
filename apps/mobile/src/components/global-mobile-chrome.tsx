@@ -22,7 +22,8 @@ export function GlobalMobileChrome(){
  const active=auth.session ? (/^\/(dossier|offre|demande)(\/|$)/.test(path)?'/interventions':/^\/(site|organisation|contrat|approbation)(\/|$)/.test(path)?role==='admin'?'/annuaire':'/organisations':path.startsWith('/annuaire/')?'/annuaire':path) : (/^\/(connexion|inscription|aide-mobile|mot-de-passe-oublie)/.test(path)?'/compte':/^\/(prestation|demande-client)/.test(path)?'/catalogue':path);
  const items=auth.session?spaceTabs(role).map(name=>({route:`/(espace)/${name}`,label:name==='interventions'?(role==='artisan'?'Missions':role==='client'?'Demandes':'Dossiers'):names[name].label,icon:names[name].icon,active:`/${name}`})):guest.map(item=>({...item,active:item.route}));
  return <View style={{backgroundColor:p.background}}>
- {(!auth.session||role==='client')&&<View style={{alignItems:'flex-end',paddingHorizontal:12,paddingTop:4}}><WhatsAppContactButton/></View>}
+ {/* Bouton flottant : il ne réserve plus une bande pleine largeur qui masquait le bas des écrans et interceptait les appuis. */}
+ {(!auth.session||role==='client')&&<View pointerEvents="box-none" style={{position:'absolute',right:12,bottom:'100%',paddingBottom:2}}><WhatsAppContactButton/></View>}
  <MobileTabBar items={items.map(item=>({label:item.label,icon:item.icon,selected:active===item.active,onPress:()=>router.navigate(item.route as Href)}))}/>
  </View>;
 }

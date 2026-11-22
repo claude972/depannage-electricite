@@ -8,6 +8,7 @@ import { BookingPhotoPicker, BookingPhotoReceipt } from '@/components/booking-ph
 import { releaseReportPhoto } from '@/lib/draft-photos';
 import type { PendingPhoto } from '@/lib/intervention-drafts';
 import { BookingLocationField } from '@/components/booking-location-field';
+import { SavedAddressChoices } from '@/components/saved-address-choices';
 import type { BookingLocation } from '../../../../shared/booking-location';
 import { OptionalEmailAccount } from '@/components/optional-email-account';
 import { ApiFailure, api, useResource } from '@/lib/api';
@@ -25,6 +26,7 @@ import { useWorkspace } from '@/lib/use-workspace';
 import { REQUEST_DESCRIPTION_LABEL, requestDescription } from '../../../../shared/request-details';
 import { orderReference } from '../../../../shared/order-reference';
 import { URGENCY_NOTICE } from '../../../../shared/commercial-facts';
+import { CoverageNotice } from '@/components/coverage-notice';
 
 const options = locationCapability.extend({ payment_methods: z.array(z.object({ id: z.string(), available: z.boolean() })) });
 type BookingIdentity = { email: string; phone?: never } | { email?: never; phone: string };
@@ -80,7 +82,7 @@ function BookingFields({ service, addressFirst, initialUrgency, initialCity, own
   owner?: { phone: string; first: string; last: string; email?: string; onReady: (request: StagedPhoneBooking) => Promise<void> };
 }) {
   const router = useRouter();
-  const { setBookingContact } = useSession();
+  const { setBookingContact, session } = useSession();
   const catalogue = usePublicServices();
   const price = useResource('/api/public/indicative-prices', prices);
   const [slug, setSlug] = useState(initialRequest?.input.service_slug ?? service ?? '');
@@ -250,6 +252,9 @@ function BookingFields({ service, addressFirst, initialUrgency, initialCity, own
       <Copy kind="muted">Ce numéro sert à vous joindre au sujet de l’intervention.</Copy>
     </Card>}
     {step === 'address' && <Card>
+      {owner && session && <SavedAddressChoices token={session.access_token} actor={session.user.id} selected={{ address, postal_code: postal, city }} onChoose={saved => {
+        setAddress(saved.address); setPostal(saved.postal_code); setCity(saved.city); setLocation(undefined); setLocationReset(value => value + 1);
+      }} />}
       <BookingLocationField key={locationReset} value={{ address, postal_code: postal, city }} location={location} onChange={(value, nextLocation) => {
         setAddress(value.address); setPostal(value.postal_code); setCity(value.city); setLocation(nextLocation);
       }} />
@@ -262,6 +267,7 @@ function BookingFields({ service, addressFirst, initialUrgency, initialCity, own
       <Copy kind="subtitle">Vérifiez votre demande</Copy>
       {description.trim() && <Copy>{description}</Copy>}
       <Copy>{address}, {postal} {city}</Copy>
+      <CoverageNotice code={postal} />
       <Copy>{first} {last} · {phone}</Copy>
       {email && <Copy>{email}</Copy>}
       <ReadState loading={price.loading} error={price.error} onRetry={price.reload} />

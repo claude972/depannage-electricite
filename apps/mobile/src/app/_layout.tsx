@@ -13,7 +13,7 @@ function Navigator() {
   return <View style={{flex:1,backgroundColor:palette.background}}>
     <View style={{flex:1}}>
     <StatusBar style={palette.background === '#FFFFFF' ? 'dark' : 'light'}/>
-    <Stack key={session?.user.id??'guest'} screenOptions={{headerBackButtonDisplayMode:'minimal',headerTintColor:palette.blue,headerStyle:{backgroundColor:palette.surface},headerTitleStyle:{fontFamily:'JakartaMedium',fontSize:16},contentStyle:{backgroundColor:palette.background}}}>
+    <Stack key={session?.user.id??'guest'} screenOptions={{headerBackButtonDisplayMode:'minimal',headerBackTitle:'Retour',headerTintColor:palette.blue,headerStyle:{backgroundColor:palette.surface},headerTitleStyle:{fontFamily:'JakartaMedium',fontSize:16},contentStyle:{backgroundColor:palette.background}}}>
       <Stack.Screen name="index" options={{headerShown:false}}/>
       <Stack.Screen name="demande-client" options={{title:'Votre demande'}}/>
       <Stack.Screen name="retrouver" options={{headerShown:false}}/>
@@ -21,6 +21,7 @@ function Navigator() {
       <Stack.Screen name="catalogue" options={{headerShown:false}}/>
       <Stack.Screen name="conseils" options={{title:'Conseils'}}/>
       <Stack.Screen name="candidature" options={{title:'Candidature'}}/>
+      <Stack.Screen name="a-propos" options={{title:'À propos'}}/>
       <Stack.Screen name="prestation/[slug]" options={{title:'Votre dépannage', presentation:'card'}}/>
       <Stack.Screen name="mot-de-passe-oublie" options={{headerShown:false}}/>
       <Stack.Protected guard={!session}>
@@ -32,10 +33,14 @@ function Navigator() {
       <Stack.Protected guard={Boolean(session)}>
         <Stack.Screen name="(espace)" options={{headerShown:false}}/>
         <Stack.Screen name="notification-preferences" options={{title:"Notifications",headerTitleStyle:{fontFamily:"JakartaMedium",fontSize:16}}}/>
+        <Stack.Screen name="mes-donnees" options={{title:'Mes données'}}/>
+        <Stack.Screen name="adresses" options={{title:'Mes adresses'}}/>
         <Stack.Screen name="notifications" options={{title:'Votre espace',headerTitleStyle:{fontFamily:'JakartaMedium',fontSize:16}}}/>
         <Stack.Screen name="organisation/demande" options={{title:"Nouvelle demande"}}/>
         <Stack.Screen name="organisation/interventions" options={{title:'Interventions entreprise'}}/>
         <Stack.Screen name="organisation/contrats" options={{title:'Contrats'}}/>
+        <Stack.Screen name="organisation/rapports" options={{title:'Rapports'}}/>
+        <Stack.Screen name="organisation/sla" options={{title:'Délais (SLA)'}}/>
         <Stack.Screen name="organisation/approbations" options={{title:'Approbations'}}/>
         <Stack.Screen name="contrat/[id]" options={{title:'Contrat'}}/>
         <Stack.Screen name="approbation/[id]" options={{title:'Approbation'}}/>

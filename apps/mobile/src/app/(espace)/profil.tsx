@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppSheet } from '@/components/app-sheet';
 import { MobileIcon, type Glyph } from '@/components/mobile-chrome';
-import { PublicLink, usePublicPortal } from '@/components/mobile-public-content';
+import { PublicLink } from '@/components/mobile-public-content';
 import { z } from 'zod';
 import { Action, Card, Copy, Field, ReadState, Screen, usePalette } from '@/components/ui';
 import { ArtisanAvailability } from '@/components/artisan-availability';
@@ -12,14 +12,13 @@ import { useWorkspace } from '@/lib/use-workspace';
 import { useSession } from '@/lib/session';
 
 const roles = { client: 'Compte particulier', artisan: 'Compte électricien', manager: 'Compte entreprise', admin: 'Administration' };
-type Section = 'identity' | 'addresses' | 'security' | 'privacy';
+type Section = 'identity' | 'security';
 const updated=z.object({profile:z.object({id:z.uuid()})});
 export default function Profile() {
   const state = useWorkspace();
   const auth = useSession();
   const router = useRouter();
   const palette = usePalette();
-  const { openPortal, portalError } = usePublicPortal();
   useEffect(() => {
     if (auth.loginResume) auth.consumeLoginResume();
   }, [auth.loginResume, auth.consumeLoginResume]);
@@ -57,7 +56,7 @@ export default function Profile() {
     setError(null);
     setSection(next);
   }
-  const titles = { identity: 'Informations personnelles', addresses: 'Adresses enregistrées', security: 'Sécurité', privacy: 'Mes données' };
+  const titles = { identity: 'Informations personnelles', security: 'Sécurité' };
   return <Screen top>
     <ReadState loading={state.loading} error={state.error} onRetry={state.reload} />
     {error && !section && <Copy kind="error">{error}</Copy>}
@@ -77,12 +76,12 @@ export default function Profile() {
         <AccountTile icon="help" label="Aide" onPress={() => router.push('/aide-mobile')} />
         <AccountTile icon="messages" label="Messages" onPress={() => router.navigate('/(espace)/messages')} />
         <AccountTile icon="shield" label="Sécurité" onPress={() => openSection('security')} />
-        <AccountTile icon="lock" label="Mes données" onPress={() => openSection('privacy')} />
+        <AccountTile icon="lock" label="Mes données" onPress={() => router.push('/mes-donnees')} />
       </View>
       <View>
         <AccountRow icon="activity" label="Notifications" hint="Actualités et suivi de votre espace" onPress={() => router.push('/notifications')} />
         <AccountRow icon="account" label="Informations personnelles" hint="Nom et coordonnées" onPress={() => openSection('identity')} />
-        {profile.role === 'client' && <AccountRow icon="pin" label="Adresses enregistrées" hint="Adresses d’intervention" onPress={() => openSection('addresses')} />}
+        {profile.role === 'client' && <AccountRow icon="pin" label="Adresses enregistrées" hint="Adresses d’intervention" onPress={() => router.push('/adresses')} />}
         <AccountRow icon="activity" label={profile.role === 'artisan' ? 'Mes missions' : 'Mes interventions'} hint="Historique et devis"
           onPress={() => router.navigate('/(espace)/interventions')} />
       </View>
@@ -104,11 +103,6 @@ export default function Profile() {
         <Action label={busy ? 'Enregistrement…' : 'Enregistrer'} onPress={saveName}
           disabled={busy || !nameValid} />
       </>}
-      {section === 'addresses' && <>
-        <Copy>Vos adresses d’intervention sont disponibles dans votre espace sur le site. Le site s’ouvre dans le navigateur et vous demandera de vous connecter à nouveau.</Copy>
-        <PublicLink label="Ouvrir mon carnet d’adresses" onPress={() => openPortal('/#profile')} />
-        {portalError && <Copy kind="error">{portalError}</Copy>}
-      </>}
       {section === 'security' && <>
         {auth.session?.user.email ? <>
           <Copy>Adresse e-mail de connexion</Copy>
@@ -118,13 +112,6 @@ export default function Profile() {
             router.push('/mot-de-passe-oublie');
           }} />
         </> : <Copy>Vous vous connectez avec un code envoyé au numéro vérifié de votre compte.</Copy>}
-      </>}
-      {section === 'privacy' && <>
-        <Copy>Consultez les informations sur l’utilisation de vos données et les moyens d’exercer vos droits.</Copy>
-        <PublicLink label="Consulter la confidentialité" onPress={() => openPortal('/#privacy')} />
-        <PublicLink label="Gérer mes données sur le site (connexion requise)" onPress={() => openPortal('/#profile')} />
-        <Copy kind="muted">Le site s’ouvre dans le navigateur : votre session de l’application n’y est pas transmise, vous devrez vous y connecter.</Copy>
-        {portalError && <Copy kind="error">{portalError}</Copy>}
       </>}
     </AppSheet>
   </Screen>;

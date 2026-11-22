@@ -147,14 +147,14 @@ export function MobileClientHome({ embedded = false }: { embedded?: boolean }) {
               style={[styles.address, styles.identityField]}>
               <MobileIcon name="pin" color={p.blue} size={18} />
               <View style={styles.grow}>
-                <Text style={[styles.small, { color: p.muted }]}>Lieu d’intervention</Text>
-                <Text style={[styles.strong, { color: p.text }]}>{city || 'Choisir mon adresse'}</Text>
+                <Text maxFontSizeMultiplier={1.3} style={[styles.small, { color: p.muted }]}>Lieu d’intervention</Text>
+                <Text maxFontSizeMultiplier={1.3} numberOfLines={2} style={[styles.strong, { color: p.text }]}>{city || 'Choisir mon adresse'}</Text>
               </View>
               <MobileIcon name="next" color={p.blue} size={16} />
             </Pressable>
             {Platform.OS === 'web' ? (
               <View style={styles.profilePicker}>
-                <Text style={[styles.small, { color: p.muted }]}>Je suis un</Text>
+                <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={[styles.small, { color: p.muted }]}>Je suis un</Text>
                 <Host style={styles.pickerHost} colorScheme={scheme}>
                   <Picker<string> selectedValue={profile} onValueChange={selectProfile} appearance="menu" testID="intervention-profile">
                     {INTERVENTION_PROFILES.map(({ value, label }) => <Picker.Item key={value} label={label} value={value} />)}
@@ -174,8 +174,8 @@ export function MobileClientHome({ embedded = false }: { embedded?: boolean }) {
                 <View accessible accessibilityRole="button" accessibilityLabel={`Je suis un · ${profileLabel}`} style={[styles.identityField, { width: profileWidth }]}>
                   <MobileIcon name="account" color={p.blue} size={18} />
                   <View style={styles.grow}>
-                    <Text style={[styles.small, { color: p.muted }]}>Je suis un</Text>
-                    <Text style={[styles.strong, { color: p.text }]}>{profileLabel}</Text>
+                    <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={[styles.small, { color: p.muted }]}>Je suis un</Text>
+                    <Text maxFontSizeMultiplier={1.3} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={[styles.strong, { color: p.text }]}>{profileLabel}</Text>
                   </View>
                   <MobileIcon name="expand" color={p.blue} size={16} />
                 </View>
@@ -189,7 +189,7 @@ export function MobileClientHome({ embedded = false }: { embedded?: boolean }) {
               return <Pressable key={item.label} accessibilityRole="tab" accessibilityState={{ selected }}
                 style={[styles.mode, { borderColor: selected ? p.primary : 'transparent' }]} onPress={() => selectMode(index)}>
                 <MobileIcon name={item.icon} color={color} size={15} />
-                <Text style={[styles.modeText, { color }]}>{item.label}</Text>
+                <Text maxFontSizeMultiplier={1.3} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={[styles.modeText, { color }]}>{item.label}</Text>
               </Pressable>;
             })}
           </View>
@@ -206,7 +206,7 @@ export function MobileClientHome({ embedded = false }: { embedded?: boolean }) {
             <Pressable accessibilityRole="link" onPress={() => router.push({ pathname: '/demande-client', params: { field: 'address', urgency: 'scheduled', ...locationParams } })}
               style={[styles.later, { backgroundColor: p.subtle }]}>
               <MobileIcon name="calendar" color={p.text} size={15} />
-              <Text style={[styles.strong, { color: p.text }]}>Plus tard</Text>
+              <Text maxFontSizeMultiplier={1.3} numberOfLines={1} style={[styles.strong, { color: p.text }]}>Plus tard</Text>
             </Pressable>
           </View>
           {showSupportPreview && <View style={styles.responseBanner}>
@@ -225,14 +225,14 @@ export function MobileClientHome({ embedded = false }: { embedded?: boolean }) {
               <View style={[styles.shortcutCircle, { backgroundColor: scheme === 'dark' ? '#282828' : '#F1F1F1' }]}>
                 <Image source={item.art} style={styles.shortcutImage} accessible={false} />
               </View>
-              <Text style={[styles.shortcutText, { color: p.text }]}>{item.label}</Text>
+              <Text maxFontSizeMultiplier={1.5} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.shortcutText, { color: p.text }]}>{item.label}</Text>
             </Pressable>)}
           </View>
         </View>
 
         <View onLayout={event => { railY.current = event.nativeEvent.layout.y; }} style={styles.section}>
           <View style={styles.split}>
-            <Copy kind="subtitle">{mode.title}</Copy>
+            <View style={styles.grow}><Copy kind="subtitle">{mode.title}</Copy></View>
             {items.length > 1 && <View style={styles.railControls}>
               <Pressable accessibilityRole="button" accessibilityLabel="Cartes précédentes" onPress={() => moveRail(-1)}
                 style={[styles.railButton, { backgroundColor: p.subtle }]}>

@@ -50,3 +50,31 @@ export function applicationActions(status:z.infer<typeof applicationStatus>) {
  return [];
 }
 export const applicationActionLabels = {approve:'Approuver la candidature',request_changes:'Demander des compléments',suspend:'Suspendre l’artisan',reinstate:'Réactiver l’artisan'};
+
+// Administration native (ADM-02/03/04) : décisions motivées, journal, réaffectation, escalades, fiches.
+const instant = z.iso.datetime({offset:true});
+export const applicationDecided = z.object({success:z.literal(true),reason_recorded:z.boolean().optional()});
+export const artisanFile = z.object({
+ payment_account:z.object({linked:z.boolean(),transfers:z.enum(['active','inactive','unknown']).nullable()}),
+ decisions:z.array(z.object({id,actor_id:id.nullable(),decided_at:instant,action:z.enum(['approve','request_changes','suspend','reinstate']),reason:z.string(),application_version:z.number().int().nonnegative()})),
+});
+export const applicationDecisionLabels = {approve:'Candidature approuvée',request_changes:'Compléments demandés',suspend:'Artisan suspendu',reinstate:'Artisan réactivé'};
+export const credentialDecision = z.enum(['accepted','changes_requested','rejected']);
+export const credentialDecisionLabels = {accepted:'Pièce acceptée',changes_requested:'Modifications demandées',rejected:'Pièce refusée'};
+const credentialReview = z.object({version:z.number().int().positive(),decision:credentialDecision,reason:z.string(),reviewed_at:instant});
+export const credentialReviews = z.object({credential_id:id,can_review:z.boolean(),current_version:z.number().int().nonnegative(),reviews:z.array(credentialReview),next_before:z.number().int().nullable()});
+export const credentialReviewed = z.object({review:credentialReview});
+const settlementCents = z.number().int().nonnegative();
+export const adminDossier = z.object({
+ intervention:z.object({id,client_id:id.nullish(),artisan_id:id.nullish(),site_id:id.nullish(),status:job.shape.status}),
+ audit:z.discriminatedUnion('status',[z.object({status:z.literal('ok'),items:z.array(z.object({id:z.string(),actor_id:id.nullable(),action:z.string(),created_at:z.string()})),limit:z.number().int(),limited:z.boolean()}),z.object({status:z.literal('error')})]),
+ settlement:z.object({amount_cents:settlementCents,fee_bps:z.number().int().min(0).max(9999),fee_cents:settlementCents,net_cents:settlementCents,transfer:z.enum(['with_payment','confirmed'])}).refine(v=>v.fee_cents+v.net_cents===v.amount_cents).optional().catch(undefined),
+});
+export const dossierAuditLabels: Record<string,string> = {create:'Demande créée',created:'Demande créée',appointment_saved:'Rendez-vous enregistré',accept_mission:'Mission acceptée',admin_reassigned:'Artisan réaffecté',send_quote:'Devis envoyé',accept_quote:'Devis accepté',start:'Intervention démarrée',complete:'Intervention clôturée',cancel:'Demande annulée',payment_confirmed:'Paiement confirmé'};
+export const reassigned = z.object({success:z.literal(true)});
+export const supportStatusLabels = {open:'Ouverte',in_progress:'En cours de traitement',awaiting_user:'En attente du demandeur',resolved:'Résolue'};
+export const adminTickets = z.object({tickets:z.array(z.object({id,subject:z.string(),status:z.enum(['open','in_progress','awaiting_user','resolved']),intervention_id:id.nullable(),created_at:z.string()})),page});
+const triageState = z.object({ticket_id:id,assigned_to:id.nullable(),assignee_name:z.string().nullable(),escalated:z.boolean(),version:z.number().int().nonnegative()});
+export const ticketTriage = z.object({triage:triageState,events:z.array(z.object({id,actor_id:id,version:z.number().int(),action:z.enum(['assign','set_escalated']),reason:z.string(),escalated:z.boolean(),created_at:z.string()})),can_manage:z.boolean()});
+export const triageReceipt = z.object({triage:triageState,replayed:z.boolean()});
+export const escalatedQueue = z.object({rows:z.array(z.object({id,subject:z.string(),status:z.enum(['open','in_progress','awaiting_user']),assigned_to:id.nullable(),escalated:z.boolean()})),next_cursor:id.nullable()});

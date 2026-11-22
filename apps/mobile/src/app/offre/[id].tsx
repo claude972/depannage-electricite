@@ -31,7 +31,9 @@ export default function Offer() {
         router.replace({ pathname: '/dossier/[id]', params: { id } });
       }
     } catch (issue) {
-      setError(issue instanceof Error ? issue.message : 'Action indisponible.');
+      // Mission prise entre-temps (attribution unique côté serveur) : le refus est expliqué, sans laisser croire à un problème de droits.
+      const taken = !decline && issue instanceof ApiFailure && [403,404,409].includes(issue.status);
+      setError(taken ? 'Cette mission n’est plus disponible : elle a été attribuée à un autre artisan ou retirée. Aucune attribution n’a été enregistrée pour vous.' : issue instanceof Error ? issue.message : 'Action indisponible.');
       if (issue instanceof ApiFailure && [401,403,404,409].includes(issue.status)) state.reload();
     } finally { lock.current = false; setBusy(false); }
   }

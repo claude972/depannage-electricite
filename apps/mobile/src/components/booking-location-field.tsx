@@ -99,7 +99,7 @@ export function BookingLocationField({ value, location, onChange, disabled = fal
       // Hauteur explicite : sans rendu, `matchContents` réduirait la vue à quelques points.
       useExpoDOMWebView: false, style: styles.map, matchContents: true, scrollEnabled: false,
       containerStyle: map === 'failed' ? styles.mapHidden : styles.mapContainer,
-      injectedJavaScriptBeforeContentLoaded: Platform.OS === 'ios' ? hostFallback : undefined,
+      injectedJavaScriptBeforeContentLoaded: hostFallback,
       onError: () => setMap('failed'), onHttpError: () => setMap('failed'),
       userAgent: 'DomDepannage/0.1',
       onOpenWindow: ({ nativeEvent }) => {

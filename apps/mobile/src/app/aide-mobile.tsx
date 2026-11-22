@@ -58,6 +58,12 @@ export default function MobileHelp({ embedded = false }: { embedded?: boolean } 
       {warranty.phase === 'published' && <WarrantyTerms terms={warranty.value} />}
     </Card>
 
+    <Card>
+      <Copy kind="subtitle">À propos</Copy>
+      <Copy>Ce que fait l’application, son exploitant et son équipe.</Copy>
+      <Action secondary label="Ouvrir la page À propos" onPress={() => router.push('/a-propos')} />
+    </Card>
+
     {apiOrigin && <Action secondary label="Ouvrir le centre d’aide sur le Web" onPress={() => void openBrowserAsync(apiOrigin + '/#help')} />}
     <PublicLink label="Mentions légales" onPress={() => openPortal('/#legal')} />
     <PublicLink label="Confidentialité" onPress={() => openPortal('/#privacy')} />
