@@ -101,6 +101,10 @@ test("propriétaire : 503 ⇒ même commande ; restauration stricte jamais envoy
   await r.c.load(); await r.c.attach(GRID);
   r.ctx.uid = U("1", 2);
   same([await r.c.retry(), r.get().pending], [false, null]);
+  // A member who is not the owner gets 404 on the READ: the owner-only block is hidden, not an error.
+  const viewer = harness({ reads: [res(404)] });
+  await viewer.c.load();
+  same(viewer.get().phase, "forbidden");
   for (const s of [401, 403]) {
     const mm = memStore();
     const f = harness({ store: mm.store, posts: [() => res(s)] });
@@ -115,6 +119,10 @@ test("rendus : accès propriétaire seulement (sinon rien) ; source « Basé sur
   const owner = text(renderToString(createElement(ui.QuoteGridAccessPanel, { interventionId: JOB, context: ctx, initial: { ...m.ACCESS_INITIAL, phase: "ready", data: m.parseAccess(access({ grid_id: GRID, version: 2 }), null) } })));
   assert.match(owner, /Contrat 2026 \(version 3\) · autorisation version 2/);
   assert.match(owner, /voit uniquement la grille que vous autorisez ici/);
+  // No artisan assigned yet: the control is disabled and the reason is shown (never a « dossier introuvable » after the click).
+  const blocked = renderToString(createElement(ui.QuoteGridAccessPanel, { interventionId: JOB, context: ctx, attachBlockedReason: "Artisan non attribué.", initial: { ...m.ACCESS_INITIAL, phase: "ready", data: m.parseAccess(access({ grid_id: null, version: null }), null) } }));
+  assert.match(blocked, /data-quote-grid-blocked=""[^>]*>Artisan non attribué\./);
+  assert.match(blocked, /<select[^>]*disabled=""/);
   assert.match(text(renderToString(createElement(ui.ContractSourceLine, { quoteId: QUOTE, initial: { grid_id: GRID, grid_version: 3, grid_label: "Contrat 2026" } }))), /Basé sur la grille Contrat 2026 version 3/);
   same(renderToString(createElement(ui.ContractSourceLine, { quoteId: QUOTE, initial: null })), "");
   let calls = 0;
@@ -132,6 +140,6 @@ test("rendus : accès propriétaire seulement (sinon rien) ; source « Basé sur
   assert.match(draftSrc, /onApplied=\{\(env, source\) => \{\s*applyEnvelope\(env, true\);/);
   // Send saves only when dirty, or when unused 0 € template lines are dropped before publication.
   assert.match(draftSrc, /if \(dirty \|\| trimmed\) \{\s*const saved = await save\(envelope, trimmed \? kept! : undefined\);/, "send saves only when dirty or trimmed");
-  for (const f of ["components/role/client-space.tsx", "components/role/artisan-space.tsx", "components/role/enterprise-space.tsx"]) assert.match(readFileSync(f, "utf8"), /<ContractSourceLine key=\{\w+\.id\} quoteId=\{\w+\.id\} demo=/, f);
-  assert.match(readFileSync("components/role/enterprise-space.tsx", "utf8"), /<QuoteGridAccessPanel interventionId=\{intervention\.id\} context=\{session\.mutationContext\} demo=\{demo\} \/>/);
+  for (const f of ["components/role/client-space.tsx", "components/role/artisan-space.tsx", "components/role/enterprise-space.tsx"]) assert.match(readFileSync(f, "utf8"), /<ContractSourceLine key=\{(?:\w+\.id|`source-\$\{\w+\.id\}`)\} quoteId=\{\w+\.id\} demo=/, f);
+  assert.match(readFileSync("components/role/enterprise-space.tsx", "utf8"), /<QuoteGridAccessPanel\s+interventionId=\{intervention\.id\}\s+context=\{session\.mutationContext\}\s+demo=\{demo\}\s+attachBlockedReason=\{intervention\.artisan_id \? undefined : "[^"]+"\}\s+\/>/);
 });

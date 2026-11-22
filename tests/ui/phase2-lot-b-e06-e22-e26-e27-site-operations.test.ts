@@ -46,6 +46,7 @@ window.scenarios = {
     revoked = true;
     const before = calls.load;
     btn(div, "Publier (irréversible)").click();
+    await until(() => btn(div, "Confirmer la publication")); btn(div, "Confirmer la publication").click();
     await tick(400);
     const again = btn(div, "Publier (irréversible)");
     if (again && !again.disabled) { again.click(); await tick(300); }
@@ -59,6 +60,7 @@ window.scenarios = {
     publishedElsewhere = true;
     const before = calls.load;
     btn(div, "Publier (irréversible)").click();
+    await until(() => btn(div, "Confirmer la publication")); btn(div, "Confirmer la publication").click();
     await tick(400);
     return { reloads: calls.load - before, publish: !!btn(div, "Publier (irréversible)"), draftTag: /Brouillon/.test(txt(div.querySelector("[aria-label='Grilles contractuelles']"))) };
   },

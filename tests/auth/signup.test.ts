@@ -93,7 +93,7 @@ test("signup: provider refusals are translated, never leaked", async () => {
     [{ status: 422, code: "email_exists" }, 409, /compte existe déjà/],
     [{ status: 429, code: "over_email_send_rate_limit" }, 429, /Trop de tentatives/],
     [{ status: 422, code: "weak_password" }, 422, /trop simple/],
-    [{ status: 400, code: "email_address_invalid" }, 422, /adresse e-mail valide/],
+    [{ status: 400, code: "email_address_invalid" }, 422, /refusée par le service d’inscription/],
     [{ status: 500, code: "unexpected_failure" }, 503, /momentanément indisponible/],
   ] as const) {
     const f = signup({ answer: refusal(error) });

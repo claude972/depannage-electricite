@@ -103,6 +103,8 @@ import { PlatformPage } from "./platform-anchor";
 import { FeatureUnavailable } from "./feature-unavailable";
 import { CustomerInvoicesPanel } from "../features/customer-invoices/customer-invoices-panel";
 import { AvailableMissionsPanel } from "../features/available-missions/available-missions-panel";
+import { CoverageNotice } from "../features/coverage/coverage-notice";
+import { artisanNotCoveredNotice } from "../features/coverage/model";
 import type { MissionsOrder } from "../features/available-missions/available-missions-model";
 import { MissionRadiusPanel } from "../features/mission-radius/mission-radius-panel";
 import { MissionHistoryPanel, historyLabel, type HistoryCounts, type HistoryItem } from "../features/mission-history/mission-history-panel";
@@ -490,7 +492,7 @@ export function ArtisanSpace({ session }: { session: Session }) {
       case "missions":
         content = (
           <>
-            <Missions session={session} declinedIds={declinedIds} onDeclined={onDeclined} availability={availability} />
+            <Missions session={session} declinedIds={declinedIds} onDeclined={onDeclined} availability={availability} available={dossier?.artisan_profile?.available ?? null} />
             {/* ART-12: provider team (invitations, members, internal assignment, technician follow-up). */}
             <ProviderTeamsPanel
               key={`teams|${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}`}
@@ -1116,7 +1118,7 @@ function toDemoOffer(i: Intervention): MissionOffer {
     created_at: i.created_at,
   };
 }
-function Missions({ session, declinedIds, onDeclined, availability }: { session: Session; declinedIds: string[]; onDeclined(id: string): void; availability: ReactNode }) {
+function Missions({ session, declinedIds, onDeclined, availability, available = null }: { session: Session; declinedIds: string[]; onDeclined(id: string): void; availability: ReactNode; /** ART-04: availability as last confirmed by the server; a change re-reads the offers. */ available?: boolean | null }) {
   const [segment, setSegment] = useState<MissionSegment>("available");
   const demo = session.mode === "demo";
   // Radius as CONFIRMED by the server for this identity; rev bumps when its version changes.
@@ -1221,7 +1223,7 @@ function Missions({ session, declinedIds, onDeclined, availability }: { session:
       )}
       {segment === "available" && (
         <AvailableMissionsPanel
-          key={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${demo ? "demo" : "live"}|${confirmed?.rev ?? 0}|${shownOrder}`}
+          key={`${session.mutationContext.userId() ?? "-"}|${session.mutationContext.generation()}|${demo ? "demo" : "live"}|${confirmed?.rev ?? 0}|${shownOrder}|${demo ? "-" : String(available)}`}
           order={shownOrder}
           nearestAvailable={!demo && confirmed?.active === true}
           radiusVersion={confirmed?.version ?? null}
@@ -3159,6 +3161,9 @@ function ApplicationForm({
   const [values, setValues] = useState<AppValues>(() => appValuesFrom(profile));
   const [postal, setPostal] = useState("");
   const [postalError, setPostalError] = useState("");
+  // ART-02: codes added in this form are checked against the published coverage (one public read
+  // each, informative only — the code is kept and nothing is blocked).
+  const [addedCodes, setAddedCodes] = useState<string[]>([]);
   const [touched, setTouched] = useState(false);
   const status: ArtisanApplicationStatus = profile?.application_status ?? "draft";
   const meta = APPLICATION_STATUS[status];
@@ -3198,6 +3203,7 @@ function ApplicationForm({
     }
     setPostalError("");
     set("postal_codes", [...values.postal_codes, code]);
+    setAddedCodes((codes) => (codes.includes(code) ? codes : [...codes, code]));
     setPostal("");
   }
   async function saveDraft() {
@@ -3386,6 +3392,10 @@ function ApplicationForm({
             Ajouter
           </button>
         </div>
+        {session.mode !== "demo" &&
+          addedCodes.filter((code) => values.postal_codes.includes(code)).map((code) => (
+            <CoverageNotice key={code} postalCode={code} message={artisanNotCoveredNotice} />
+          ))}
         {values.postal_codes.length ? (
           <ul className={styles.chips} aria-label="Codes postaux couverts" style={{ listStyle: "none", padding: 0 }}>
             {values.postal_codes.map((code) => (

@@ -10,6 +10,7 @@ import { normalizeWebPhone, WEB_PHONE_MESSAGE } from "@/lib/features/guest/phone
 const HEADERS = { "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer" };
 const text = (message: string, max: number) => z.string({ error: message }).trim().min(1, message).max(max, message);
 const EMAIL_MESSAGE = "Indiquez une adresse e-mail valide.";
+const EMAIL_REFUSED_MESSAGE = "Cette adresse e-mail est refusée par le service d’inscription (domaine non accepté ou adresse non distribuable). Utilisez une autre adresse e-mail.";
 const PASSWORD_MESSAGE = "Choisissez un mot de passe de 10 à 128 caractères.";
 export const signupSchema = z.object({
   first_name: text("Indiquez votre prénom (60 caractères au plus).", 60),
@@ -30,7 +31,10 @@ function refused(error: unknown): never {
   const e = record(error) ? error : {}, code = typeof e.code === "string" ? e.code : "", status = typeof e.status === "number" ? e.status : 0;
   if (status === 429 || code.startsWith("over_")) throw new ApiError(429, "Trop de tentatives. Patientez quelques minutes avant de réessayer.");
   if (code === "weak_password") throw new ApiError(422, "Ce mot de passe est trop simple. Choisissez-en un plus long ou moins courant.");
-  if (code === "email_address_invalid" || code === "validation_failed") throw new ApiError(422, EMAIL_MESSAGE);
+  // The format was already checked above: this code means the provider itself refuses the address
+  // (domain not accepted or undeliverable), which is not « invalid format ».
+  if (code === "email_address_invalid") throw new ApiError(422, EMAIL_REFUSED_MESSAGE);
+  if (code === "validation_failed") throw new ApiError(422, EMAIL_MESSAGE);
   if (["user_already_exists", "email_exists", "identity_already_exists"].includes(code))
     throw new ApiError(409, "Un compte existe déjà avec cette adresse. Connectez-vous, ou utilisez « Mot de passe oublié ».");
   throw new ApiError(503, "La création de compte est momentanément indisponible. Réessayez.");

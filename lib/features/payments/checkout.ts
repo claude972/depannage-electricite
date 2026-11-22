@@ -112,3 +112,14 @@ export async function createQuoteCheckout(request:Request){
   throw conflict();
  }catch(e){const status=e instanceof ApiError?e.status:e instanceof SyntaxError?400:503;return Response.json({error:e instanceof ApiError?e.message:"Le paiement n’a pas pu être confirmé. Réessayez depuis le même dossier."},{status,headers:{...PAYMENT_HEADERS,...(status===503?{"Retry-After":"2"}:{})}});}
 }
+
+/** Whether a Checkout can be started at all on this deployment (configuration only: no secret, amount
+ * or dossier is read). Lets the pay button announce the unavailability before the click. */
+export async function checkoutAvailability(request:Request){
+ try{
+  await authenticatedClient(request);
+  let available=true;
+  try{stripeClient();appUrl();if(commissionBps()>=10000)available=false;}catch{available=false;}
+  return Response.json({available},{headers:PAYMENT_HEADERS});
+ }catch(e){const status=e instanceof ApiError?e.status:503;return Response.json({error:e instanceof ApiError?e.message:"La disponibilité du paiement n’a pas pu être vérifiée."},{status,headers:PAYMENT_HEADERS});}
+}

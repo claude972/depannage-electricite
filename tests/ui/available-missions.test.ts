@@ -188,7 +188,7 @@ test("démo : offres locales, aucun appel réseau, résumé depuis les offres de
 test("wiring: the « available » segment mounts the paged leaf (live: no exhaustive count; demo: anonymized local offers)", async () => {
   const { readFileSync } = await import("node:fs");
   const src = readFileSync("components/role/artisan-space.tsx", "utf8");
-  assert.match(src, /<AvailableMissionsPanel\s+key=\{`\$\{session\.mutationContext\.userId\(\) \?\? "-"\}\|\$\{session\.mutationContext\.generation\(\)\}\|\$\{demo \? "demo" : "live"\}\|\$\{confirmed\?\.rev \?\? 0\}\|\$\{shownOrder\}`\}/, "keyed by identity + confirmed radius revision + order (any change restarts at page 1)");
+  assert.match(src, /<AvailableMissionsPanel\s+key=\{`\$\{session\.mutationContext\.userId\(\) \?\? "-"\}\|\$\{session\.mutationContext\.generation\(\)\}\|\$\{demo \? "demo" : "live"\}\|\$\{confirmed\?\.rev \?\? 0\}\|\$\{shownOrder\}\|\$\{demo \? "-" : String\(available\)\}`\}/, "keyed by identity + confirmed radius revision + order + server-confirmed availability (any change restarts at page 1)");
   assert.match(src, /onAccept=\{\(id\) => session\.action\(id, "accept_mission"\)\}/);
   assert.match(src, /onOpenAccepted=\{\(id\) => session\.openIntervention\(id\)\}/);
   assert.match(src, /demoItems=\{demo \? offers\.map\(toDemoOffer\) : undefined\}/);

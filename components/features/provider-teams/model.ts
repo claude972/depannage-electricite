@@ -159,6 +159,7 @@ export const COPY = {
   invitationNote: "Une invitation n’est visible que par le compte dont l’e-mail confirmé correspond. Aucun e-mail ni SMS n’est envoyé.",
   roleNote: "Les rôles d’équipe (propriétaire, coordinateur, technicien) ne changent pas votre rôle sur la plateforme.",
   technicianNote: "En tant que technicien, vous suivez uniquement vos interventions affectées : ni prix, ni paiement, ni documents.",
+  assignClosed: "Dossier terminé : l’affectation n’est plus possible.",
   assignNote: "L’affectation interne concerne uniquement un dossier déjà attribué à l’artisan titulaire ; elle ne change ni le devis ni le paiement.",
   doneNote: "« Terminé » clôt votre suivi interne ; il ne termine pas le dossier commercial.",
   expiresNote: "Date d’expiration choisie explicitement, dans le futur ; aucune durée n’est imposée.",
@@ -332,6 +333,9 @@ export function futureInstant(local: string, now = Date.now()): string | null {
   if (!Number.isFinite(t) || t <= now) return null;
   return new Date(t).toISOString();
 }
+/** Same rule as the server's permissions.can_assign (the list rows carry the status, not the
+ *  permission): a technician can only be assigned while the dossier is still being worked on. */
+export const canAssignStatus = (status: string) => ["assigned", "quoted", "accepted", "in_progress"].includes(status);
 /** Technicians that the server lists as active members (assignment choices). */
 export const activeTechnicians = (members: Member[]) => members.filter((m) => m.active && m.role === "technician");
 /** Actions shown from the SERVER-provided role (the server re-checks every one). */

@@ -14,6 +14,7 @@ import {
   ROLE_LABEL,
   RUNNER_INITIAL,
   activeTechnicians,
+  canAssignStatus,
   createPtApi,
   createRunner,
   futureInstant,
@@ -503,7 +504,10 @@ function TeamDetail({ deps, initialTeam, onTeamChanged }: { deps: Deps; initialT
                       </span>
                       <span className={styles.row}>
                         <button type="button" className={styles.button} onClick={() => setOpenMission(openMission === job.id ? null : job.id)} data-pt-mission-open={job.id}>{openMission === job.id ? "Fermer le suivi" : "Suivi"}</button>
-                        {actions.assign && (!a || a.state === "unassigned") && technicians.length > 0 && (
+                        {actions.assign && (!a || a.state === "unassigned") && !canAssignStatus(job.status) && (
+                          <span className={styles.muted} data-pt-assign-closed={job.id}>{COPY.assignClosed}</span>
+                        )}
+                        {actions.assign && (!a || a.state === "unassigned") && canAssignStatus(job.status) && technicians.length > 0 && (
                           <>
                             <select className={styles.input} aria-label="Technicien à affecter" value={value} onChange={(e) => setAssignTo((prev) => ({ ...prev, [job.id]: e.target.value }))} disabled={locked} data-pt-assign-select={job.id}>
                               <option value="">Choisir un technicien…</option>

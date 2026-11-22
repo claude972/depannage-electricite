@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import { notCoveredNotice, readNotCovered } from "./model";
 
-export function CoverageNotice({ postalCode, fetcher }: { postalCode: string; fetcher?: typeof fetch }) {
+export function CoverageNotice({ postalCode, fetcher, message = notCoveredNotice }: { postalCode: string; fetcher?: typeof fetch; /** Wording for another audience (same verified « not_covered » fact). */ message?: (code: string) => string }) {
   const code = postalCode.trim();
   const [notCovered, setNotCovered] = useState<string | null>(null);
   useEffect(() => {
@@ -20,7 +20,7 @@ export function CoverageNotice({ postalCode, fetcher }: { postalCode: string; fe
   if (notCovered !== code) return null;
   return (
     <p className="alert warning" role="status" data-coverage-notice="not_covered">
-      <span>{notCoveredNotice(code)}</span>
+      <span>{message(code)}</span>
     </p>
   );
 }

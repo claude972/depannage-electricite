@@ -32,7 +32,7 @@ import styles from "./quote-grid.module.css";
 const uuid = (): string | null => (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : null);
 
 // ---- Owner access ---------------------------------------------------------------------------------
-export function QuoteGridAccessPanel(props: { interventionId: string; context: Context; demo?: boolean; api?: QgApi; store?: () => Store | null; newId?: () => string | null; initial?: AccessState }) {
+export function QuoteGridAccessPanel(props: { interventionId: string; context: Context; demo?: boolean; /** Reason why a grid cannot be authorised yet (e.g. no artisan assigned): the control is disabled and the reason shown. */ attachBlockedReason?: string; api?: QgApi; store?: () => Store | null; newId?: () => string | null; initial?: AccessState }) {
   if (props.demo)
     return (
       <div className={styles.block} data-quote-grid-access="demo">
@@ -41,7 +41,7 @@ export function QuoteGridAccessPanel(props: { interventionId: string; context: C
     );
   return <Access key={`${props.context.userId() ?? "-"}|${props.context.generation()}|${props.interventionId}`} {...props} />;
 }
-function Access({ interventionId, context, api, store = tabStore, newId = uuid, initial }: { interventionId: string; context: Context; api?: QgApi; store?: () => Store | null; newId?: () => string | null; initial?: AccessState }) {
+function Access({ interventionId, context, attachBlockedReason, api, store = tabStore, newId = uuid, initial }: { interventionId: string; context: Context; attachBlockedReason?: string; api?: QgApi; store?: () => Store | null; newId?: () => string | null; initial?: AccessState }) {
   const uid = useId();
   const [state, setRaw] = useState<AccessState>(initial ?? ACCESS_INITIAL);
   const ref = useRef(state);
@@ -102,15 +102,16 @@ function Access({ interventionId, context, api, store = tabStore, newId = uuid, 
       )}
       <div className={styles.row}>
         <label className={styles.muted} htmlFor={`${uid}-g`}>Grille publiée</label>
-        <select id={`${uid}-g`} className={styles.input} value={choice} onChange={(e) => setChoice(e.target.value)} disabled={locked}>
+        <select id={`${uid}-g`} className={styles.input} value={choice} onChange={(e) => setChoice(e.target.value)} disabled={locked || !!attachBlockedReason} aria-describedby={attachBlockedReason ? `${uid}-b` : undefined}>
           <option value="">Choisir…</option>
           {d.grids.filter((g) => g.id !== d.grid_id).map((g) => (
             <option key={g.id} value={g.id}>{g.label} (version {g.version})</option>
           ))}
         </select>
-        <button type="button" className={`${styles.button} ${styles.primary}`} disabled={locked || !choice} onClick={() => setConfirm("attach")} data-quote-grid-attach="">Autoriser…</button>
+        <button type="button" className={`${styles.button} ${styles.primary}`} disabled={locked || !choice || !!attachBlockedReason} onClick={() => setConfirm("attach")} data-quote-grid-attach="">Autoriser…</button>
         {d.grid_id && <button type="button" className={styles.button} disabled={locked} onClick={() => setConfirm("detach")} data-quote-grid-detach="">Retirer l’autorisation…</button>}
       </div>
+      {attachBlockedReason && <p id={`${uid}-b`} className={styles.muted} data-quote-grid-blocked="">{attachBlockedReason}</p>}
       {d.next_cursor && <button type="button" className={styles.button} onClick={() => void ctrl.current?.load(d.next_cursor)}>{COPY.more}</button>}
       {confirm && (
         <div className={styles.confirm} role="alertdialog" aria-labelledby={`${uid}-c`} data-quote-grid-confirm={confirm}>

@@ -11,3 +11,4 @@ supabase/.temp/
 playwright-report/
 test-results/
 .vercel
+scripts/qa/credentials.json

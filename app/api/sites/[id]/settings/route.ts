@@ -40,6 +40,13 @@ export async function POST(request: Request, context: RouteContext) {
       p_action: command.action,
       p_values: command.action === "save" ? command.values : null,
     });
+    // ENT-03: this refusal is a rule that still applies after a refresh; it gets its own reason so
+    // the screen does not present it as a version conflict.
+    if (result.error?.code === "P0001" && result.error.message === "Site still has open interventions")
+      return Response.json(
+        { error: "Ce site a encore des interventions en cours. Clôturez-les ou annulez-les avant d’archiver le site.", reason: "open_interventions" },
+        { status: 409, headers: privateHeaders },
+      );
     dbError(result.error);
     const parsed = siteRecord.safeParse(result.data);
     if (!parsed.success || parsed.data.id !== id || parsed.data.settings_version !== command.expected_version + 1

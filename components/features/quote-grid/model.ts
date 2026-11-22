@@ -237,7 +237,9 @@ export function createAccessController({ api, interventionId, store, newId, cont
     set({ ...get(), phase: get().data ? get().phase : "loading" });
     const r = await api().access(interventionId, after);
     if (my !== seq || !same(who)) return;
-    if (r.status === 401 || r.status === 403) return forbid();
+    // 404 on the READ is how the server answers a member who is not the organisation owner (or a
+    // dossier without a site): owner-only block, hidden — never a retryable read error.
+    if (r.status === 401 || r.status === 403 || r.status === 404) return forbid();
     const d = r.status === 200 ? parseAccess(r.body, after) : null;
     if (!d) return set({ ...get(), phase: "error", error: COPY.loadFailed });
     const prev = after && get().data ? get().data!.grids : [];

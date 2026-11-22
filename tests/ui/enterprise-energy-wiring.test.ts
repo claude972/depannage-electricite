@@ -18,7 +18,7 @@ test("site sheet mounts SiteEnergyPanel for every site type with the session mut
   assert.match(src, /import \{ SiteEnergyPanel \} from "\.\.\/features\/energy\/site-energy-panel";/);
   const sheet = siteSheet();
   // Keyed by site + identity + generation: no list, cursor or form survives a site or identity change.
-  assert.match(sheet, /<SiteEnergyPanel\s+key=\{`\$\{site\.id\}:\$\{session\.mutationContext\.userId\(\) \?\? "anon"\}:\$\{session\.mutationContext\.generation\(\)\}`\}\s+siteId=\{site\.id\}\s+context=\{session\.mutationContext\}\s+\/>/);
+  assert.match(sheet, /<SiteEnergyPanel\s+key=\{`energy:\$\{site\.id\}:\$\{session\.mutationContext\.userId\(\) \?\? "anon"\}:\$\{session\.mutationContext\.generation\(\)\}`\}\s+siteId=\{site\.id\}\s+context=\{session\.mutationContext\}\s+\/>/);
   // Not nested in a vertical-only branch: no `vertical === "…" && (` block contains it.
   for (const m of sheet.matchAll(/vertical === "[a-z]+" && \(/g)) {
     const block = sheet.slice(m.index!, sheet.indexOf("\n        )}", m.index!));
@@ -59,7 +59,7 @@ test("no constant UUID fallback: creation refuses explicitly when crypto.randomU
 test("ENT-04: site sheet mounts SiteContactsPanel keyed by site + identity + generation; demo never calls the route", () => {
   const sheet = siteSheet();
   assert.match(src, /import \{ SiteContactsPanel \} from "\.\.\/features\/site-contacts\/site-contacts-panel";/);
-  assert.match(sheet, /session\.mode === "demo" \? \(\s*<Unavailable\s+title="Contacts du site"[\s\S]{0,300}?blocker="ENT-04"[\s\S]{0,40}?\) : \(\s*<SiteContactsPanel\s+key=\{`\$\{site\.id\}:\$\{session\.mutationContext\.userId\(\) \?\? "anon"\}:\$\{session\.mutationContext\.generation\(\)\}`\}\s+siteId=\{site\.id\}\s+context=\{session\.mutationContext\}/);
+  assert.match(sheet, /session\.mode === "demo" \? \(\s*<Unavailable\s+title="Contacts du site"[\s\S]{0,300}?blocker="ENT-04"[\s\S]{0,40}?\) : \(\s*<SiteContactsPanel\s+key=\{`contacts:\$\{site\.id\}:\$\{session\.mutationContext\.userId\(\) \?\? "anon"\}:\$\{session\.mutationContext\.generation\(\)\}`\}\s+siteId=\{site\.id\}\s+context=\{session\.mutationContext\}/);
   assert.doesNotMatch(src, /Aucun contact de site n’est modélisé/);
 });
 

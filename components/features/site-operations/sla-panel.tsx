@@ -33,7 +33,7 @@ const resumeSchema = z.object({ ended_at: z.string().min(1, "Indiquez la fin de 
 
 // Same derivation as the enterprise CSV export (app/api/enterprise/interventions/search/route.ts).
 const ticketRef = (id: string) => `INT-${id.slice(0, 6).toUpperCase()}`;
-const CATEGORY_LABEL: Record<string, string> = { outage: "Panne générale", panel: "Tableau électrique", socket: "Prise ou interrupteur", lighting: "Éclairage", diagnostic: "Recherche de panne" };
+const CATEGORY_LABEL: Record<string, string> = { outage: "Coupure de courant", panel: "Tableau électrique", socket: "Prise ou interrupteur", lighting: "Éclairage", diagnostic: "Recherche de panne" };
 const day = (iso: string) => new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
 
 /**

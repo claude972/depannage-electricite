@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
+import { ConfirmAction } from "../../app/ui";
 import { contractGridPayload } from "../../../lib/features/site-operations/schemas";
 import { GRID_STATUS, GRID_UNIT, date, dateTime, money } from "../../../lib/features/site-operations/labels";
 import type { ContractGrid, ContractGridPayload, GridUnit } from "../../../lib/features/site-operations/types";
@@ -147,14 +148,15 @@ export function GridsPanel({ context }: { context: PanelContext }) {
                     {grid.status === "draft" && (
                       <>
                         <button type="button" className="button outline" onClick={() => open(grid)} disabled={!!editing}>Modifier</button>
-                        <button
-                          type="button"
+                        {/* Irreversible: explicit confirmation step before the command is sent. */}
+                        <ConfirmAction
+                          label="Publier (irréversible)"
+                          message={`Publier la grille « ${grid.label} » ? Une fois publiée, elle est figée : ses lignes et ses prix ne pourront plus être modifiés (seule une nouvelle version pourra être préparée).`}
+                          confirmLabel="Confirmer la publication"
                           className="button primary"
-                          disabled={!!editing || publishForm.submitting || context.busy}
-                          onClick={(event) => publishForm.submit(event, contractGridPayload.pick({ label: true }), { label: grid.label }, { action: "publish_contract_grid", id: grid.id, expected_version: grid.version }, () => undefined, "Grille publiée : elle est désormais figée.")}
-                        >
-                          Publier (irréversible)
-                        </button>
+                          busy={!!editing || publishForm.submitting || context.busy}
+                          onConfirm={() => publishForm.submit({ preventDefault() {}, currentTarget: document.body } as unknown as FormEvent, contractGridPayload.pick({ label: true }), { label: grid.label }, { action: "publish_contract_grid", id: grid.id, expected_version: grid.version }, () => undefined, "Grille publiée : elle est désormais figée.")}
+                        />
                       </>
                     )}
                     {grid.status === "published" && !versions.some((v) => v.status === "draft") && (

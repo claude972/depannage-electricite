@@ -663,10 +663,13 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
   // A kept invitation code is accepted once a live session exists (verified recipient server-side).
   const inviteAttempt = useRef("");
   useEffect(() => {
-    if (mode !== "live" || !pendingInvitation || inviteAttempt.current === pendingInvitation) return;
+    // ENT-02: the mutation runner serialises chains and refuses a second one while the login chain
+    // is still running; wait for it instead of losing the code (the effect re-runs when busy clears).
+    if (mode !== "live" || busy || runner.isBusy() || !pendingInvitation || inviteAttempt.current === pendingInvitation) return;
     inviteAttempt.current = pendingInvitation;
     void acceptInvitation(pendingInvitation).then((ok) => {
       if (!ok) {
+        inviteAttempt.current = ""; // the same link may be opened again after a refusal
         setPendingInvitation(null);
         try {
           sessionStorage.removeItem(INVITE_KEY);
@@ -674,7 +677,7 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, pendingInvitation]);
+  }, [mode, pendingInvitation, busy]);
 
   // Hash routing with role guard. Unknown or forbidden targets never mount their view.
   useEffect(() => {
@@ -687,6 +690,17 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
         if (link) pendingLink.current = link;
       }
       hashSeen.current = true;
+      // ENT-02: an invitation link opened while signed in is accepted by this account (the server
+      // checks the recipient); the link is replaced by the role home, never shown as a foreign page.
+      if (mode === "live" && parsed.view === "join-organization") {
+        const home = homeFor(role, mode);
+        window.history.replaceState(null, "", `#${buildHash(home)}`);
+        setParam("");
+        setView(home);
+        if (INVITE_TOKEN.test(parsed.param)) setPendingInvitation(parsed.param);
+        else setError("Ce lien d’invitation est incomplet ou invalide. Demandez un nouveau code au propriétaire de l’organisation.");
+        return;
+      }
       // End of the service booking wizard: « Créer mon compte » opens the account form on creation.
       if (mode === "public" && parsed.view === "auth" && parsed.param === "signup") setAuthMode("signup");
       const followFromAccount = mode === "live" && parsed.view === "auth" && parsed.param === "requests";
@@ -1840,7 +1854,11 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
         return;
       }
       await api("/api/professional", values);
-      if (ctx.alive()) await Promise.all([loadProfessional(), refresh()]);
+      // ENT-12: sequential on purpose. The workspace read advances the shared sequence, so a
+      // professional read started in parallel was discarded as stale and the dossier kept the
+      // previous approval state until a reload.
+      if (ctx.alive()) await refresh();
+      if (ctx.alive()) await loadProfessional();
       ctx.notice("Modification enregistrée.");
     });
   }

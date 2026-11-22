@@ -96,6 +96,11 @@ test("réponse perdue / 503 / rechargement ⇒ même commande ; 409 ⇒ aucun re
   same(k.map.size, 0);
   await c.c.save(form({ name: "D" }));
   same(c.calls.filter((x) => x.kind === "POST").map((x) => (x.body as Model.SiteCommand).command_id), [NEW(1), NEW(2)]);
+  // ENT-03: archiving refused for open interventions is an explicit reason, not a version conflict.
+  const o = memStore();
+  const open = settingsHarness({ store: o.store, posts: [() => res(409, { error: "x", reason: "open_interventions" })] });
+  await open.c.load(); await open.c.archive();
+  same([open.get().conflict, open.get().writeError, open.get().pending, o.map.size], ["", m.SL_COPY.archiveOpen, null, 0]);
   for (const [status, copy] of [[403, m.SL_COPY.writeForbidden], [404, m.SL_COPY.notFound], [422, m.SL_COPY.invalid]] as const) {
     const x = settingsHarness({ posts: [() => res(status)] });
     await x.c.load(); await x.c.save(form({ name: "E" }));
@@ -173,6 +178,6 @@ test("wiring: site sheet mounts SiteSettingsPanel; sites view lists active/archi
   const { readFileSync } = await import("node:fs");
   const src = readFileSync("components/role/enterprise-space.tsx", "utf8");
   assert.match(src, /import \{ OrganizationSitesList, SiteSettingsPanel \} from "\.\.\/features\/site-lifecycle\/site-lifecycle-panels";/);
-  assert.match(src, /<SiteSettingsPanel\s+key=\{`\$\{site\.id\}:\$\{session\.mutationContext\.userId\(\) \?\? "anon"\}:\$\{session\.mutationContext\.generation\(\)\}`\}\s+siteId=\{site\.id\}\s+context=\{session\.mutationContext\}\s+demo=\{session\.mode === "demo"\}\s+onChanged=\{\(\) => void session\.refresh\(\)\}/);
+  assert.match(src, /<SiteSettingsPanel\s+key=\{`settings:\$\{site\.id\}:\$\{session\.mutationContext\.userId\(\) \?\? "anon"\}:\$\{session\.mutationContext\.generation\(\)\}`\}\s+siteId=\{site\.id\}\s+context=\{session\.mutationContext\}\s+demo=\{session\.mode === "demo"\}\s+onChanged=\{\(\) => void session\.refresh\(\)\}/);
   assert.match(src, /<OrganizationSitesList\s+key=\{`\$\{c\.organization\.id\}:[\s\S]{0,120}?organizationId=\{c\.organization\.id\}[\s\S]{0,120}?onOpen=\{\(id\) => c\.go\("site", id\)\}/);
 });

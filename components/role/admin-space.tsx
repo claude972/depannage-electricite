@@ -51,6 +51,7 @@ import type {
   Urgency,
   View,
 } from "../app/types";
+import { api } from "../app/api";
 import { Icon } from "../app/icons";
 import { InstallPanel } from "../app/install-panel";
 import { AccountDataPanel } from "../features/account-data/account-data-panel";
@@ -1339,6 +1340,49 @@ export function AdminSpace({ session }: { session: Session }) {
   );
 }
 
+/** ADM-02: opens one supporting document through the existing private link (GET /api/documents?id=),
+ *  with the operator's own rights (the server decides); nothing is cached or exposed in the page. */
+function CredentialDocumentOpen({ documentId, context }: { documentId: string; context: { generation(): number; userId(): string | null } }) {
+  const [state, setState] = useState<"idle" | "opening" | "error">("idle");
+  const [message, setMessage] = useState("");
+  const inFlight = useRef(false);
+  async function open() {
+    if (inFlight.current) return;
+    const user = context.userId();
+    const generation = context.generation();
+    if (!user) return;
+    inFlight.current = true;
+    setState("opening");
+    const current = () => user === context.userId() && generation === context.generation();
+    try {
+      const result = await api<{ url: string }>(`/api/documents?id=${encodeURIComponent(documentId)}`, undefined, "GET");
+      if (!current()) return;
+      if (typeof result?.url !== "string" || !result.url.startsWith("https://")) throw new Error("Le lien de téléchargement est indisponible.");
+      window.open(result.url, "_blank", "noopener,noreferrer");
+      setState("idle");
+    } catch (e) {
+      if (!current()) return;
+      setMessage((e as Error).message || "Le justificatif n’a pas pu être ouvert.");
+      setState("error");
+    } finally {
+      inFlight.current = false;
+    }
+  }
+  return (
+    <span>
+      <button type="button" className="text-button" data-credential-document-open={documentId} disabled={state === "opening"} onClick={() => void open()} style={{ minHeight: 44 }}>
+        {state === "opening" ? "Ouverture…" : state === "error" ? "Réessayer l’ouverture" : "Ouvrir le justificatif"}
+      </button>
+      {state === "error" && (
+        <span role="alert" className="form-error">
+          {" "}
+          {message}
+        </span>
+      )}
+    </span>
+  );
+}
+
 // Read-only artisan dossier for the operator: company, zone, skills and credentials.
 function ArtisanDossierPanel({
   session,
@@ -1456,6 +1500,7 @@ function ArtisanDossierPanel({
                     <div>
                       <strong>{CREDENTIAL_LABEL[c.kind] || CREDENTIAL_LABEL.other}</strong>
                       <span>{documentName(c.document_id)}</span>
+                      {session.mode !== "demo" && <CredentialDocumentOpen documentId={c.document_id} context={session.mutationContext} />}
                       <span>
                         {c.expires_on
                           ? `${expired ? "Expiré le" : "Expire le"} ${date(c.expires_on)}`

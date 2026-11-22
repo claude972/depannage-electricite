@@ -224,8 +224,13 @@ const cx = (...xs: (string | false | undefined | null)[]) => xs.filter(Boolean).
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 const byDateDesc = <T extends { created_at: string }>(rows: T[]) =>
   [...rows].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
-const fullAddress = (i: Intervention) =>
-  [i.address, [i.postal_code, i.city].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+// A site address often already ends with its postal code and city: they are not repeated.
+const fullAddress = (i: Pick<Intervention, "address" | "postal_code" | "city">) => {
+  const tail = [i.postal_code, i.city].filter(Boolean).join(" ");
+  return tail && (i.address || "").toLowerCase().includes(tail.toLowerCase())
+    ? i.address
+    : [i.address, tail].filter(Boolean).join(", ");
+};
 const percent = (value: number) => `${value.toFixed(1).replace(".", ",")} %`;
 const approvalMeta = (status: string) =>
   APPROVAL_META[status] || { label: status, tone: "amber" as const };
@@ -506,7 +511,7 @@ export function EnterpriseSpace({ session }: { session: Session }) {
         case "approval":
           return <ApprovalDetail key={param} c={c} id={param} />;
         case "contracts":
-          return <ContractsView c={c} />;
+          return <ContractsView key={param} c={c} target={param} />;
         case "reports":
           return <ReportsView c={c} />;
         case "invoices":
@@ -863,6 +868,7 @@ function ContextBar({
             {sites.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
+                {s.archived_at ? " (archivé)" : ""}
               </option>
             ))}
           </select>
@@ -1194,7 +1200,7 @@ function InterventionsTable({
                         <Icon name="building" size={22} />
                         <span>
                           <strong>{i.siteLabel}</strong>
-                          <small>{[i.address, [i.postal_code, i.city].filter(Boolean).join(" ")].filter(Boolean).join(", ")}</small>
+                          <small>{fullAddress(i)}</small>
                         </span>
                       </button>
                     </td>
@@ -1482,7 +1488,7 @@ export function OverviewView({ c }: { c: Ctx }) {
               <h2 id="deadlines-title">Échéances</h2>
               <p>Maintenance, audits et signalements enregistrés</p>
             </div>
-            <button type="button" className={styles.textLink} onClick={() => c.go("contracts")}>
+            <button type="button" className={styles.textLink} onClick={() => c.go("contracts", "compliance")}>
               Gérer
               <Icon name="arrow" size={15} />
             </button>
@@ -2013,8 +2019,13 @@ export function DossierView({ c, id, initialQuoteId }: { c: Ctx; id: string; ini
               />
             )}
             {/* ENT-13: contract source of the displayed quote (server-stated) and the owner's grid access. */}
-            {displayed && <ContractSourceLine key={displayed.id} quoteId={displayed.id} demo={demo} />}
-            <QuoteGridAccessPanel interventionId={intervention.id} context={session.mutationContext} demo={demo} />
+            {displayed && <ContractSourceLine key={`source-${displayed.id}`} quoteId={displayed.id} demo={demo} />}
+            <QuoteGridAccessPanel
+              interventionId={intervention.id}
+              context={session.mutationContext}
+              demo={demo}
+              attachBlockedReason={intervention.artisan_id ? undefined : "Une grille ne peut être autorisée qu’une fois un artisan attribué à ce dossier."}
+            />
             {versions.length > 1 && (
               <div className={styles.versions} role="group" aria-label="Versions du devis">
                 {versions.map((q, index) => (
@@ -2068,7 +2079,7 @@ export function DossierView({ c, id, initialQuoteId }: { c: Ctx; id: string; ini
                   <div className={cx("inline-note")}>
                     <Icon name="shield" />
                     <p>
-                      Ce devis dépasse le seuil d’approbation du site : décision{" "}
+                      Ce devis dépasse le seuil d’approbation du site : statut{" "}
                       <strong>{approvalMeta(approval.status).label.toLowerCase()}</strong>.{" "}
                       <button type="button" className={styles.textLink} onClick={() => c.go("approval", approval.id)}>
                         Ouvrir l’approbation
@@ -2472,7 +2483,7 @@ function AppointmentPanel({
 }
 
 // ---- Sites & contrats --------------------------------------------------------------------
-function ProfessionalBlock({ c, initialTab = "approvals" }: { c: Ctx; initialTab?: "approvals" | "contracts" }) {
+function ProfessionalBlock({ c, initialTab = "approvals", initialSite }: { c: Ctx; initialTab?: "approvals" | "contracts" | "compliance"; initialSite?: string }) {
   const { session, demo } = c;
   const organizationId = c.organization?.id ?? null;
   const context = session.mutationContext;
@@ -2489,7 +2500,8 @@ function ProfessionalBlock({ c, initialTab = "approvals" }: { c: Ctx; initialTab
   return (
     <ProfessionalOperations
       key={demo ? undefined : `${context.userId()}|${context.generation()}|${organizationId}`}
-      initialTab={demo ? "approvals" : initialTab}
+      initialTab={demo && initialTab === "contracts" ? "approvals" : initialTab}
+      initialSite={initialSite}
       contracts={{ organizationId, context }}
       data={{
         ...session.professional,
@@ -2524,6 +2536,7 @@ function SitesView({ c }: { c: Ctx }) {
   // W4 : un site archivé ne reçoit plus de demande ; il n'est plus listé parmi « Mes sites »
   // (il reste consultable depuis « Sites archivés » du portefeuille ci-dessous).
   const activeSites = scope.sites.filter((s) => !s.archived_at);
+  const noOrganization = !session.loading && !c.organization && session.data.organizations.length === 0;
   return (
     <>
       <PageTitle
@@ -2694,7 +2707,7 @@ function SitesView({ c }: { c: Ctx }) {
         ) : (
           <div className="panel">
             <Empty icon="building" title="Aucun site sur ce périmètre">
-              {c.authority.canWriteOrganization
+              {c.authority.canWriteOrganization || noOrganization
                 ? "Ajoutez un premier site pour rattacher vos demandes, budgets et règles d’approbation."
                 : "Aucun site ne vous est accessible sur ce périmètre."}
             </Empty>
@@ -2773,7 +2786,14 @@ function SitesView({ c }: { c: Ctx }) {
         </section>
       )}
 
-      {c.authority.canWriteOrganization ? (
+      {/* ENT-01: without any organisation the first site creates it (server: create_site without
+          organization_id); the membership-based authority cannot apply yet. */}
+      {noOrganization && (
+        <p className="inline-note" role="note">
+          Vous n’avez pas encore d’organisation : l’enregistrement de votre premier site la crée et vous en fait le propriétaire.
+        </p>
+      )}
+      {c.authority.canWriteOrganization || noOrganization ? (
         <SiteForm
           busy={session.busy}
           onSubmit={async (values) => {
@@ -2796,7 +2816,11 @@ function SitesView({ c }: { c: Ctx }) {
   );
 }
 
-function ContractsView({ c }: { c: Ctx }) {
+// `target` (#contracts/<tab>[:<site id>]) lets a site sheet shortcut open the right tab with its
+// site preselected; it is a display hint only (the forms still list writable sites only).
+function ContractsView({ c, target = "" }: { c: Ctx; target?: string }) {
+  const [tabHint, siteHint] = target.split(":");
+  const initialTab = tabHint === "approvals" || tabHint === "compliance" ? tabHint : "contracts";
   return (
     <>
       <PageTitle
@@ -2804,7 +2828,7 @@ function ContractsView({ c }: { c: Ctx }) {
         subtitle="Approbations, contrats enregistrés et échéances de l’organisation active"
         back={{ label: "Retour aux sites", onClick: () => c.go("sites") }}
       />
-      <ProfessionalBlock c={c} initialTab="contracts" />
+      <ProfessionalBlock c={c} initialTab={initialTab} initialSite={siteHint || undefined} />
     </>
   );
 }
@@ -3137,7 +3161,7 @@ export function SiteSheet({ c, id }: { c: Ctx; id: string }) {
           <div className={styles.panelTitle}>
             <h2 id="site-compliance">Échéances & conformité</h2>
             {canWrite ? (
-              <button type="button" className={styles.textLink} onClick={() => c.go("contracts")}>
+              <button type="button" className={styles.textLink} onClick={() => c.go("contracts", `compliance:${site.id}`)}>
                 Ajouter
                 <Icon name="arrow" size={15} />
               </button>
@@ -3305,7 +3329,7 @@ export function SiteSheet({ c, id }: { c: Ctx; id: string }) {
             <p className={styles.muted}>Aucune règle : les devis de ce site sont acceptables sans approbation préalable.</p>
           )}
           {canWrite ? (
-            <button type="button" className={styles.textLink} onClick={() => c.go("contracts")}>
+            <button type="button" className={styles.textLink} onClick={() => c.go("contracts", `approvals:${site.id}`)}>
               Configurer la règle
               <Icon name="arrow" size={15} />
             </button>
@@ -3337,7 +3361,7 @@ export function SiteSheet({ c, id }: { c: Ctx; id: string }) {
           />
         )}
         <SiteSettingsPanel
-          key={`${site.id}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`}
+          key={`settings:${site.id}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`}
           siteId={site.id}
           context={session.mutationContext}
           demo={session.mode === "demo"}
@@ -3360,7 +3384,7 @@ export function SiteSheet({ c, id }: { c: Ctx; id: string }) {
           />
         ) : (
           <SiteEnergyPanel
-            key={`${site.id}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`}
+            key={`energy:${site.id}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`}
             siteId={site.id}
             context={session.mutationContext}
           />
@@ -3441,7 +3465,7 @@ export function SiteSheet({ c, id }: { c: Ctx; id: string }) {
           />
         ) : (
           <SiteContactsPanel
-            key={`${site.id}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`}
+            key={`contacts:${site.id}:${session.mutationContext.userId() ?? "anon"}:${session.mutationContext.generation()}`}
             siteId={site.id}
             context={session.mutationContext}
           />
@@ -4812,6 +4836,16 @@ const MEMBERSHIP_EVENT: Record<string, string> = {
   change_member_role: "Rôle modifié",
   remove_member: "Membre retiré",
   transfer_ownership: "Propriété transférée",
+  // Event names written by the server journal (the keys above are the command names, kept for demo data).
+  invitation_created: "Invitation créée",
+  invitation_revoked: "Invitation révoquée",
+  invitation_accepted: "Invitation acceptée",
+  member_joined: "Membre ajouté",
+  member_role_changed: "Rôle modifié",
+  member_site_access_changed: "Accès aux sites modifié",
+  member_removed: "Membre retiré",
+  membership_removed: "Membre retiré",
+  ownership_transferred: "Propriété transférée",
 };
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -5214,6 +5248,9 @@ function MembersView({ c }: { c: Ctx }) {
         <Empty icon="users" title="Aucune organisation active">
           Ajoutez un premier site pour créer votre organisation ; ses membres apparaîtront ici.
         </Empty>
+        <button type="button" className="button primary" onClick={() => c.go("sites")}>
+          Ajouter un premier site
+        </button>
       </>
     );
   return (
@@ -5448,7 +5485,7 @@ function MembersView({ c }: { c: Ctx }) {
                 overview.events.map((ev) => (
                   <div key={ev.id} className={styles.listRow}>
                     <section>
-                      <strong>{MEMBERSHIP_EVENT[ev.action] || ev.action}</strong>
+                      <strong>{MEMBERSHIP_EVENT[ev.action] || "Autre événement d’accès"}</strong>
                       <small>
                         {nameOf(ev.actor_id)}
                         {ev.target_user_id ? ` → ${nameOf(ev.target_user_id)}` : ""}

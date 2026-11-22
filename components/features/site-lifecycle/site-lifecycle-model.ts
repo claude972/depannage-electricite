@@ -192,6 +192,7 @@ export const SL_COPY = {
   saved: "Paramètres enregistrés.",
   archivedDone: "Site archivé.",
   unchanged: "Aucune modification à enregistrer.",
+  archiveOpen: "Archivage impossible : ce site a encore des interventions en cours. Clôturez-les ou annulez-les, puis archivez le site.",
   conflict: "Le site a été modifié entre-temps ou la commande a déjà servi : rien n’est renvoyé automatiquement. Actualisez pour voir la version courante.",
   retry: "Issue inconnue (réponse perdue ou service indisponible). Réessayer renvoie exactement la même commande.",
   resume: "Une modification a été envoyée depuis cet onglet sans réponse confirmée : reprenez l’envoi de la même commande.",
@@ -309,6 +310,12 @@ export function createSettingsController({
       set({ ...base, pending: null, site, canWrite: base.canWrite && site.archived_at === null, notice: cmd.action === "archive" ? SL_COPY.archivedDone : SL_COPY.saved });
       onChanged?.(site);
       await load();
+      return true;
+    }
+    if (r.status === 409 && cmd.action === "archive" && (r.body as { reason?: unknown } | null)?.reason === "open_interventions") {
+      // Nothing was written and nothing is stale: the rule applies until the interventions are closed.
+      if (key) store().remove(key);
+      set({ ...base, pending: null, writeError: SL_COPY.archiveOpen });
       return true;
     }
     if (r.status === 409) {

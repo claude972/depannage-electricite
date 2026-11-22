@@ -184,7 +184,7 @@ test("aucune géolocalisation, aucun filtrage côté client ; libellés d’appr
   assert.doesNotMatch(demo, /<button|<select|<input/);
   const artisan = readFileSync("components/role/artisan-space.tsx", "utf8");
   assert.match(artisan, /<MissionRadiusPanel\s+demo=\{demo\}\s+context=\{session\.mutationContext\}\s+recheck=\{radiusCheck\}\s+onAttention=\{revealRadiusError\}\s+onConfirmed=/);
-  assert.match(artisan, /\|\$\{confirmed\?\.rev \?\? 0\}\|\$\{shownOrder\}`\}/);
+  assert.match(artisan, /\|\$\{confirmed\?\.rev \?\? 0\}\|\$\{shownOrder\}\|/);
   const missions = readFileSync("components/features/available-missions/available-missions-panel.tsx", "utf8");
   const missionsModel = readFileSync("components/features/available-missions/available-missions-model.ts", "utf8");
   for (const src of [missions, missionsModel]) assert.doesNotMatch(src, /\.filter\([^)]*(distance_band_km|radius_km)|radius_km/, "the server applies the radius: no client-side filtering");

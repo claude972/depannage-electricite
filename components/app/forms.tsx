@@ -2569,6 +2569,7 @@ export function ProfessionalOperations({
   readOnlyReason = null,
   contracts,
   initialTab = "approvals",
+  initialSite,
 }: {
   data: ProfessionalData;
   sites: Site[];
@@ -2587,7 +2588,9 @@ export function ProfessionalOperations({
   /** ENT-13 live contracts: active organisation + identity fence. Absent (or no organisation) ⇒
    *  no live read and an honest « choisissez une organisation ». Ignored in demo. */
   contracts?: EnterpriseContractsContext;
-  initialTab?: "approvals" | "contracts";
+  initialTab?: "approvals" | "contracts" | "compliance";
+  /** Site preselected in the rule / deadline forms (shortcut from a site sheet). */
+  initialSite?: string;
 }) {
   const [tab, setTab] = useState<string>(initialTab);
   // ENT-13: bumped after each successful contract write ⇒ causal re-read (page 1 + open detail).
@@ -2600,7 +2603,7 @@ export function ProfessionalOperations({
   };
   // Live: the active organisation of the contracts context ONLY (no fallback); demo unchanged.
   const contractOrganizationId = liveContracts ? contracts?.organizationId || undefined : organizations[0]?.id;
-  const [site, setSite] = useState("");
+  const [site, setSite] = useState(initialSite ?? "");
   const [threshold, setThreshold] = useState("200");
   const [requiredRole, setRequiredRole] = useState("manager");
   const [enabled, setEnabled] = useState(true);
@@ -2617,7 +2620,7 @@ export function ProfessionalOperations({
   const [error, setError] = useState("");
   // Only sites the member may write on are offered in the forms.
   const writableSites = sites.filter((s) => canWriteSite(s.id));
-  const selectedSite = site || writableSites[0]?.id || "";
+  const selectedSite = (writableSites.some((s) => s.id === site) ? site : "") || writableSites[0]?.id || "";
   const readOnlyNote = (title: string) => (
     <Unavailable
       title={title}

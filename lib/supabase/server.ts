@@ -105,6 +105,8 @@ export function assertOrigin(request: Request) {
 const KNOWN_REFUSALS: Record<string, string> = {
   "Approval required": "Ce devis doit d’abord être approuvé par votre organisation (règle d’approbation du site). Il pourra ensuite être accepté.",
   "Advanced approval required for exact quote": "Ce devis doit d’abord être approuvé dans le circuit de votre organisation, pour cette version exacte. Il pourra ensuite être accepté.",
+  "Site still has open interventions": "Ce site a encore des interventions en cours. Clôturez-les ou annulez-les avant d’archiver le site.",
+  "Fiscal years overlap": "Cet exercice chevauche un exercice existant : les exercices budgétaires ne peuvent pas se chevaucher. Modifiez les dates.",
 };
 export function dbError(error: { code?: string; message?: string } | null) {
   if (!error) return;

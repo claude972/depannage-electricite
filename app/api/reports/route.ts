@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { csvCell } from "@/lib/domain";
 import { authenticatedClient, ApiError, dbError } from "@/lib/supabase/server";
-import { reportRow, reportTotals, REPORT_BASIS, type FinancialSiteReport } from "@/lib/features/professional-report/model";
+import { reportRow, reportTotals, REPORT_BASIS, SITE_TYPE_LABELS, type FinancialSiteReport } from "@/lib/features/professional-report/model";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -39,7 +39,7 @@ async function readPage(db: Database, { site, organization }: Scope, after: stri
 function csvRow(row: FinancialSiteReport) {
   const cents = [row.budget_cents, row.accepted_cents, row.active_accepted_cents, row.paid_cents,
     row.declared_paid_cents, row.unverified_paid_cents, row.refunded_cents, row.net_paid_cents, row.committed_cents];
-  return [row.name, row.type, ...cents.map(value => (value / 100).toFixed(2)), row.interventions,
+  return [row.name, SITE_TYPE_LABELS[row.type], ...cents.map(value => (value / 100).toFixed(2)), row.interventions,
     row.financial_complete ? "oui" : "non"].map(csvCell).join(";");
 }
 

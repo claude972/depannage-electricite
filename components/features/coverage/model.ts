@@ -64,6 +64,9 @@ export function publicMessage(code: string, r: PublicCoverage): string {
 /** CLI-03: honest notice on a recap / dossier still searching. Informative: the request is never blocked. */
 export const notCoveredNotice = (code: string) =>
   `Le code postal ${code} ne figure pas dans la zone publiée par l’exploitant : il est possible qu’aucun artisan ne puisse prendre votre demande. Elle reste enregistrée et aucun délai n’est garanti.`;
+/** ART-02: same verified fact, worded for an artisan declaring an intervention zone (never blocking). */
+export const artisanNotCoveredNotice = (code: string) =>
+  `Le code postal ${code} ne figure pas dans la zone publiée par l’exploitant. Vous pouvez le conserver dans votre dossier ; vérifiez qu’il correspond bien à votre zone d’intervention.`;
 /** Only a verified « not_covered » answer yields a notice; unknown, covered, errors and timeouts stay silent. */
 export async function readNotCovered(fetcher: typeof fetch, code: string): Promise<boolean> {
   if (!isPostalCode(code)) return false;

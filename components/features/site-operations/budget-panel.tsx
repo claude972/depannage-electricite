@@ -141,6 +141,12 @@ export function BudgetPanel({ context }: { context: PanelContext }) {
               <div><span>Écart</span><strong>{used && yearLines.length ? money(total - used.accepted_cents) : "—"}</strong><small>{yearLines.length ? "budget − devis acceptés" : "aucune ligne saisie"}</small></div>
             </div>
           )}
+          {/* ENT-14: the overrun is said, not only shown as a negative gap. */}
+          {year && used && yearLines.length > 0 && used.accepted_cents > total && (
+            <Notice tone="warning">
+              Dépassement du budget : les devis acceptés sur cet exercice dépassent le budget saisi de {money(used.accepted_cents - total)}.
+            </Notice>
+          )}
           {year && (
             <table className={styles.table}>
               <caption>Lignes budgétaires — {year.label}</caption>

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  ApiError,
   authenticatedClient,
   apiError,
   assertOrigin,
@@ -58,9 +59,10 @@ const schema = z.discriminatedUnion("action", [
     })
     .strict(),
 ]);
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const { db } = await authenticatedClient();
+    // Session web (cookie) ou application mobile (Bearer) : mêmes droits, vérifiés par la base.
+    const { db } = await authenticatedClient(request);
     const results = await Promise.all([
       db.from("approval_rules").select("*").limit(200),
       db
@@ -102,8 +104,19 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     assertOrigin(request);
-    const { db } = await authenticatedClient();
+    const { db } = await authenticatedClient(request);
     const input = await validated(request, schema);
+    // ENT-12: a rejection is always motivated (the comment is shown to the requester).
+    if (input.action === "decide_approval" && input.decision === "rejected" && !input.note)
+      throw new ApiError(422, "Un commentaire est obligatoire pour refuser.");
+    // ENT-03: an archived site is strictly read-only (same rule as its settings, equipment and
+    // new requests). The row is read under RLS; an unreadable site is left to the RPC to refuse.
+    if ("site_id" in input) {
+      const site = await db.from("sites").select("id,archived_at").eq("id", input.site_id).maybeSingle();
+      dbError(site.error);
+      if (site.data?.archived_at)
+        throw new ApiError(409, "Ce site est archivé : il est en lecture seule et ne peut plus être modifié.");
+    }
     let response;
     switch (input.action) {
       case "set_approval_rule":
