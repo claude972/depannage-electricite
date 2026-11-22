@@ -866,7 +866,9 @@ function ContextBar({
             disabled={!sites.length}
           >
             <option value="">Tous les sites</option>
-            {sites.map((s) => (
+            {/* ENT-03: an archived site is not offered as a scope; it stays listed (and marked)
+                only while it is the scope already selected, so the control never shows a blank. */}
+            {sites.filter((s) => !s.archived_at || s.id === siteId).map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
                 {s.archived_at ? " (archivé)" : ""}

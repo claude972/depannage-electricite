@@ -3,7 +3,7 @@
 // Approving a request and executing its refund are separate actions.
 import { useCallback, useState, type ReactNode } from "react";
 import type { ContractState, Dispute, DisputeOutcome, FinanceConfig, FinanceReport, Invoice, InvoiceReadiness, LedgerEntry, Page, PlatformAccess, PlatformClient, PlatformViewScope, RefundRequest } from "../../../lib/features/platform-operations/types";
-import { COMMISSION_NOT_CONFIGURED, refundExecutionMessage } from "../../../lib/features/platform-operations/config";
+import { COMMISSION_NOT_CONFIGURED, outstandingEstimate, refundExecutionMessage } from "../../../lib/features/platform-operations/config";
 import { ApiRequestError } from "../../app/api";
 import { PLATFORM_MFA_MESSAGE, platformMfaRequired } from "../../../shared/platform-mfa";
 import { PlatformMfaPanel } from "./platform-mfa-panel";
@@ -192,6 +192,7 @@ function Overview({ ctx }: { ctx: Ctx }) {
   if (data.error && !data.data) return <ErrorBox message={data.error} onRetry={data.reload} />;
   if (!data.data) return null;
   const r = data.data.report;
+  const estimate = outstandingEstimate(r);
   return (
     <>
       <Panel title="Paiements et ledger" intro={`Comptes exacts au ${dateTime(r.generated_at)}. Les montants sont TTC, en euros.`}
@@ -200,7 +201,7 @@ function Overview({ ctx }: { ctx: Ctx }) {
           <Stat label="Paiements réglés" value={`${r.payments.paid_count} · ${money(r.payments.paid_cents)}`} note={`Inclut les règlements déclarés reçus sur place par l’artisan (pas une preuve bancaire). En attente : ${r.payments.pending_count} · échoués : ${r.payments.failed_count} · tentatives échouées : ${r.payments.failed_attempts}`} />
           <Stat label="Règlements au registre" value={`${r.ledger.settled_count} · ${money(r.ledger.settled_cents)}`} note={r.ledger.missing_settlement ? `${r.ledger.missing_settlement} règlement(s) confirmé(s) pas encore inscrit(s) au registre : étape normale après un paiement, le rapprochement les inscrit.` : "Tous les règlements sont inscrits. Le registre peut inclure des déclarations sur place, qui ne sont pas une preuve bancaire."} />
           <Stat label="Écarts de montant" value={String(r.ledger.amount_mismatches)} note="Écritures dont le montant ou la devise diffère du paiement." />
-          <Stat label="Commission estimée (non prélevée)" value={`${r.ledger.commission_estimated_count} · ${money(r.ledger.commission_estimated_cents)}`} note={r.commission_setting ? `Au taux ${(r.commission_setting.bps / 100).toFixed(2)} % (version ${r.commission_setting.version}).` : COMMISSION_NOT_CONFIGURED} />
+          <Stat label="Commission estimée (non prélevée)" value={`${estimate.count} · ${money(estimate.cents)}`} note={`${r.commission_setting ? `Au taux ${(r.commission_setting.bps / 100).toFixed(2)} % (version ${r.commission_setting.version}).` : COMMISSION_NOT_CONFIGURED}${estimate.superseded ? ` Hors ${estimate.superseded.count} estimation(s) du registre (${money(estimate.superseded.cents)}) portant sur des règlements dont la commission est déjà prélevée et confirmée.` : ""}`} />
           <Stat label="Commission prélevée (confirmée)" value={`${r.ledger.commission_withheld_count} · ${money(r.ledger.commission_withheld_cents)}`} note="Connue uniquement par événement fournisseur confirmé." />
           <Stat label="Remboursements confirmés" value={`${r.ledger.refund_settled_count} · ${money(r.ledger.refund_settled_cents)}`} />
         </div>

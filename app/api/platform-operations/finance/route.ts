@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { authenticatedClient, assertOrigin, dbError } from "@/lib/supabase/server";
 import { validated } from "@/lib/supabase/validation";
-import { describeAccess, failed, invalidQuery, objectResult, ok, requireScope } from "@/lib/features/platform-operations/http";
+import { describeAccess, failed, invalidQuery, objectResult, ok, requireScope, supersededEstimates } from "@/lib/features/platform-operations/http";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 const schema = z.object({ action: z.literal("reconcile"), limit: z.number().int().min(1).max(500).optional() }).strict();
@@ -9,9 +9,10 @@ export async function GET() {
   try {
     const { db } = await authenticatedClient();
     await requireScope(db, "finance_read");
-    const [report, access] = await Promise.all([db.rpc("platform_finance_report"), describeAccess(db)]);
+    const [report, access, superseded] = await Promise.all([db.rpc("platform_finance_report"), describeAccess(db), supersededEstimates(db).catch(() => null)]);
     dbError(report.error);
-    return ok({ report: objectResult(report.data, "Le rapport financier est indisponible."), config: access.config });
+    // FIN-06: a commission already withheld is not also shown as « estimated, not withheld ».
+    return ok({ report: { ...objectResult(report.data, "Le rapport financier est indisponible."), commission_estimated_superseded: superseded }, config: access.config });
   } catch (error) { return failed(error); }
 }
 /** The commission rate is never accepted from the browser: the database reads its audited setting. */

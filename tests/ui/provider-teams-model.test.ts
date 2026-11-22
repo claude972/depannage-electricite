@@ -70,6 +70,8 @@ test("matrice des droits (rôle serveur) : propriétaire / coordinateur / techni
     { admin: false, assign: false, invitationsVisible: true },
   ]);
   same(m.activeTechnicians([{ id: TECH, full_name: "T", role: "technician", active: true, version: 1 }, { id: U("1", 6), full_name: "R", role: "technician", active: false, version: 1 }, { id: U("1", 7), full_name: "C", role: "coordinator", active: true, version: 1 }]).map((x) => x.id), [TECH]);
+  // ART-12: same statuses as the server's permissions.can_assign (no assignment offered on a closed dossier).
+  same(["assigned", "quoted", "accepted", "in_progress", "completed", "paid", "cancelled", "requested"].map(m.canAssignStatus), [true, true, true, true, false, false, false, false]);
   const now = Date.parse(AT);
   same([m.futureInstant("", now), m.futureInstant("2026-01-01T09:00", now) === null, typeof m.futureInstant("2027-01-01T10:00", now)], [null, true, "string"]);
 });

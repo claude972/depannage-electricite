@@ -115,6 +115,24 @@ export async function listRows<T>(db: Database, request: Request, spec: ListSpec
   }
   return { rows, page: { limit, total: count(total.count), has_more: hasMore, next_cursor: next }, filters };
 }
+/** FIN-06: the reconciliation also writes an estimate for a payment whose commission is already
+ *  withheld (confirmed by the provider). Those estimates are not an outstanding « non prélevée »
+ *  amount: they are totalled here so the report can leave them out. Read under the caller's RLS;
+ *  null whenever either list is unreadable or incomplete (the raw totals are then kept). */
+export async function supersededEstimates(db: Database): Promise<{ count: number; cents: number } | null> {
+  const read = (kind: "commission_estimated" | "commission_withheld") =>
+    db.from("platform_ledger_entries").select("payment_id,amount_cents", { count: "exact" }).eq("entry_kind", kind).limit(1000);
+  const [estimated, withheld] = await Promise.all([read("commission_estimated"), read("commission_withheld")]);
+  for (const list of [estimated, withheld]) if (list.error || !Array.isArray(list.data) || list.count !== list.data.length) return null;
+  const confirmed = new Set((withheld.data as { payment_id: unknown }[]).map((entry) => entry.payment_id));
+  let count = 0, cents = 0;
+  for (const entry of estimated.data as { payment_id: unknown; amount_cents: unknown }[]) {
+    if (!confirmed.has(entry.payment_id)) continue;
+    if (typeof entry.amount_cents !== "number" || !Number.isSafeInteger(entry.amount_cents) || entry.amount_cents < 0) return null;
+    count += 1; cents += entry.amount_cents;
+  }
+  return Number.isSafeInteger(cents) ? { count, cents } : null;
+}
 export function objectResult(data: unknown, message: string): Record<string, unknown> {
   if (!data || typeof data !== "object" || Array.isArray(data)) throw new ApiError(503, message);
   return data as Record<string, unknown>;

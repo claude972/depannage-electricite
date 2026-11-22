@@ -43,4 +43,12 @@ export function refundExecutionMessage(provider: Pick<FinanceConfig["payment_pro
       : `l’exécution des remboursements n’est pas activée pour votre accès sur ce service (fournisseur de paiement configuré${provider.mode === "test" ? ", mode test" : ""})`;
   return `Exécution indisponible : ${reason}. Une demande approuvée n’est pas un remboursement effectué.`;
 }
+/** FIN-06: the « estimated, not withheld » total excludes the estimates of payments whose
+ *  commission is already withheld (confirmed) — that commission is counted once, as withheld.
+ *  An absent or inconsistent correction leaves the server totals untouched. */
+export function outstandingEstimate(report: { ledger: { commission_estimated_count: number; commission_estimated_cents: number }; commission_estimated_superseded?: { count: number; cents: number } | null }): { count: number; cents: number; superseded: { count: number; cents: number } | null } {
+  const { commission_estimated_count: count, commission_estimated_cents: cents } = report.ledger, s = report.commission_estimated_superseded;
+  const valid = !!s && Number.isSafeInteger(s.count) && Number.isSafeInteger(s.cents) && s.count > 0 && s.cents >= 0 && s.count <= count && s.cents <= cents;
+  return valid ? { count: count - s.count, cents: cents - s.cents, superseded: { count: s.count, cents: s.cents } } : { count, cents, superseded: null };
+}
 export const COMMISSION_NOT_CONFIGURED = "Taux de commission non configuré : aucune estimation n’est calculée.";

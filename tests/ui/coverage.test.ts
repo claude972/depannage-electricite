@@ -235,4 +235,9 @@ test("CLI-03 : avis « hors zone publiée » seulement sur une réponse not_cove
   assert.match(text, /97217 ne figure pas dans la zone publiée/);
   assert.match(text, /reste enregistrée/);
   assert.doesNotMatch(text, /refus|impossible|bloqu/i);
+  // ART-02: artisan wording of the same fact — informative, the declared code is kept.
+  const artisan = m.artisanNotCoveredNotice("75001");
+  assert.match(artisan, /75001 ne figure pas dans la zone publiée/);
+  assert.match(artisan, /Vous pouvez le conserver/);
+  assert.doesNotMatch(artisan, /refus|impossible|bloqu/i);
 });

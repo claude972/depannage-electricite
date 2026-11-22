@@ -227,3 +227,17 @@ test("review contestation explains invalid reason lengths in French before any w
     assert.equal(h.calls.length,0,"invalid input never reaches a database operation");
   }
 });
+test("FIN-06: the finance report totals the estimates already superseded by a confirmed withheld commission", async () => {
+  const entry = (n: number, payment: number, entry_kind: string, amount_cents: number): Row => ({ id: uuid(n, "80000000"), payment_id: uuid(payment, "70000000"), entry_kind, amount_cents });
+  const ledger = [entry(1, 1, "commission_withheld", 1845), entry(2, 1, "commission_estimated", 1085), entry(3, 2, "commission_withheld", 2213), entry(4, 2, "commission_estimated", 1302), entry(5, 3, "commission_estimated", 1085), entry(6, 3, "payment_settled", 10850)];
+  const h = harness("finRead", {}, undefined, { platform_ledger_entries: ledger });
+  const response = await h.route("finance").GET(h.request("/finance"));
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).report.commission_estimated_superseded, { count: 2, cents: 2387 });
+  const none = harness("finRead");
+  assert.deepEqual((await (await none.route("finance").GET(none.request("/finance"))).json()).report.commission_estimated_superseded, { count: 0, cents: 0 });
+  // An unusable amount never yields a partial correction.
+  const broken = harness("finRead", {}, undefined, { platform_ledger_entries: [entry(1, 1, "commission_withheld", 1845), entry(2, 1, "commission_estimated", -1)] });
+  assert.equal((await (await broken.route("finance").GET(broken.request("/finance"))).json()).report.commission_estimated_superseded, null);
+  assert.equal((await harness("moderator").route("finance").GET(harness("moderator").request("/finance"))).status, 403);
+});

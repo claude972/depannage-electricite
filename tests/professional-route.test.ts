@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { fakeServerHelpers, loadModule } from "./documents/harness";
+import { ApiError, fakeServerHelpers, loadModule } from "./documents/harness";
 
 const site = "2346e5ab-4f0a-445f-b209-a21c00f86ab2";
 const approval = "6f716c08-d6ef-4437-a1db-5d63f9336463";
@@ -44,4 +44,34 @@ test("ENT-03 : un site archivé refuse budget, échéance et règle d’approbat
   const active = load(null);
   for (const command of commands) assert.equal((await active.POST(post(command))).status, 200);
   assert.deepEqual(active.calls, ["set_site_budget", "save_compliance", "set_approval_rule"]);
+});
+
+test("M1 : la session mobile (Bearer) est transmise à l’authentification vérifiée ; l’origine reste contrôlée", async () => {
+  const body = { action: "decide_approval", approval_id: approval, decision: "approved" };
+  for (const verb of ["GET", "POST"] as const)
+    for (const header of [undefined, "Bearer head.payload.signature"]) {
+      let received: Request | undefined;
+      const helpers = { ...fakeServerHelpers({ db: {} }), authenticatedClient: async (request: Request) => { received = request; throw new ApiError(401, "Session requise"); } };
+      const handlers = loadModule("app/api/professional/route.ts", { "@/lib/supabase/server": helpers });
+      const request = new Request("https://app.test/api/professional", { method: verb, headers: header ? { Authorization: header } : undefined, body: verb === "POST" ? JSON.stringify(body) : undefined });
+      const response = await (handlers[verb] as (request: Request) => Promise<Response>)(request);
+      assert.equal(received, request, `${verb} ${header ?? "cookie"}`);
+      assert.equal(response.status, 401);
+    }
+  // A native Bearer request (no Origin) decides the approval; a cross-origin browser request is
+  // refused before authentication, with or without a Bearer.
+  const calls: string[] = [];
+  let authenticated = 0;
+  const helpers = {
+    ...fakeServerHelpers({ db: {} }),
+    authenticatedClient: async () => { authenticated++; return { user: { id: "10000000-0000-4000-8000-000000000009" }, db: { rpc: async (name: string) => { calls.push(name); return { error: null, data: null }; } } }; },
+  };
+  const POST = loadModule("app/api/professional/route.ts", { "@/lib/supabase/server": helpers }).POST as (request: Request) => Promise<Response>;
+  const send = (headers: Record<string, string>) => POST(new Request("https://app.test/api/professional", { method: "POST", headers, body: JSON.stringify(body) }));
+  assert.equal((await send({ Authorization: "Bearer head.payload.signature" })).status, 200);
+  assert.deepEqual(calls, ["decide_approval"]);
+  for (const headers of [{ Origin: "https://evil.example" }, { Origin: "https://evil.example", Authorization: "Bearer head.payload.signature" }] as Record<string, string>[])
+    assert.equal((await send(headers)).status, 403);
+  assert.equal(authenticated, 1);
+  assert.deepEqual(calls, ["decide_approval"]);
 });

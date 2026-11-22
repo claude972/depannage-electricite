@@ -56,6 +56,9 @@ export type FinanceReport = {
   invoices: { invoice_count: number; credit_note_count: number };
   commission_setting: { bps: number; version: number; updated_at: string } | null;
   currency: "eur"; generated_at: string;
+  /** FIN-06 (added by the route): estimates written for payments whose commission is already
+   *  withheld and confirmed. Null or absent = not determined (the raw totals are then shown). */
+  commission_estimated_superseded?: { count: number; cents: number } | null;
 };
 export type ReconcileResult = { settled_added: number; commission_added: number; commission_bps: number | null; setting_version: number | null; remaining_unsettled: number };
 

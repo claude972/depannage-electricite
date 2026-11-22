@@ -376,7 +376,8 @@ function TicketRow({ ticket: t, queue, onOpen }: { ticket: SupportTicket; queue:
       </span>
       <span className={styles.rowMeta}>
         <Tag tone={meta.tone}>{meta.label}</Tag>
-        {queue === "all" && <span>Demandeur {shortId(t.creator_id)}</span>}
+        {/* An account reference, never the « INT- » form reserved to dossiers. */}
+        {queue === "all" && <span>Demandeur : compte {t.creator_id.slice(0, 6).toUpperCase()}</span>}
         {t.intervention_id && <span>Dossier {shortId(t.intervention_id)}</span>}
         <span>Dernière activité : {dateTime(t.last_message_at)}</span>
       </span>
