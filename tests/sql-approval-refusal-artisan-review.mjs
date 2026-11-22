@@ -51,7 +51,7 @@ try {
   let artisan = await inbox(ids.artisan);
   eq(artisan.length, 1, "une notification pour l’artisan");
   eq([artisan[0].title, artisan[0].body, artisan[0].intervention_id, artisan[0].site_id, artisan[0].actor_id], ["Devis non approuvé par le client", `L’organisation cliente n’a pas approuvé le devis du dossier ${A.ref}.`, A.job, null, ids.owner], "titre, texte, dossier ; aucun rattachement au site privé");
-  eq(artisan[0].payload, { reference: A.ref, quote_id: A.quote }, "données de navigation seulement");
+  eq(artisan[0].payload, { subject: "quote_not_approved", reference: A.ref, quote_id: A.quote }, "données de navigation seulement");
   eq(JSON.stringify(artisan[0]).includes("Note interne"), false, "la note interne n’est jamais transmise");
   eq(await one("select status v from public.quotes where id=$1", [A.quote]), "sent", "l’état du devis n’est pas modifié par la notification");
 
@@ -77,7 +77,7 @@ try {
   await q("update public.advanced_approval_workflows set state='rejected',version=4 where quote_id=$1", [C.quote]);
   artisan = await inbox(ids.artisan);
   eq(artisan.length, 2, "refus du circuit avancé : une notification");
-  eq([artisan[1].title, artisan[1].intervention_id, artisan[1].payload], ["Devis non approuvé par le client", C.job, { reference: C.ref, quote_id: C.quote }], "même message, bon dossier");
+  eq([artisan[1].title, artisan[1].intervention_id, artisan[1].payload], ["Devis non approuvé par le client", C.job, { subject: "quote_not_approved", reference: C.ref, quote_id: C.quote }], "même message, bon dossier");
   await q("update public.advanced_approval_workflows set version=5 where quote_id=$1", [C.quote]);
   eq((await inbox(ids.artisan)).length, 2, "aucun doublon");
 

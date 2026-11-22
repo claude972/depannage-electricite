@@ -12,7 +12,8 @@
 --
 -- The existing kind approval_decided is reused (no constraint, preference or client change). The
 -- notification is attached to the dossier only, never to the site, and carries neither the internal
--- note nor the names of the deciders. The quote and the dossier are not modified. In-app only.
+-- note nor the names of the deciders. payload.subject = « quote_not_approved » lets the notification
+-- centre label it for the artisan (the kind label alone speaks of an internal decision). The quote and the dossier are not modified. In-app only.
 
 create function public.notify_artisan_quote_not_approved(p_quote_id uuid,p_dedupe text) returns void language plpgsql security definer set search_path='' as $$
 #variable_conflict use_variable
@@ -22,7 +23,7 @@ begin
  if not found then return; end if;
  ref=public.intervention_reference(q.intervention_id);
  perform public.notify(q.artisan_id,'approval_decided','Devis non approuvé par le client','L’organisation cliente n’a pas approuvé le devis du dossier '||ref||'.',
-  p_dedupe,q.intervention_id,null,null,auth.uid(),jsonb_build_object('reference',ref,'quote_id',q.id));
+  p_dedupe,q.intervention_id,null,null,auth.uid(),jsonb_build_object('subject','quote_not_approved','reference',ref,'quote_id',q.id));
 end; $$;
 revoke execute on function public.notify_artisan_quote_not_approved(uuid,text) from public,anon,authenticated,service_role;
 

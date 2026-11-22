@@ -38,6 +38,9 @@ const AMENDMENT_EVENT_LABELS: Record<string, string> = {
 export function notificationLabel(n: { kind: NotificationKind; payload?: Record<string, unknown> | null }): string {
   const payload = n.payload;
   if (payload && payload.subject === "quote_amendment" && typeof payload.event === "string" && Object.hasOwn(AMENDMENT_EVENT_LABELS, payload.event)) return AMENDMENT_EVENT_LABELS[payload.event];
+  // ENT-12 — the artisan is told that the client organisation did not approve the quote: stored under
+  // approval_decided, labelled for what it means to its recipient.
+  if (payload && payload.subject === "quote_not_approved" && n.kind === "approval_decided") return "Devis non approuvé par le client";
   return KIND_LABELS[n.kind] ?? "Notification";
 }
 /** Label of a kind in the PREFERENCES list: muting a quote kind also mutes the amendment events
@@ -46,6 +49,7 @@ const PREFERENCE_OVERRIDES: Partial<Record<NotificationKind, string>> = {
   quote_received: "Devis reçu, avenant proposé ou retiré",
   quote_rejected: "Devis ou avenant refusé",
   quote_accepted: "Devis ou avenant accepté",
+  approval_decided: "Décision d’approbation interne, ou devis non approuvé par le client",
 };
 export function preferenceLabel(kind: NotificationKind): string {
   return PREFERENCE_OVERRIDES[kind] ?? KIND_LABELS[kind];
@@ -84,7 +88,7 @@ const REQUESTER: NotificationKind[] = ["mission_assigned", "quote_received", "wo
 const ROLE_KINDS: Record<string, NotificationKind[]> = {
   client: REQUESTER,
   manager: [...REQUESTER, "compliance_reminder", "approval_requested", "approval_decided", "member_joined", "membership_removed"],
-  artisan: ["mission_received", "mission_reassigned", "quote_rejected", "quote_accepted", "payment_confirmed", "mission_cancelled", "appointment_saved", "appointment_reminder", "credential_reminder", "message_received", "account_approved", "account_suspended", "support_replied", "support_status_changed"],
+  artisan: ["mission_received", "mission_reassigned", "quote_rejected", "quote_accepted", "approval_decided", "payment_confirmed", "mission_cancelled", "appointment_saved", "appointment_reminder", "credential_reminder", "message_received", "account_approved", "account_suspended", "support_replied", "support_status_changed"],
 };
 export function kindsForRole(role: unknown): NotificationKind[] {
   const allowed = typeof role === "string" && Object.hasOwn(ROLE_KINDS, role) ? new Set(ROLE_KINDS[role]) : null;
