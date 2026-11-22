@@ -9,7 +9,7 @@ import { paymentReturn, paymentReturnKey, paymentReturnStatus, recentPaymentRetu
 export function PaymentReturnStatus({ id, actor, token, quote, fromLink, onPaid }: {
   id: string; actor: string; token: string; quote: string; fromLink: boolean; onPaid: () => void;
 }) {
-  const [visible, setVisible] = useState(fromLink);
+  const [visible, setVisible] = useState(fromLink), [dismissed, setDismissed] = useState(false);
   const [status, setStatus] = useState<'pending' | 'paid' | 'failed'>('pending');
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0), [active, setActive] = useState(AppState.currentState === 'active');
@@ -61,10 +61,19 @@ export function PaymentReturnStatus({ id, actor, token, quote, fromLink, onPaid 
     void check();
     return () => { controller.abort(); clearTimeout(timer); };
   }, [visible, focused, active, attempt, id, key, quote, token]);
-  return visible ? <Card>
+  function dismiss() {
+    setDismissed(true); setVisible(false);
+    // Only this dossier's marker is removed, so the next launch no longer reopens this card.
+    void deviceDrafts.read(key, paymentReturn).then(saved => {
+      if (saved?.dossier === id && saved.quote === quote) return deviceDrafts.clear(key);
+    }).catch(() => {});
+  }
+  return visible && !dismissed ? <Card>
     <Copy kind="subtitle">Retour du paiement</Copy>
     <Copy>{status === 'paid' ? 'Règlement confirmé.' : status === 'failed' ? 'Règlement non abouti.' : 'Règlement en attente de confirmation.'}</Copy>
     {error && <Copy kind="error">{error}</Copy>}
     {status !== 'paid' && <Action label="Vérifier le règlement" secondary onPress={() => setAttempt(value => value + 1)} />}
+    {status !== 'paid' && <Copy kind="muted">Sans paiement engagé sur Stripe, vous pouvez fermer ce message : il ne confirme ni n’annule aucun règlement.</Copy>}
+    <Action label="Fermer ce message" secondary onPress={dismiss} />
   </Card> : null;
 }

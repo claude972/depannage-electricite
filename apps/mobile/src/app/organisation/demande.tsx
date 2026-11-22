@@ -9,10 +9,11 @@ import { Action, BookingProgress, Card, Copy, Field, ReadState, Screen, usePalet
 import { api, ApiFailure, useResource } from '@/lib/api';
 import { categories, creation, euros, prices, requestFields, type Category } from '@/lib/contracts';
 import { siteSettings } from '@/lib/management-contracts';
-import { enterpriseDraftKey, enterpriseRequestCommand, enterpriseRequestDraft, enterpriseRequestForm, type EnterpriseRequestIntent } from '@/lib/enterprise-request-draft';
+import { enterpriseDraftKey, enterpriseRequestCommand, enterpriseRequestDraft, enterpriseRequestForm, siteAddressParts, type EnterpriseRequestIntent } from '@/lib/enterprise-request-draft';
 import { useDeviceDraft } from '@/lib/use-device-draft';
 import { useSession } from '@/lib/session';
 import { orderReference } from '../../../../../shared/order-reference';
+import { URGENCY_NOTICE } from '../../../../../shared/commercial-facts';
 import { requestDescription, REQUEST_DESCRIPTION_LABEL } from '../../../../../shared/request-details';
 
 export default function EnterpriseRequest() {
@@ -32,10 +33,18 @@ function Editor({ actor, token, site }: { actor: string; token: string; site: z.
   const palette = usePalette();
   const router = useRouter(), catalogue = useResource('/api/public/indicative-prices', prices);
   const draft = useDeviceDraft(enterpriseDraftKey(actor, site.organization_id, site.id), enterpriseRequestDraft, { intent: null, confirmedId: null });
-  const form = draft.value?.form ?? { category: null, description: '', address: site.address, postal: '', city: '', urgency: null, step: 0 };
+  // The site's own address pre-fills the request; a draft saved before this pre-fill is completed too.
+  const known = siteAddressParts(site.address);
+  type Form = z.infer<typeof enterpriseRequestForm>;
+  const completed = (saved: Form | undefined): Form => saved
+    ? (known.postal && !saved.postal && !saved.city && saved.address === site.address ? { ...saved, ...known } : saved)
+    : { category: null, description: '', ...known, urgency: null, step: 0 };
+  const form = completed(draft.value?.form);
+  const fromSite = Boolean(known.postal) && form.address === known.address && form.postal === known.postal && form.city === known.city;
+  const [editAddress, setEditAddress] = useState(false);
   const { category, description, address, postal, city, urgency, step } = form;
   function editForm(patch: Partial<z.infer<typeof enterpriseRequestForm>>) {
-    draft.edit(current => ({ ...current, form: { ...(current.form ?? form), ...patch } }));
+    draft.edit(current => ({ ...current, form: { ...completed(current.form), ...patch } }));
   }
   const [error, setError] = useState(''), [busy, setBusy] = useState(false);
   const lock = useRef(false), controller = useRef<AbortController | null>(null), alive = useRef(true), credential = useRef(token);
@@ -99,10 +108,11 @@ function Editor({ actor, token, site }: { actor: string; token: string; site: z.
     <Copy kind="muted">Le bon point de départ pour résoudre votre problème électrique.</Copy>
     <BookingProgress columns labels={['Le problème', 'Le lieu et le besoin', 'Le récapitulatif']} index={progress} />
     {progress === 0 && <Card><Copy kind="subtitle">{category ? categories[category] : 'Choisir le problème'}</Copy><EnterpriseProblemPicker value={category} onChange={value => editForm({ category: value })} /><Field label={REQUEST_DESCRIPTION_LABEL} value={description} onChangeText={value => editForm({ description: value })} multiline maxLength={4000} /></Card>}
-    {progress === 1 && <Card><Copy kind="subtitle">Où faut-il intervenir ?</Copy><Copy>{site.name}</Copy><Field label="Adresse d’intervention" value={address} onChangeText={value => editForm({ address: value })} maxLength={500} /><Field label="Code postal" value={postal} onChangeText={value => editForm({ postal: value })} keyboardType="number-pad" maxLength={5} /><Field label="Commune" value={city} onChangeText={value => editForm({ city: value })} maxLength={120} /><Copy kind="subtitle">Quel est votre besoin ?</Copy><EnterpriseUrgencyPicker value={urgency} onChange={value => editForm({ urgency: value })} /><Copy kind="muted">La disponibilité et les délais seront précisés après prise en charge.</Copy></Card>}
+    {progress === 1 && <Card><Copy kind="subtitle">Où faut-il intervenir ?</Copy><Copy>{site.name}</Copy>{fromSite && !editAddress ? <><Copy selectable>{address}, {postal} {city}</Copy><Copy kind="muted">Adresse enregistrée pour ce site.</Copy><Action secondary label="Intervenir à une autre adresse" onPress={() => setEditAddress(true)} /></> : <><Field label="Adresse d’intervention" value={address} onChangeText={value => editForm({ address: value })} maxLength={500} /><Field label="Code postal" value={postal} onChangeText={value => editForm({ postal: value })} keyboardType="number-pad" maxLength={5} /><Field label="Commune" value={city} onChangeText={value => editForm({ city: value })} maxLength={120} /></>}<Copy kind="subtitle">Quel est votre besoin ?</Copy><EnterpriseUrgencyPicker value={urgency} onChange={value => editForm({ urgency: value })} />{urgency === 'urgent' && <Copy kind="muted">{URGENCY_NOTICE}</Copy>}<Copy kind="muted">La disponibilité et les délais seront précisés après prise en charge.</Copy></Card>}
     {progress === 2 && <Card><Copy kind="subtitle">Votre demande, en clair.</Copy><Copy>{site.name} · {chosen && categories[chosen]}</Copy><Copy>{intent?.payload.description ?? fields.description}</Copy><Copy>{intent?.payload.address ?? address}, {intent?.payload.postal_code ?? postal} {intent?.payload.city ?? city}</Copy><Copy>{(intent?.payload.urgency ?? urgency) === 'urgent' ? 'Urgent' : 'À planifier'}</Copy>
       {(!intent || intent.reviewRequired) && <ReadState loading={catalogue.loading} error={catalogue.error} onRetry={catalogue.reload} />}
       {range && <View style={{ padding: 19, gap: 8, borderWidth: 1, borderColor: palette.border, borderRadius: 8, backgroundColor: palette.subtle }}><Copy kind="muted">Estimation indicative</Copy><Text style={{ fontFamily: 'JakartaMedium', fontSize: 24, lineHeight: 40, color: palette.text }}>{euros(range.min_cents)} – {euros(range.max_cents)}</Text><Copy kind="muted">Le prix final et les taxes applicables seront précisés dans un devis à accepter avant intervention.</Copy></View>}
+      {(intent?.payload.urgency ?? urgency) === 'urgent' && <Copy>{URGENCY_NOTICE}</Copy>}
       {intent?.reviewRequired && <><Copy>Le tarif a changé. Vérifiez la nouvelle estimation avant de confirmer.</Copy><Action secondary label="Actualiser l’estimation" disabled={busy || catalogue.loading} onPress={catalogue.reload} /></>}
       {intent && !intent.reviewRequired && <Copy>Une tentative est enregistrée. Réessayez pour retrouver son résultat sans créer une autre demande.</Copy>}
     </Card>}

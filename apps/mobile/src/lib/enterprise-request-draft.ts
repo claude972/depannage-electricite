@@ -12,6 +12,17 @@ export const enterpriseRequestIntent = z.object({
 export const enterpriseRequestForm = z.object({ category: category.nullable(), description: z.string().max(4000), address: z.string().max(500), postal: z.string().max(5), city: z.string().max(120), urgency: z.enum(['urgent','scheduled']).nullable(), step: z.number().int().min(0).max(2) });
 export const enterpriseRequestDraft = z.object({ form: enterpriseRequestForm.optional(), intent: enterpriseRequestIntent.nullable(), confirmedId: z.uuid().nullable() }).strict();
 export type EnterpriseRequestIntent = z.infer<typeof enterpriseRequestIntent>;
+/**
+ * Sépare « rue, 97240 Commune » en champs de demande. Sans code postal reconnaissable (ou avec une
+ * voie trop courte), l’adresse du site est reprise telle quelle et rien n’est déduit.
+ */
+export function siteAddressParts(address: string): { address: string; postal: string; city: string } {
+  const text = address.trim();
+  const match = /^(.*?)[\s,;–-]*\b(\d{5})\s+([^,;]+?)\s*$/.exec(text);
+  const street = match?.[1].trim().replace(/[\s,;–-]+$/, '') ?? '';
+  if (!match || street.length < 5) return { address: text, postal: '', city: '' };
+  return { address: street.slice(0, 500), postal: match[2], city: match[3].trim().slice(0, 120) };
+}
 export function enterpriseDraftKey(actor: string, organization: string, site: string) {
   return ['enterprise-request-v1', ...[actor, organization, site].map(value => z.uuid().parse(value))].join('.');
 }

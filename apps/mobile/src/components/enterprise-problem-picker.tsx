@@ -11,7 +11,7 @@ const icons = {
 };
 const labels = { ...categories, diagnostic: 'Recherche de panne' };
 const descriptions: Record<Category, string> = {
-  outage: 'Tout ou partie du logement', panel: 'Disjoncteur, fusible ou tableau',
+  outage: 'Tout ou partie du site', panel: 'Disjoncteur, fusible ou tableau',
   socket: 'Une prise ou un point de commande', lighting: 'Luminaire ou circuit d’éclairage',
   diagnostic: 'L’origine du problème est inconnue',
 };

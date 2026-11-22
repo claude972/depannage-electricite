@@ -24,6 +24,7 @@ import { claimEmailBooking, clearEmailBooking, discardUnclaimedEmailBooking, ema
 import { useWorkspace } from '@/lib/use-workspace';
 import { REQUEST_DESCRIPTION_LABEL, requestDescription } from '../../../../shared/request-details';
 import { orderReference } from '../../../../shared/order-reference';
+import { URGENCY_NOTICE } from '../../../../shared/commercial-facts';
 
 const options = locationCapability.extend({ payment_methods: z.array(z.object({ id: z.string(), available: z.boolean() })) });
 type BookingIdentity = { email: string; phone?: never } | { email?: never; phone: string };
@@ -219,14 +220,16 @@ function BookingFields({ service, addressFirst, initialUrgency, initialCity, own
     {chosen && <Card>
       <Copy kind="subtitle">{chosen.title}</Copy>
       {range && <Copy kind="muted">Estimation indicative : {euros(range.min_cents)} à {euros(range.max_cents)}</Copy>}
+      {urgency === 'urgent' && step !== 'urgency' && <Copy kind="muted">{URGENCY_NOTICE}</Copy>}
     </Card>}
 
     {step === 'urgency' && <>
       <ReadState loading={catalogue.loading} error={catalogue.error} onRetry={catalogue.reload} />
       {chosen ? <Card>
         <Copy kind="subtitle">Est-ce urgent ?</Copy>
-        <Action label="Oui, c’est urgent" secondary={urgency !== 'urgent'} onPress={() => setUrgency('urgent')} />
-        <Action label="Non, je peux planifier" secondary={urgency !== 'scheduled'} onPress={() => setUrgency('scheduled')} />
+        <Action label="Oui, c’est urgent" selected={urgency === 'urgent'} secondary={urgency !== 'urgent'} onPress={() => setUrgency('urgent')} />
+        <Action label="Non, je peux planifier" selected={urgency === 'scheduled'} secondary={urgency !== 'scheduled'} onPress={() => setUrgency('scheduled')} />
+        {urgency === 'urgent' && <Copy kind="muted">{URGENCY_NOTICE}</Copy>}
         <Field label={REQUEST_DESCRIPTION_LABEL} value={description} onChangeText={setDescription} multiline maxLength={4000}
           returnKeyType="done" submitBehavior="blurAndSubmit" />
         <BookingPhotoPicker photo={photo} preservedPhotoId={savedPhoto?.fileId} onChange={setPhoto} onPicking={setPicking} />
@@ -440,6 +443,7 @@ function ConfirmBooking({ actor, identity, token, service, addressFirst, initial
       {request.input.location?.access_details && <Copy>{request.input.location.access_details}</Copy>}
       {(!intent || intent.reviewRequired) && <ReadState loading={price.loading} error={price.error} onRetry={price.reload} />}
       {range && <Copy>Estimation indicative : {euros(range.min_cents)} à {euros(range.max_cents)}.</Copy>}
+      {request.input.urgency === 'urgent' && <Copy>{URGENCY_NOTICE}</Copy>}
     </Card>
     <Card>
       <Copy kind="subtitle">{review ? "Récapitulatif" : "Choisir le règlement"}</Copy>

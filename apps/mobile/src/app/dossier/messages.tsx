@@ -5,7 +5,7 @@ import { randomUUID } from 'expo-crypto';
 import { z } from 'zod';
 import { Action, Card, Copy, Field, ReadState, Screen } from '@/components/ui';
 import { api, useResource } from '@/lib/api';
-import { history, sent, timestamp } from '@/lib/contracts';
+import { history, participantsView, sent, timestamp } from '@/lib/contracts';
 import { useSession } from '@/lib/session';
 
 export default function Conversation() {
@@ -34,6 +34,15 @@ function ConversationThread({id,token,profileId}:{id:string;token:string;profile
   },[]);
   // Keep the draft and current page stable; only the newest page follows arrivals.
   const state=useResource(path,history,token,profileId,focused&&active&&!cursor?5000:0);
+  // Identité des participants (client, artisan attribué) ; sans elle le libellé générique reste affiché.
+  const people=useResource('/api/interventions/'+id+'/operations',participantsView,token,profileId).data?.participants??[];
+  function author(authorId:string){
+    if(authorId===profileId)return 'VOUS';
+    const person=people.find(item=>item.id===authorId), name=person?.full_name?.trim();
+    if(!person||!name)return 'INTERLOCUTEUR';
+    return (person.role==='artisan'?'Artisan · ':person.role==='client'?'Client · ':'')+name;
+  }
+  const other=people.some(item=>item.id===profileId)?people.find(item=>item.id!==profileId&&item.full_name?.trim()):undefined;
   async function send(){
     if(!token||!id||!body.trim()||lock.current)return;
     const text=body.trim();
@@ -49,13 +58,14 @@ function ConversationThread({id,token,profileId}:{id:string;token:string;profile
   }
   return <Screen onRefresh={state.reload}>
     <Copy kind="title">Conversation</Copy>
+    {other&&<Copy kind="muted">{other.role==='artisan'?'Avec votre artisan · ':other.role==='client'?'Avec le client · ':'Avec '}{other.full_name!.trim()}</Copy>}
     <ReadState loading={state.loading} error={state.error} onRetry={state.reload}/>
     {state.data&&<>
       {cursor&&<Action secondary label="Revenir aux messages récents" onPress={()=>setCursor(null)}/>}
       {state.data.page.next_cursor&&<Action secondary label="Voir les messages plus anciens" onPress={()=>setCursor(state.data?.page.next_cursor??null)}/>}
       {state.data.messages.length===0&&<Copy kind="muted">Aucun message.</Copy>}
       {[...state.data.messages].reverse().map(item=><Card key={item.id}>
-        <Copy kind="label">{item.author_id===profileId?'VOUS':'INTERLOCUTEUR'}</Copy>
+        <Copy kind="label">{author(item.author_id)}</Copy>
         <Copy>{item.body}</Copy>
         {item.attachment_id&&<Copy kind="muted">Pièce jointe disponible dans le dossier.</Copy>}
         <Copy kind="muted">{timestamp(item.created_at)}</Copy>

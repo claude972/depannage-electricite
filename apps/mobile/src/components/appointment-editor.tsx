@@ -38,6 +38,7 @@ export function AppointmentEditor({ current, busy, save }: {
   return <Card>
     <Copy kind="subtitle">Rendez-vous</Copy>
     <Copy>{current ? `${timestamp(current.starts_at)} – ${timestamp(current.ends_at)}` : 'Aucun créneau confirmé.'}</Copy>
+    {current?.note && !open && <Copy kind="muted">Note pour le client · {current.note}</Copy>}
     {open ? <>
       <Copy kind="muted">Heure locale des Antilles. Date au format AAAA-MM-JJ.</Copy>
       <Field label="Date de début" value={date} onChangeText={setDate} maxLength={10} editable={!busy} placeholder="AAAA-MM-JJ" />

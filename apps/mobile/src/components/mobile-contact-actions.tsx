@@ -54,8 +54,8 @@ export function MobileContactActions({ phoneHref, inline = false, phoneLabel = S
 export function WhatsAppContactButton() {
   const router=useRouter(),palette=usePalette();
   function open(){
-    if (!whatsappHref) { Alert.alert(SUPPORT_CONTACT.whatsapp.label, SUPPORT_CONTACT.whatsapp.unavailable, [{text:'Fermer',style:'cancel'},{text:'Voir l’aide',onPress:()=>router.push('/aide-mobile')}]); return; }
-    void Linking.openURL(whatsappHref).catch(()=>Alert.alert('WhatsApp','Ce moyen de contact n’a pas pu être ouvert sur cet appareil.'));
+    if (!whatsappHref) { Alert.alert(SUPPORT_CONTACT.whatsapp.label, SUPPORT_CONTACT.whatsapp.unavailable, [{text:'Fermer',style:'cancel'},{text:'Voir l’aide',onPress:()=>router.push('/aide-mobile')}],{cancelable:true}); return; }
+    void Linking.openURL(whatsappHref).catch(()=>Alert.alert('WhatsApp','Ce moyen de contact n’a pas pu être ouvert sur cet appareil.',[{text:'Fermer',style:'cancel'}],{cancelable:true}));
   }
   return <Pressable accessibilityRole="button" accessibilityLabel="WhatsApp" onPress={open}
     style={({pressed})=>[styles.button,styles.whatsapp,{borderColor:palette.border,opacity:pressed?.8:1}]}>

@@ -106,7 +106,11 @@ export function operatorIdentityRows(published: OperatorProfile | null): Row[] {
 export const validatedServiceArea = (published: OperatorProfile | null): string | null =>
   published ? published.service_area ?? null : VALIDATED_OPERATOR.service_area;
 /** Règles tarifaires validées (mêmes libellés que la page Tarifs du Web). */
-export const pricingRuleRows = (): Row[] => PRICING_RULES.map(rule => ({ label: rule.label, value: rule.text }));
+export const pricingRuleRows = (): Row[] => PRICING_RULES.map(rule => ({
+  label: rule.label,
+  // Le texte Web annonce une grille « ci-dessous » ; dans l’application elle se trouve dans le catalogue.
+  value: rule.text.replace('figure ci-dessous.', 'figure dans le catalogue : ouvrez l’onglet Services pour consulter les estimations par prestation.'),
+}));
 export type Channel = Row & { action: string; url: string };
 const mailto = (address: string) => `mailto:${encodeURIComponent(address).replace(/%40/g, '@')}`;
 /** Canaux réellement publiés ; le téléphone est facultatif et n’apparaît que s’il est publié. */

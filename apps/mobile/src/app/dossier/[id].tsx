@@ -1,6 +1,5 @@
 import { useRef, useState } from 'react';
 import { Alert, Linking, Platform, View, type ScrollViewInstance } from 'react-native';
-import { Host, Switch } from '@expo/ui';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { dismissBrowser, openBrowserAsync } from 'expo-web-browser';
 import { z } from 'zod';
@@ -12,10 +11,11 @@ import { AppointmentEditor } from '@/components/appointment-editor';
 import { MissionTracking } from '@/components/mission-tracking';
 import { OfferPhotoConsent } from '@/components/offer-photos';
 import { PaymentReturnStatus } from '@/components/payment-return-status';
+import { LabeledSwitch } from '@/components/labeled-switch';
 import { deviceDrafts } from '@/lib/device-drafts';
 import { paymentReturnKey, withPaymentBrowserReturn } from '@/lib/payment-return';
 import { api, useResource } from '@/lib/api';
-import { categories, creation, detail, euros, link, operations, signature, success, timestamp } from '@/lib/contracts';
+import { categories, creation, detail, euros, link, operations, phoneHref, signature, success, timestamp } from '@/lib/contracts';
 import { dossierAmount, dossierStep, DOSSIER_STEPS, jobStatus, paymentLabel } from '@/lib/job-presentation';
 import { useSession } from '@/lib/session';
 import { supabaseOrigin } from '@/lib/config';
@@ -66,16 +66,23 @@ export default function Dossier() {
   function pay(quoteId:string){
     if(!token||!auth||!id)return;
     void run(async()=>{
-      await deviceDrafts.write(paymentReturnKey(auth.user.id),{dossier:id,quote:quoteId,startedAt:Date.now()});
       const result=await api('/api/payments/checkout',link,{token,method:'POST',body:{quote_id:quoteId,native_test:true}});
       const checkout=new URL(result.url);
       if(checkout.origin!=='https://checkout.stripe.com'||!/(?:^|\/)cs_test_/.test(checkout.pathname)||checkout.username||checkout.password)
         throw Error('L’application de recette accepte uniquement un paiement Stripe de test.');
-      if (Platform.OS === 'ios') {
-        await withPaymentBrowserReturn(id, () => openBrowserAsync(checkout.toString()),
-          onUrl => Linking.addEventListener('url', event => onUrl(event.url)), dismissBrowser);
-      } else {
-        await openBrowserAsync(checkout.toString());
+      // Le repère de retour n’existe qu’une fois la session Stripe obtenue : un refus ne laisse aucune trace.
+      await deviceDrafts.write(paymentReturnKey(auth.user.id),{dossier:id,quote:quoteId,startedAt:Date.now()});
+      try {
+        if (Platform.OS === 'ios') {
+          await withPaymentBrowserReturn(id, () => openBrowserAsync(checkout.toString()),
+            onUrl => Linking.addEventListener('url', event => onUrl(event.url)), dismissBrowser);
+        } else {
+          await openBrowserAsync(checkout.toString());
+        }
+      } catch (issue) {
+        // The checkout page never opened: no return is expected.
+        await deviceDrafts.clear(paymentReturnKey(auth.user.id)).catch(()=>{});
+        throw issue;
       }
       setReturnEpoch(value=>value+1);
     });
@@ -97,11 +104,16 @@ export default function Dossier() {
   const role = artisan ? 'artisan' : owner ? 'client' : 'manager';
   const access = owner || artisan ? data.data?.booking_location : null;
   const report=ops.data?.report;
+  const people=ops.data?.participants??[];
+  // Coordonnées minimales après attribution : l’artisan pour le client, le client pour l’artisan.
+  const counterpart=owner?people.find(person=>person.id===job?.artisan_id):artisan?people.find(person=>person.id===job?.client_id):undefined;
+  const call=(phone:string)=>void Linking.openURL(phoneHref(phone)).catch(()=>setError('Aucune application de cet appareil n’a pu composer le '+phone+'.'));
   const receipt=ops.data?.report_receipt;
   if(!id)return <Screen><Copy kind="error">Dossier introuvable.</Copy></Screen>;
   return <Screen scrollRef={scroll} refreshing={data.loading && Boolean(job)} onRefresh={reload}>
     <ReadState loading={data.loading} error={data.error} onRetry={reload}/>
     {error&&<Copy kind="error">{error}</Copy>}
+    {job&&!router.canGoBack()&&<Action secondary label="Revenir à mon espace" onPress={()=>router.replace('/(espace)/interventions')}/>}
     {job&&<>
       <Copy kind="label">{jobStatus(job.status, role)}</Copy>
       <Copy kind="title">{categories[job.category]}</Copy>
@@ -126,6 +138,11 @@ export default function Dossier() {
         {!owner && !artisan && <Copy>Consultez les informations autorisées du dossier ci-dessous.</Copy>}
       </Card>}
       {owner && accepted && token && auth && <PaymentReturnStatus key={accepted.id+':'+returnEpoch} id={id} actor={auth.user.id} token={token} quote={accepted.id} fromLink={params.retourPaiement==='1'} onPaid={reload} />}
+      {counterpart&&<Card>
+        <Copy kind="subtitle">{owner?'Votre artisan':'Client'}</Copy>
+        <Copy selectable>{counterpart.full_name?.trim()||'Nom non communiqué'}</Copy>
+        {counterpart.phone?.trim()?<Action secondary label={(owner?'Appeler l’artisan · ':'Appeler le client · ')+counterpart.phone.trim()} onPress={()=>call(counterpart.phone!.trim())}/>:<Copy kind="muted">Téléphone non communiqué.</Copy>}
+      </Card>}
       <Copy kind="subtitle">Détails de l’intervention</Copy>
       <Copy>{job.description}</Copy>
       <Copy kind="muted">Estimation initiale indicative · {euros(job.estimate_min_cents)} à {euros(job.estimate_max_cents)}</Copy>
@@ -142,7 +159,7 @@ export default function Dossier() {
         <Action secondary label="Annuler ma demande" disabled={busy} onPress={()=>confirm('Annuler la demande ?', 'Le serveur vérifiera que le dossier peut être annulé.',()=>action({action:'cancel'}))}/>}
 
       <ReadState loading={ops.loading} error={ops.error} onRetry={ops.reload}/>
-      {artisan && ops.data && ['assigned','quoted','accepted'].includes(job.status) ? <AppointmentEditor current={ops.data.appointment} busy={busy} save={operation} /> : ops.data?.appointment&&<Card><Copy kind="subtitle">Rendez-vous</Copy><Copy>{timestamp(ops.data.appointment.starts_at)} – {timestamp(ops.data.appointment.ends_at)}</Copy></Card>}
+      {artisan && ops.data && ['assigned','quoted','accepted'].includes(job.status) ? <AppointmentEditor current={ops.data.appointment} busy={busy} save={operation} /> : ops.data?.appointment&&<Card><Copy kind="subtitle">Rendez-vous</Copy><Copy>{timestamp(ops.data.appointment.starts_at)} – {timestamp(ops.data.appointment.ends_at)}</Copy>{ops.data.appointment.note?.trim()&&<><Copy kind="label">Note de l’artisan</Copy><Copy selectable>{ops.data.appointment.note.trim()}</Copy></>}</Card>}
       <View onLayout={event => { sections.current.quotes = event.nativeEvent.layout.y; }} style={{gap:16}}>
       {artisan&&auth&&job.status==='assigned'&&<QuoteEditor key={quoteDraftKey(auth.user.id,id)} draftKey={quoteDraftKey(auth.user.id,id)} busy={busy} onSend={(lines,tax_rate,onSaved)=>confirm('Envoyer le devis ?', 'Le client pourra examiner le devis et décider avant les travaux.',()=>action({action:'send_quote',lines,tax_rate},onSaved))}/>}
       {data.data?.quotes.status==='error'&&<Copy kind="error">Les devis n’ont pas pu être chargés.</Copy>}
@@ -176,7 +193,7 @@ export default function Dossier() {
         <Copy kind="subtitle">Compte rendu enregistré</Copy><Copy>{report.summary}</Copy><Copy kind="muted">{report.signature_name}</Copy>
         {receipt&&<Copy>Remis et signé par {receipt.signature_name} le {timestamp(receipt.signed_at)}.</Copy>}
         {owner&&['completed','paid'].includes(job.status)&&report.report_revision&&!receipt&&<>
-          <Host matchContents={Platform.OS!=='ios'} style={Platform.OS==='ios'?{width:'100%',height:48}:undefined} ignoreSafeArea={Platform.OS==='ios'?'all':undefined}><Switch label="J’accuse réception du compte rendu" value={ack} onValueChange={setAck}/></Host>
+          <LabeledSwitch label="J’accuse réception du compte rendu" value={ack} onValueChange={setAck}/>
           <Field label="Vos nom et prénom" value={name} onChangeText={setName} maxLength={120}/>
           <Action label="Signer le compte rendu" disabled={busy||!ack||!signature.safeParse(name).success} onPress={()=>operation({action:'sign_report',acknowledged:true,signature_name:name.trim(),report_revision:report.report_revision})}/>
         </>}

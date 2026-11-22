@@ -28,6 +28,17 @@ const geocodes = z.object({ candidates: z.array(z.object({
 })).max(20) });
 
 type Snapshot = z.infer<typeof tracking>;
+/** La boîte de permission met brièvement l’application en retrait : attendre son retour au premier plan. */
+function appActive(timeout = 5000) {
+  if (AppState.currentState === 'active') return Promise.resolve(true);
+  return new Promise<boolean>(resolve => {
+    const subscription = AppState.addEventListener('change', state => {
+      if (state !== 'active') return;
+      clearTimeout(timer); subscription.remove(); resolve(true);
+    });
+    const timer = setTimeout(() => { subscription.remove(); resolve(AppState.currentState === 'active'); }, timeout);
+  });
+}
 
 export function MissionTracking({ id, actor, token, artisan, address }: {
   id: string; actor: string; token: string; artisan: boolean; address: string;
@@ -154,7 +165,7 @@ export function MissionTracking({ id, actor, token, artisan, address }: {
     run(async () => {
       if (!(await Location.requestForegroundPermissionsAsync()).granted)
         throw new Error('La permission de localisation est nécessaire pour partager le trajet.');
-      if (!focus.current || AppState.currentState !== 'active') throw new Error('Revenez sur cet écran pour démarrer le partage.');
+      if (!(await appActive()) || !focus.current) throw new Error('Revenez sur cet écran pour démarrer le partage.');
       foreground.current = true;
       const session = randomUUID();
       const started = await command('start', point.control_version, { session_id: session, consent: true, consent_policy: 'tracking-v1' });

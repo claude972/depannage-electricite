@@ -3,7 +3,7 @@ import { PublicLink, usePublicPortal } from '@/components/mobile-public-content'
 import { useRouter } from 'expo-router';
 import { openBrowserAsync } from 'expo-web-browser';
 import { useState } from 'react';
-import { Linking, Platform, View } from 'react-native';
+import { Keyboard, Linking, Platform, View } from 'react-native';
 import { Action, Card, Copy, Field, Screen } from '@/components/ui';
 import { useResource } from '@/lib/api';
 import { apiOrigin } from '@/lib/config';
@@ -110,6 +110,8 @@ function CoverageCheck({ serviceArea }: { serviceArea: string | null }) {
       return;
     }
     setInvalid(false);
+    // Le clavier numérique n’a pas de touche de validation : le refermer pour laisser voir le résultat.
+    Keyboard.dismiss();
     if (checked === code) read.reload();
     else setChecked(code);
   };

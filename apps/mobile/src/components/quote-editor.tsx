@@ -59,7 +59,7 @@ export function QuoteEditor({ draftKey, busy, onSend }: {
     </Card>)}
     {lines.length < 30 && <Action label="Ajouter une ligne" secondary disabled={disabled} onPress={() => draft.edit(current => ({ ...current, lines: [...current.lines, newLine()] }))} />}
     <Copy>Taux de TVA applicable</Copy>
-    {quoteRates.map(value => <Action key={value} label={`${value.toLocaleString('fr-FR')} %`} secondary={rate !== value} disabled={disabled} onPress={() => draft.edit(current => ({ ...current, rate: value }))} />)}
+    {quoteRates.map(value => <Action key={value} label={`${value.toLocaleString('fr-FR')} %`} selected={rate === value} secondary={rate !== value} disabled={disabled} onPress={() => draft.edit(current => ({ ...current, rate: value }))} />)}
     {draft.pending && <Copy kind="muted">Enregistrement du brouillon…</Copy>}
     {draft.error && <ReadState loading={false} error={draft.error} onRetry={draft.retry} />}
     {error && <Copy kind="error">{error}</Copy>}

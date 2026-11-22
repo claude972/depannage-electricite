@@ -60,7 +60,14 @@ export const detail = z.object({
   payments: list(payment),
   booking_location: bookingLocation.nullish(),
 });
+const participant = z.object({ id, full_name: z.string().nullish(), phone: z.string().nullish(), role: z.string() });
+export type Participant = z.infer<typeof participant>;
+/** Participants réels du dossier (client et artisan attribué) ; une liste illisible est ignorée. */
+export const participants = z.array(participant).nullish().catch(null);
+export const participantsView = z.object({ participants });
+export const phoneHref = (phone: string) => 'tel:' + phone.replace(/[^+\d]/g, '');
 export const operations = z.object({
+  participants,
   travel_stage: z.enum(['planned','en_route','on_site']),
   appointment: z.object({starts_at: z.iso.datetime({ offset: true }), ends_at: z.iso.datetime({ offset: true }), reminder_version: z.number().int().positive(), note: z.string().optional()}).nullable(),
   report_evidence_required: z.boolean(),

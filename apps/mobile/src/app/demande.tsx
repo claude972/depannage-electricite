@@ -19,6 +19,7 @@ import { useSession } from '@/lib/session';
 import { useWorkspace } from '@/lib/use-workspace';
 import { REQUEST_DESCRIPTION_LABEL, requestDescription } from '../../../../shared/request-details';
 import { orderReference } from '../../../../shared/order-reference';
+import { URGENCY_NOTICE } from '../../../../shared/commercial-facts';
 import { normalizeBookingPhone } from '../../../../shared/booking-contact';
 
 export default function RequestForm() {
@@ -170,13 +171,14 @@ function ClientRequest({ actor, token, profile }: { actor: string; token: string
     <BookingProgress labels={['Votre besoin', 'Adresse d’intervention', 'Récapitulatif']} index={progress} />
     {progress === 0 && <Card>
       <Copy kind="subtitle">Type de panne</Copy>
-      {Object.entries(categories).map(([key, label]) => <Action key={key} disabled={disabled} secondary={chosen !== key} label={label} onPress={() => setCategory(key as Category)} />)}
+      {Object.entries(categories).map(([key, label]) => <Action key={key} disabled={disabled} selected={chosen === key} secondary={chosen !== key} label={label} onPress={() => setCategory(key as Category)} />)}
       <Field label={REQUEST_DESCRIPTION_LABEL} value={intent?.payload.description ?? description} onChangeText={setDescription} maxLength={4000} multiline editable={!disabled}
         returnKeyType="done" submitBehavior="blurAndSubmit" />
       <BookingPhotoPicker photo={photo} onChange={setPhoto} onPicking={setPicking} />
       <Copy kind="subtitle">Est-ce urgent ?</Copy>
-      <Action label="Oui, c’est urgent" secondary={shownUrgency !== 'urgent'} disabled={disabled} onPress={() => setUrgency('urgent')} />
-      <Action label="Non, je peux planifier" secondary={shownUrgency !== 'scheduled'} disabled={disabled} onPress={() => setUrgency('scheduled')} />
+      <Action label="Oui, c’est urgent" selected={shownUrgency === 'urgent'} secondary={shownUrgency !== 'urgent'} disabled={disabled} onPress={() => setUrgency('urgent')} />
+      <Action label="Non, je peux planifier" selected={shownUrgency === 'scheduled'} secondary={shownUrgency !== 'scheduled'} disabled={disabled} onPress={() => setUrgency('scheduled')} />
+      {shownUrgency === 'urgent' && <Copy kind="muted">{URGENCY_NOTICE}</Copy>}
     </Card>}
     {progress === 1 && <Card>
       <BookingLocationField value={{ address, postal_code: postal, city }} location={location} disabled={disabled} onChange={(value, nextLocation) => {
@@ -198,6 +200,7 @@ function ClientRequest({ actor, token, profile }: { actor: string; token: string
       {locationBlocked && !bookingOptions.loading && !bookingOptions.error && <Action secondary label="Actualiser les options" onPress={bookingOptions.reload} />}
       {(!intent || intent.reviewRequired) && <ReadState loading={catalogue.loading} error={catalogue.error} onRetry={catalogue.reload} />}
       {range && <Copy>{euros(range.min_cents)} à {euros(range.max_cents)}. Le devis fixe le prix final.</Copy>}
+      {shownUrgency === 'urgent' && <Copy>{URGENCY_NOTICE}</Copy>}
       <Copy>Règlement après l’intervention via DomDépannage. Le paiement en ligne apparaît dans votre suivi lorsqu’il est disponible.</Copy>
       {draft.error && <ReadState loading={false} error={draft.error} onRetry={draft.retry} />}
       {intent && !intent.reviewRequired && <Copy kind="muted">L’envoi reste à confirmer. Le prochain essai réutilise la même référence.</Copy>}

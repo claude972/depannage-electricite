@@ -101,7 +101,7 @@ export default function Profile() {
           disabled={busy || !first.trim() || !last.trim() || first.trim().length + last.trim().length + 1 > 120} />
       </>}
       {section === 'addresses' && <>
-        <Copy>Vos adresses d’intervention sont disponibles dans votre espace sur le site.</Copy>
+        <Copy>Vos adresses d’intervention sont disponibles dans votre espace sur le site. Le site s’ouvre dans le navigateur et vous demandera de vous connecter à nouveau.</Copy>
         <PublicLink label="Ouvrir mon carnet d’adresses" onPress={() => openPortal('/#profile')} />
         {portalError && <Copy kind="error">{portalError}</Copy>}
       </>}
@@ -118,7 +118,8 @@ export default function Profile() {
       {section === 'privacy' && <>
         <Copy>Consultez les informations sur l’utilisation de vos données et les moyens d’exercer vos droits.</Copy>
         <PublicLink label="Consulter la confidentialité" onPress={() => openPortal('/#privacy')} />
-        <PublicLink label="Gérer mes données sur le site" onPress={() => openPortal('/#profile')} />
+        <PublicLink label="Gérer mes données sur le site (connexion requise)" onPress={() => openPortal('/#profile')} />
+        <Copy kind="muted">Le site s’ouvre dans le navigateur : votre session de l’application n’y est pas transmise, vous devrez vous y connecter.</Copy>
         {portalError && <Copy kind="error">{portalError}</Copy>}
       </>}
     </AppSheet>
