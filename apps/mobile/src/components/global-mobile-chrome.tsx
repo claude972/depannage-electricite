@@ -13,7 +13,10 @@ const names:Record<string,{label:string;icon:Glyph}>={accueil:{label:'Accueil',i
 export function GlobalMobileChrome(){
  const router=useRouter(),path=usePathname(),auth=useSession(),state=useWorkspace(true),p=usePalette();
  const [typing,setTyping]=useState(false);
- useEffect(()=>{const show=Keyboard.addListener(Platform.OS==='ios'?'keyboardWillShow':'keyboardDidShow',()=>setTyping(true));const hide=Keyboard.addListener(Platform.OS==='ios'?'keyboardWillHide':'keyboardDidHide',()=>setTyping(false));return()=>{show.remove();hide.remove();};},[]);
+ // Android redimensionne la fenêtre : la barre remonterait au-dessus du clavier, on la retire pendant la saisie.
+ // iOS : le clavier la recouvre. La retirer changerait la hauteur des écrans après le calcul de l’inset clavier
+ // et laisserait le bouton principal sous le clavier.
+ useEffect(()=>{if(Platform.OS==='ios')return;const show=Keyboard.addListener('keyboardDidShow',()=>setTyping(true));const hide=Keyboard.addListener('keyboardDidHide',()=>setTyping(false));return()=>{show.remove();hide.remove();};},[]);
  if(typing||!auth.ready)return null;
  const role=state.data?.profile.role;
  const active=auth.session ? (/^\/(dossier|offre|demande)(\/|$)/.test(path)?'/interventions':/^\/(site|organisation|contrat|approbation)(\/|$)/.test(path)?role==='admin'?'/annuaire':'/organisations':path.startsWith('/annuaire/')?'/annuaire':path) : (/^\/(connexion|inscription|aide-mobile|mot-de-passe-oublie)/.test(path)?'/compte':/^\/(prestation|demande-client)/.test(path)?'/catalogue':path);

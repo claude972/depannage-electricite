@@ -4,7 +4,7 @@ import { Stack } from 'expo-router';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import { SessionProvider, useSession } from '@/lib/session';
-import { ReadState, Screen, usePalette } from '@/components/ui';
+import { KeyboardDoneBar, ReadState, Screen, usePalette } from '@/components/ui';
 
 function Navigator() {
   const { session, ready } = useSession();
@@ -52,6 +52,7 @@ function Navigator() {
     </Stack>
     </View>
     <GlobalMobileChrome/>
+    <KeyboardDoneBar/>
   </View>;
 }
 

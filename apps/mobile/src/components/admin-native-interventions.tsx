@@ -14,7 +14,7 @@ function List({token}:{token:string}){
  const params=new URLSearchParams({limit:'25'});if(query)params.set('q',query);if(status)params.set('status',status);if(category)params.set('category',category);if(urgency)params.set('urgency',urgency);if(cursors.length)params.set('cursor',cursors.at(-1)!);
  const data=useResource('/api/admin/interventions?'+params,adminInterventions,token);
  const change=(setter:(value:string)=>void,value:string)=>{setCursors([]);setter(value);};
- return <SafeAreaView edges={['top','left','right']} style={{flex:1,backgroundColor:p.background}}><FlatList data={data.data?.interventions??[]} keyExtractor={item=>item.id} onRefresh={data.reload} refreshing={data.loading&&!!data.data} contentContainerStyle={{padding:16,gap:14}}
+ return <SafeAreaView edges={['top','left','right']} style={{flex:1,backgroundColor:p.background}}><FlatList automaticallyAdjustKeyboardInsets keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled" data={data.data?.interventions??[]} keyExtractor={item=>item.id} onRefresh={data.reload} refreshing={data.loading&&!!data.data} contentContainerStyle={{padding:16,gap:14}}
  ListHeaderComponent={<View style={{gap:12}}><Copy kind="title">Interventions</Copy>
  <Field label="Rechercher une intervention" value={text} maxLength={80} onChangeText={setText} returnKeyType="search" onSubmitEditing={()=>change(setQuery,text.trim())}/><Action secondary label="Rechercher" onPress={()=>change(setQuery,text.trim())}/>
  <Action secondary label={`${open?'Masquer':'Afficher'} les filtres (${[status,category,urgency].filter(Boolean).length})`} onPress={()=>setOpen(!open)}/>

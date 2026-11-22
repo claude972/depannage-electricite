@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState } from 'react-native';
+import { AppState, type NativeScrollEvent, type NativeSyntheticEvent, type ScrollViewInstance } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { randomUUID } from 'expo-crypto';
 import { z } from 'zod';
@@ -42,6 +42,13 @@ function ConversationThread({id,token,profileId}:{id:string;token:string;profile
     if(!person||!name)return 'INTERLOCUTEUR';
     return (person.role==='artisan'?'Artisan · ':person.role==='client'?'Client · ':'')+name;
   }
+  // La conversation s’ouvre sur le dernier message et y reste à chaque arrivée, sauf si la personne est remontée
+  // dans l’historique ou consulte une page plus ancienne.
+  const scroll=useRef<ScrollViewInstance>(null), pinned=useRef(true);
+  const follow=()=>{if(pinned.current&&!cursor)scroll.current?.scrollToEnd({animated:false});};
+  const settle=({nativeEvent:{contentOffset,contentSize,layoutMeasurement,contentInset}}:NativeSyntheticEvent<NativeScrollEvent>)=>{
+    pinned.current=contentSize.height+(contentInset?.bottom??0)-contentOffset.y-layoutMeasurement.height<80;
+  };
   const other=people.some(item=>item.id===profileId)?people.find(item=>item.id!==profileId&&item.full_name?.trim()):undefined;
   async function send(){
     if(!token||!id||!body.trim()||lock.current)return;
@@ -52,16 +59,16 @@ function ConversationThread({id,token,profileId}:{id:string;token:string;profile
     try{
       await api('/api/messages',sent,{token,signal:controller.signal,method:'POST',body:{intervention_id:id,body:text,command_id:intent.current.id}});
       if(controller.signal.aborted)return;
-      setBody('');intent.current=null;setCursor(null);
+      setBody('');intent.current=null;pinned.current=true;setCursor(null);
     }catch(issue){if(controller.signal.aborted)return;setError(issue instanceof Error?issue.message:'Envoi indisponible.');}
     finally{if(!controller.signal.aborted){pending.current=null;lock.current=false;setBusy(false);state.reload();}}
   }
-  return <Screen onRefresh={state.reload}>
+  return <Screen onRefresh={state.reload} scrollRef={scroll} scrollProps={{onContentSizeChange:follow,onScrollBeginDrag:()=>{pinned.current=false;},onScrollEndDrag:settle,onMomentumScrollEnd:settle}}>
     <Copy kind="title">Conversation</Copy>
     {other&&<Copy kind="muted">{other.role==='artisan'?'Avec votre artisan · ':other.role==='client'?'Avec le client · ':'Avec '}{other.full_name!.trim()}</Copy>}
     <ReadState loading={state.loading} error={state.error} onRetry={state.reload}/>
     {state.data&&<>
-      {cursor&&<Action secondary label="Revenir aux messages récents" onPress={()=>setCursor(null)}/>}
+      {cursor&&<Action secondary label="Revenir aux messages récents" onPress={()=>{pinned.current=true;setCursor(null);}}/>}
       {state.data.page.next_cursor&&<Action secondary label="Voir les messages plus anciens" onPress={()=>setCursor(state.data?.page.next_cursor??null)}/>}
       {state.data.messages.length===0&&<Copy kind="muted">Aucun message.</Copy>}
       {[...state.data.messages].reverse().map(item=><Card key={item.id}>

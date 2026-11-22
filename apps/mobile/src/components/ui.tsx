@@ -1,8 +1,6 @@
-import { ActivityIndicator, RefreshControl, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useColorScheme, useWindowDimensions, type ScrollViewInstance, type TextInputProps } from 'react-native';
+import { ActivityIndicator, InputAccessoryView, Keyboard, RefreshControl, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useColorScheme, useWindowDimensions, type ScrollViewInstance, type ScrollViewProps, type TextInputProps } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSegments } from 'expo-router';
-import { HeaderHeightContext } from 'expo-router/react-navigation';
-import { useContext } from 'react';
 import type { PropsWithChildren, ReactNode, Ref, ComponentRef } from 'react';
 
 const publicPalette = {
@@ -23,18 +21,19 @@ export function usePalette() {
   const connected = section === '(espace)' || section === 'notifications' || section === 'notification-preferences' || section === 'demande' || section === 'dossier' || section === 'offre' || section === 'organisation' || section === 'site' || section === 'annuaire' || section === 'contrat' || section === 'approbation';
   return connected && scheme === 'dark' ? darkPalette : publicPalette;
 }
-export function Screen({ children, top=false, footer, scrollRef, refreshing=false, onRefresh }: PropsWithChildren<{ top?: boolean; footer?: ReactNode; scrollRef?: Ref<ScrollViewInstance>; refreshing?: boolean; onRefresh?: () => void }>) {
+type ScreenScrollProps = Pick<ScrollViewProps, 'onContentSizeChange' | 'onScrollBeginDrag' | 'onScrollEndDrag' | 'onMomentumScrollEnd'>;
+export function Screen({ children, top=false, footer, scrollRef, refreshing=false, onRefresh, scrollProps }: PropsWithChildren<{ top?: boolean; footer?: ReactNode; scrollRef?: Ref<ScrollViewInstance>; refreshing?: boolean; onRefresh?: () => void; scrollProps?: ScreenScrollProps }>) {
   const palette = usePalette();
-  // Navigation headers sit outside this view; root/headerless containers have no context.
-  const headerHeight = useContext(HeaderHeightContext) ?? 0;
   const [section] = useSegments();
   const edges = top ? ['top','left','right'] as const : ['left','right'] as const;
   return <SafeAreaView edges={footer || section === '(espace)' ? edges : [...edges, 'bottom']} style={[styles.flex,{backgroundColor:palette.background}]}>
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}>
-      <ScrollView ref={scrollRef} contentInsetAdjustmentBehavior="automatic" refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} /> : undefined} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} contentContainerStyle={styles.screen}>
+    {/* iOS : l’inset clavier natif se calcule sur la position réelle de la liste et amène le champ actif à l’écran ;
+        le contenu défile alors jusqu’au bouton principal. Android redimensionne la fenêtre. */}
+    <View style={styles.flex}>
+      <ScrollView ref={scrollRef} {...scrollProps} contentInsetAdjustmentBehavior="automatic" automaticallyAdjustKeyboardInsets refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} /> : undefined} keyboardShouldPersistTaps="handled" keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'} contentContainerStyle={styles.screen}>
         {children}
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
     {footer}
   </SafeAreaView>;
 }
@@ -55,10 +54,25 @@ export function Action({ label, onPress, disabled=false, secondary=false, select
     <Text style={[styles.actionText,{color:secondary?p.blue:'#FFFFFF'}]}>{label}</Text>
   </Pressable>;
 }
+const keyboardDoneBar = 'app-keyboard-done';
+const padKeyboards = ['numeric', 'number-pad', 'decimal-pad', 'phone-pad'];
+/** iOS : les pavés numériques et les champs multilignes n’ont pas de touche pour fermer le clavier. Monté une fois à la racine. */
+export function KeyboardDoneBar() {
+  const p=usePalette();
+  if (Platform.OS !== 'ios') return null;
+  return <InputAccessoryView nativeID={keyboardDoneBar} backgroundColor={p.subtle}>
+    <View style={[styles.doneBar,{borderColor:p.border}]}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Terminer la saisie" hitSlop={8} style={styles.doneKey} onPress={() => Keyboard.dismiss()}>
+        <Text style={[styles.actionText,{color:p.blue}]}>Terminer</Text>
+      </Pressable>
+    </View>
+  </InputAccessoryView>;
+}
 export function Field({ label, inputRef, ...props }: TextInputProps & {label:string; inputRef?: Ref<ComponentRef<typeof TextInput>>}) {
   const p=usePalette();
+  const doneBar = Platform.OS === 'ios' && (props.multiline || padKeyboards.includes(props.keyboardType ?? '')) ? keyboardDoneBar : undefined;
   return <View style={styles.field}><Copy>{label}</Copy><TextInput
-    ref={inputRef} accessibilityLabel={label} placeholderTextColor={p.muted} {...props}
+    ref={inputRef} accessibilityLabel={label} placeholderTextColor={p.muted} inputAccessoryViewID={doneBar} {...props}
     style={[styles.input,{backgroundColor:p.surface,color:p.text,borderColor:p.border},props.multiline&&styles.multiline,props.style]} /></View>;
 }
 export function ReadState({ loading,error,onRetry }: {loading:boolean;error:string|null;onRetry:()=>void}) {
@@ -101,4 +115,6 @@ const styles = StyleSheet.create({  progress: { flexDirection: 'row', flexWrap: 
   input:{minHeight:48,borderWidth:1,borderRadius:13,paddingHorizontal:13,paddingVertical:10,fontFamily:'JakartaRegular',fontSize:16},
   multiline:{minHeight:105,textAlignVertical:'top'},
   field:{gap:5},loading:{alignItems:'center',gap:10,padding:16},
+  doneBar:{flexDirection:'row',justifyContent:'flex-end',paddingHorizontal:12,borderTopWidth:StyleSheet.hairlineWidth},
+  doneKey:{minHeight:44,paddingHorizontal:8,justifyContent:'center'},
 });

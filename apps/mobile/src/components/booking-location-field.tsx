@@ -1,7 +1,8 @@
-import { Keyboard, Linking, StyleSheet, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Keyboard, Linking, Platform, StyleSheet, View } from 'react-native';
 import * as Location from 'expo-location';
 import { z } from 'zod';
-import { Action, Copy, Field } from '@/components/ui';
+import { Action, Copy, Field, usePalette } from '@/components/ui';
 import BookingMap from '@/components/booking-map-dom';
 import { ApiFailure, api } from '@/lib/api';
 import { nearbyBanUrl, parseNearbyBan } from '../../../../shared/ban-nearby';
@@ -55,6 +56,16 @@ async function locate() {
   } catch { throw new Error(copy.gpsUnavailable); }
 }
 
+const MAP_HEIGHT = 262;
+/** Délai laissé à la vue web pour charger la carte (premier bundle de développement compris). */
+const MAP_READY_DELAY = 8000;
+/**
+ * Sur iOS dans Expo Go, l’objet injecté par react-native-webview (`injectedObjectJson`) n’atteint pas toujours la
+ * page : le runtime DOM s’arrête alors avant le premier rendu (« $$EXPO_DOM_HOST_OS is not defined »). Ce script de
+ * début de document ne fournit une valeur que si la vraie est absente ; les propriétés sont renvoyées au signal DOM_READY.
+ */
+const hostFallback = `(function(){try{var w=window,b=w.ReactNativeWebView=w.ReactNativeWebView||{};if(typeof b.injectedObjectJson!=='function'){b.injectedObjectJson=function(){return ${JSON.stringify(JSON.stringify({ EXPO_DOM_HOST_OS: Platform.OS, initialProps: { names: ['updatePoint', 'ready'], props: { target: null } } }))};};}}catch(e){}})();true;`;
+
 export function BookingLocationField({ value, location, onChange, disabled = false }: {
   value: BookingAddress;
   location?: BookingLocation;
@@ -64,6 +75,13 @@ export function BookingLocationField({ value, location, onChange, disabled = fal
   const address = useBookingAddress({ value, location, onChange, lookup, locate });
   const canSearch = !disabled && !address.searching && address.query.trim().length >= 3;
   const find = () => { if (canSearch) { Keyboard.dismiss(); void address.find(); } };
+  const palette = usePalette();
+  // 'failed' : erreur de chargement ou aucun signal de la carte dans le délai. Un signal tardif la rétablit.
+  const [map, setMap] = useState<'loading' | 'ready' | 'failed'>('loading');
+  useEffect(() => {
+    const timer = setTimeout(() => setMap(state => state === 'loading' ? 'failed' : state), MAP_READY_DELAY);
+    return () => clearTimeout(timer);
+  }, []);
   return <View style={styles.location}>
     <Field label={copy.search} value={address.query} maxLength={200} placeholder={copy.placeholder} editable={!disabled}
       onChangeText={address.changeQuery} onSubmitEditing={find} returnKeyType="search" />
@@ -73,8 +91,16 @@ export function BookingLocationField({ value, location, onChange, disabled = fal
     <Action secondary label={address.busy === 'gps' ? copy.locating : copy.locate} disabled={disabled || address.busy === 'gps'}
       onPress={() => { Keyboard.dismiss(); void address.usePosition(); }} />
     <Copy kind="muted">{copy.mapHelp}</Copy>
-    <BookingMap target={address.target} updatePoint={async point => { if (!disabled) address.move(point); }} dom={{
+    {map === 'failed' && <View accessibilityRole="alert" style={[styles.mapUnavailable, { borderColor: palette.border, backgroundColor: palette.subtle }]}>
+      <Copy kind="muted">Carte indisponible ici — utilisez la recherche ou la saisie d’adresse.</Copy>
+    </View>}
+    <BookingMap target={address.target} updatePoint={async point => { if (!disabled) address.move(point); }}
+      ready={async () => { setMap('ready'); }} dom={{
+      // Hauteur explicite : sans rendu, `matchContents` réduirait la vue à quelques points.
       useExpoDOMWebView: false, style: styles.map, matchContents: true, scrollEnabled: false,
+      containerStyle: map === 'failed' ? styles.mapHidden : styles.mapContainer,
+      injectedJavaScriptBeforeContentLoaded: Platform.OS === 'ios' ? hostFallback : undefined,
+      onError: () => setMap('failed'), onHttpError: () => setMap('failed'),
       userAgent: 'DomDepannage/0.1',
       onOpenWindow: ({ nativeEvent }) => {
         if (nativeEvent.targetUrl === 'https://www.openstreetmap.org/copyright') void Linking.openURL(nativeEvent.targetUrl).catch(() => {});
@@ -92,5 +118,8 @@ export function BookingLocationField({ value, location, onChange, disabled = fal
 }
 const styles = StyleSheet.create({
   location: { gap: 12 },
-  map: { width: '100%', minHeight: 262, backgroundColor: 'transparent' },
+  map: { width: '100%', minHeight: MAP_HEIGHT, backgroundColor: 'transparent' },
+  mapContainer: { width: '100%', minHeight: MAP_HEIGHT },
+  mapHidden: { width: '100%', height: 0, minHeight: 0, opacity: 0, overflow: 'hidden' },
+  mapUnavailable: { padding: 16, borderWidth: 1, borderRadius: 12 },
 });

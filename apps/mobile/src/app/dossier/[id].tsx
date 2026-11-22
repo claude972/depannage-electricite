@@ -15,7 +15,7 @@ import { LabeledSwitch } from '@/components/labeled-switch';
 import { deviceDrafts } from '@/lib/device-drafts';
 import { paymentReturnKey, withPaymentBrowserReturn } from '@/lib/payment-return';
 import { api, useResource } from '@/lib/api';
-import { categories, creation, detail, euros, link, operations, phoneHref, signature, success, timestamp } from '@/lib/contracts';
+import { categories, commissionRate, creation, detail, euros, link, operations, paymentSettlement, phoneHref, settlementPayout, signature, success, timestamp } from '@/lib/contracts';
 import { dossierAmount, dossierStep, DOSSIER_STEPS, jobStatus, paymentLabel } from '@/lib/job-presentation';
 import { useSession } from '@/lib/session';
 import { supabaseOrigin } from '@/lib/config';
@@ -32,6 +32,14 @@ export default function Dossier() {
   const data=useResource(token?base:null,detail,token,auth?.user.id);
   const ops=useResource(base&&token?base+'/operations':null,operations,token,auth?.user.id);
   const paymentOptions=useResource('/api/bookings/options',bookingOptions);
+  // ART-11 : commission et net de l’artisan, lus sur le serveur uniquement pour un devis accepté réglé par carte.
+  const settledQuote=(()=>{
+    const view=data.data, mine=Boolean(auth&&view?.intervention.artisan_id===auth.user.id);
+    if(!mine||view?.quotes.status!=='ok'||view.payments.status!=='ok')return null;
+    const quote=view.quotes.items.find(item=>item.status==='accepted');
+    return quote&&view.payments.items.some(item=>item.quote_id===quote.id&&item.status==='paid'&&item.method==='stripe')?quote.id:null;
+  })();
+  const settlement=useResource(token&&settledQuote?`/api/payments/status?quote_id=${settledQuote}`:null,paymentSettlement,token,auth?.user.id).data?.artisan_settlement;
   const [error,setError]=useState<string|null>(null), [busy,setBusy]=useState(false);
   const [returnEpoch,setReturnEpoch]=useState(0);
   const [ack,setAck]=useState(false), [name,setName]=useState(''), [reason,setReason]=useState('');
@@ -119,7 +127,14 @@ export default function Dossier() {
       <Copy kind="title">{categories[job.category]}</Copy>
       {owner && <Copy kind="muted" selectable>Numéro de commande · {orderReference(job.id)}</Copy>}
       {dossierStep(job.status) >= 0 && <BookingProgress labels={DOSSIER_STEPS} index={dossierStep(job.status)} />}
-      {amount && <Card><Copy kind="label">{artisan && amount.label === 'À régler' ? 'Règlement attendu' : artisan && amount.label === 'Devis reçu' ? 'Devis envoyé' : amount.label}</Copy><Copy kind="subtitle" selectable>{amount.value}</Copy></Card>}
+      {amount && <Card><Copy kind="label">{artisan && amount.label === 'À régler' ? 'Règlement attendu' : artisan && amount.label === 'Devis reçu' ? 'Devis envoyé' : amount.label}</Copy><Copy kind="subtitle" selectable>{amount.value}</Copy>
+        {artisan && settlement && <>
+          <Copy selectable>Montant réglé · {euros(settlement.amount_cents)}</Copy>
+          <Copy selectable>Commission plateforme ({commissionRate(settlement.fee_bps)}) · − {euros(settlement.fee_cents)}</Copy>
+          <Copy kind="subtitle" selectable>Net à percevoir · {euros(settlement.net_cents)}</Copy>
+          <Copy kind="muted">{settlementPayout(settlement.transfer)}</Copy>
+        </>}
+      </Card>}
       {['requested','assigned','quoted','accepted','in_progress','completed'].includes(job.status) && <Card>
         <Copy kind="subtitle">Prochaine action</Copy>
         {owner && job.status === 'requested' && <Copy>Votre demande est transmise. Vous serez informé lorsqu’un artisan sera attribué.</Copy>}
@@ -166,6 +181,11 @@ export default function Dossier() {
       {data.data?.quotes.status==='ok'&&data.data.quotes.items.map(quote=><Card key={quote.id}>
         <Copy kind="subtitle">Devis {quote.status==='accepted'?'accepté':quote.status==='rejected'?'refusé':'proposé'}</Copy>
         {quote.lines.map((line,index)=><Copy key={index}>{line.quantity} × {line.label} · {euros(line.unit_price_cents)} HT</Copy>)}
+        {quote.subtotal_cents !== undefined && quote.tax_cents !== undefined && quote.subtotal_cents + quote.tax_cents === quote.total_cents && <>
+          <Copy>Total HT {euros(quote.subtotal_cents)}</Copy>
+          <Copy>TVA{quote.tax_rate !== undefined ? ` ${quote.tax_rate.toLocaleString('fr-FR')} %` : ''} {euros(quote.tax_cents)}</Copy>
+          {quote.status === 'accepted' && quote.accepted_total_cents !== undefined && quote.accepted_total_cents !== quote.total_cents && <Copy kind="muted">Devis initial TTC {euros(quote.total_cents)} · le total ci-dessous inclut les avenants acceptés.</Copy>}
+        </>}
         <Copy>{quote.status === 'accepted' && quote.accepted_total_cents === undefined ? 'Montant accepté à vérifier — actualisez le dossier.' : `Total TTC ${euros(quote.status === 'accepted' ? quote.accepted_total_cents! : quote.total_cents)}`}</Copy>
         {job.site_id && quote.status === 'sent' && <NativeApprovalWorkflow quoteId={quote.id}/>}
         {owner&&quote.status==='sent'&&job.status==='quoted'&&<>

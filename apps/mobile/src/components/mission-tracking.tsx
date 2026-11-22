@@ -50,6 +50,8 @@ export function MissionTracking({ id, actor, token, artisan, address }: {
   const focus = useRef(false);
   const [active, setActive] = useState(AppState.currentState === 'active');
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null);
+  // Incident du dernier relevé seulement : effacé dès qu’un relevé suivant aboutit.
+  const [sampleIssue, setSampleIssue] = useState<string | null>(null);
   const [query, setQuery] = useState(address), [places, setPlaces] = useState<z.infer<typeof geocodes>['candidates']>([]);
   const [owned, setOwned] = useState<string | null>(null);
   const current = useRef<Snapshot['tracking'] | null>(null);
@@ -102,8 +104,17 @@ export function MissionTracking({ id, actor, token, artisan, address }: {
     async function sample() {
       const latest = current.current;
       if (!latest || latest.session_id !== owned || !foreground.current || controller.signal.aborted) return;
+      let location: Location.LocationObject;
       try {
-        const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High, mayShowUserSettingsDialog: false });
+        location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High, mayShowUserSettingsDialog: false });
+      } catch {
+        // Le message du système (CoreLocation, Play Services) est technique : rien n’a été envoyé, le prochain relevé réessaie.
+        if (controller.signal.aborted) return;
+        setSampleIssue('Position momentanément indisponible. Nouvelle tentative…');
+        timer = setTimeout(sample, 8500);
+        return;
+      }
+      try {
         const accuracy = location.coords.accuracy;
         if (!foreground.current || controller.signal.aborted || current.current?.session_id !== owned) return;
         if (accuracy != null && accuracy <= 250) {
@@ -114,28 +125,28 @@ export function MissionTracking({ id, actor, token, artisan, address }: {
           }, controller.signal);
           if (!controller.signal.aborted && foreground.current && current.current?.session_id === owned) current.current = updated;
         }
+        if (!controller.signal.aborted) setSampleIssue(null);
       } catch (issue) {
         if (controller.signal.aborted) return;
-        setError(issue instanceof Error ? issue.message : 'Position indisponible.');
-        if (issue instanceof ApiFailure && [401,403,404,409].includes(issue.status)) {
-          setOwned(null); current.current = null; reload(); return;
-        }
+        const message = issue instanceof ApiFailure ? issue.message : 'Position momentanément indisponible. Nouvelle tentative…';
+        // Le partage s’arrête : ce message reste affiché, contrairement à un incident de relevé.
+        const ended = () => { setError(issue instanceof ApiFailure ? issue.message : 'Le partage de position s’est interrompu. Relancez-le si nécessaire.'); setOwned(null); current.current = null; reload(); };
+        if (issue instanceof ApiFailure && [401,403,404,409].includes(issue.status)) { ended(); return; }
+        setSampleIssue(message);
         if (issue instanceof ApiFailure && issue.status === 429) {
           timer = setTimeout(sample, 60000); return;
         }
         // Recover the authoritative sequence after an ambiguous network failure.
         try {
           const fresh = await api(path, tracking, { token: latestToken.current, signal: controller.signal });
-          if (fresh.tracking.intervention_id !== id || fresh.tracking.session_id !== owned || !fresh.permissions.can_share) {
-            setOwned(null); current.current = null; reload(); return;
-          }
+          if (fresh.tracking.intervention_id !== id || fresh.tracking.session_id !== owned || !fresh.permissions.can_share) { ended(); return; }
           if (!controller.signal.aborted && foreground.current && current.current?.session_id === owned) current.current = fresh.tracking;
-        } catch { setOwned(null); current.current = null; reload(); return; }
+        } catch { if (!controller.signal.aborted) ended(); return; }
       }
       if (!controller.signal.aborted) timer = setTimeout(sample, 8500);
     }
     void sample();
-    return () => { controller.abort(); clearTimeout(timer); };
+    return () => { controller.abort(); clearTimeout(timer); setSampleIssue(null); };
   }, [owned, active, focused, path, reload]);
 
   useEffect(() => {
@@ -186,7 +197,7 @@ export function MissionTracking({ id, actor, token, artisan, address }: {
   return <Card>
     <Copy kind="subtitle">{artisan ? 'Partage du trajet' : 'Arrivée de l’artisan'}</Copy>
     <ReadState loading={read.loading} error={read.error} onRetry={reload} />
-    {error && <Copy kind="error">{error}</Copy>}
+    {(error ?? sampleIssue) && <Copy kind="error">{error ?? sampleIssue}</Copy>}
     {point && <>
       {!artisan && <Copy>{point.travel_stage === 'on_site' ? 'L’artisan est arrivé.' : estimate?.key === routeKey && routeKey
         ? `Environ ${estimate.minutes} min · itinéraire IGN, sans trafic en temps réel` : 'Estimation d’arrivée indisponible pour le moment.'}</Copy>}

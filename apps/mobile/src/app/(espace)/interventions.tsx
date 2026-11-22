@@ -26,7 +26,7 @@ export default function Interventions() {
     <FlatList
       data={(state.data?.interventions??[]).filter(job => profile?.role !== 'artisan' || job.artisan_id === profile.id)} keyExtractor={job=>job.id}
       refreshing={state.loading&&Boolean(state.data)} onRefresh={state.reload}
-      keyboardShouldPersistTaps="handled"
+      keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" automaticallyAdjustKeyboardInsets
       contentContainerStyle={styles.list}
       ListHeaderComponent={<View style={styles.list}>
         <Copy kind="title">{profile?.role==='artisan'?'Missions':profile?.role==='manager'?'Interventions':'Mes demandes'}</Copy>
@@ -35,10 +35,12 @@ export default function Interventions() {
           <Action label="Nouvelle demande" onPress={()=>router.push('/demande')}/>
           <OrderLookup key={profile.id} />
         </>}
-        {profile?.role==='artisan'&&<><ArtisanAvailability approved={profile.artisan_approved} onChanged={() => setAvailabilityVersion(value => value + 1)} /><ArtisanOffers key={availabilityVersion} /></>}
+        {profile?.role==='artisan'&&<ArtisanAvailability approved={profile.artisan_approved} onChanged={() => setAvailabilityVersion(value => value + 1)} />}
         <ReadState loading={state.loading} error={state.error} onRetry={state.reload}/>
         {state.data?.limits?.interventions.limited&&<Copy kind="muted">Les 100 dossiers les plus récents sont affichés.</Copy>}
       </View>}
+      // Missions attribuées d’abord ; les offres ouvertes suivent, dans leur ordre documenté (plus anciennes d’abord).
+      ListFooterComponent={profile?.role==='artisan'?<View style={styles.footer}><ArtisanOffers key={availabilityVersion} /></View>:undefined}
       ListEmptyComponent={state.data && !state.loading && !state.error ? <Card>
         <Copy kind="subtitle">{profile?.role === 'artisan' ? 'Aucune mission affectée' : 'Aucune intervention en cours'}</Copy>
         <Copy kind="muted">Les dossiers accessibles depuis votre compte apparaîtront ici.</Copy>
@@ -47,4 +49,4 @@ export default function Interventions() {
     />
   </SafeAreaView>;
 }
-const styles=StyleSheet.create({fill:{flex:1},list:{gap:14,padding:14}});
+const styles=StyleSheet.create({fill:{flex:1},list:{gap:14,padding:14},footer:{paddingHorizontal:14}});

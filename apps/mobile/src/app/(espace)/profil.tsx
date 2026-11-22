@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import { useRouter } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { AppSheet } from '@/components/app-sheet';
 import { MobileIcon, type Glyph } from '@/components/mobile-chrome';
 import { PublicLink, usePublicPortal } from '@/components/mobile-public-content';
@@ -29,7 +29,8 @@ export default function Profile() {
   const [busy,setBusy]=useState(false);
   const [section, setSection] = useState<Section | null>(null);
   const [first,setFirst]=useState(''), [last,setLast]=useState('');
-  const lock=useRef(false);
+  const lock=useRef(false), lastField=useRef<ComponentRef<typeof TextInput>>(null);
+  const nameValid=Boolean(first.trim()&&last.trim())&&first.trim().length+last.trim().length+1<=120;
   async function run(work:()=>Promise<void>, refresh?:()=>void) {
     if(lock.current)return;
     lock.current=true;setBusy(true);setError(null);
@@ -38,7 +39,7 @@ export default function Profile() {
     finally{lock.current=false;setBusy(false);refresh?.();}
   }
   function saveName(){
-    if(!token||!profile||!first.trim()||!last.trim())return;
+    if(!token||!profile||!nameValid)return;
     void run(async()=>{
       const response=await api('/api/profile',updated,{token,method:'PATCH',body:{
         first_name:first.trim(),last_name:last.trim(),full_name:`${first.trim()} ${last.trim()}`,phone:profile.phone??'',
@@ -93,12 +94,15 @@ export default function Profile() {
     </Pressable>
     <AppSheet title={section ? titles[section] : ''} open={section !== null} onClose={() => setSection(null)}>
       {section === 'identity' && profile && <>
-        <Field label="Prénom" value={first} onChangeText={setFirst} maxLength={60} editable={!busy} />
-        <Field label="Nom" value={last} onChangeText={setLast} maxLength={60} editable={!busy} />
+        {/* La touche du clavier enregistre : dans la feuille native, un premier toucher sur le bouton peut seulement fermer le clavier. */}
+        <Field label="Prénom" value={first} onChangeText={setFirst} maxLength={60} editable={!busy} returnKeyType="next"
+          submitBehavior="submit" onSubmitEditing={() => lastField.current?.focus()} />
+        <Field label="Nom" inputRef={lastField} value={last} onChangeText={setLast} maxLength={60} editable={!busy} returnKeyType="done"
+          onSubmitEditing={saveName} />
         {auth.session?.user.email && <Copy kind="muted">{auth.session.user.email}</Copy>}
         {error && <Copy kind="error">{error}</Copy>}
         <Action label={busy ? 'Enregistrement…' : 'Enregistrer'} onPress={saveName}
-          disabled={busy || !first.trim() || !last.trim() || first.trim().length + last.trim().length + 1 > 120} />
+          disabled={busy || !nameValid} />
       </>}
       {section === 'addresses' && <>
         <Copy>Vos adresses d’intervention sont disponibles dans votre espace sur le site. Le site s’ouvre dans le navigateur et vous demandera de vous connecter à nouveau.</Copy>

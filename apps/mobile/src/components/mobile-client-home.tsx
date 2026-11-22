@@ -139,7 +139,7 @@ export function MobileClientHome({ embedded = false }: { embedded?: boolean }) {
   }
 
   return <SafeAreaView edges={['top', 'left', 'right']} style={[styles.flex, { backgroundColor: p.background }]}>
-    <ScrollView ref={scroll} style={styles.flex} keyboardShouldPersistTaps="handled">
+    <ScrollView ref={scroll} style={styles.flex} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
       <View style={styles.content}>
         <View style={styles.entry}>
           <View style={styles.locationAndProfile}>

@@ -35,12 +35,31 @@ export type QuoteSummary = z.infer<typeof quoteSummary>;
 const quote = quoteSummary.extend({
   id, intervention_id: id, status: z.enum(['sent', 'accepted', 'rejected']),
   lines: z.array(z.object({label: z.string(), quantity: z.number().int().positive(), unit_price_cents: cents})),
+  // Détail HT/TVA du devis lui-même ; absent des réponses plus anciennes.
+  subtotal_cents: cents.optional(), tax_rate: z.coerce.number().min(0).max(100).optional().catch(undefined), tax_cents: cents.optional(),
   total_cents: cents, accepted_total_cents: cents.optional(),
 });
 const attachment = z.object({id, name: z.string(), mime_type: z.string()});
 const message = z.object({id, author_id: id, body: z.string(), created_at: z.string(), attachment_id: id.nullish()});
 export const payment = z.object({id, quote_id: id.optional(), total_cents: cents, status: z.enum(['pending','paid','failed']), method: z.enum(['stripe','on_site_declared']).optional(), paid_at: z.string().nullish(), created_at: z.string().optional()});
 export type Payment = z.infer<typeof payment>;
+// ART-11 : part de l’artisan sur un règlement par carte, lue sur GET /api/payments/status (champ
+// facultatif réservé à l’auteur du devis). Rien n’est recalculé ici : un rapport absent, illisible ou
+// incohérent au centime donne `undefined` et l’écran garde le seul montant réglé.
+const artisanSettlement = z.object({
+  amount_cents: cents.positive(), fee_bps: z.number().int().min(0).max(9999), fee_cents: cents, net_cents: cents,
+  transfer: z.enum(['with_payment','confirmed']),
+}).refine(item => item.fee_cents + item.net_cents === item.amount_cents);
+export type ArtisanSettlement = z.infer<typeof artisanSettlement>;
+export const paymentSettlement = z.object({ artisan_settlement: artisanSettlement.optional().catch(undefined) });
+/** Taux figé sur le règlement, en points de base : 1000 → « 10 % », 1250 → « 12,5 % ». */
+export const commissionRate = (bps: number) => `${String(bps / 100).replace('.', ',')} %`;
+/** Même formulation que le web : le virement bancaire suit le calendrier de Stripe, sans confirmation de la plateforme. */
+export const settlementPayout = (transfer: ArtisanSettlement['transfer']) =>
+  (transfer === 'confirmed'
+    ? 'Le transfert de votre part nette vers votre compte de règlement Stripe est confirmé par la plateforme.'
+    : 'Votre part nette est transférée par Stripe sur votre compte de règlement dans le cadre de ce paiement (transfert automatique).')
+  + ' Le virement vers votre compte bancaire suit ensuite le calendrier de versement de Stripe ; la plateforme ne le confirme pas ici.';
 const list = <T extends z.ZodType>(schema: T) => z.discriminatedUnion('status', [
   z.object({ status: z.literal('ok'), items: z.array(schema), limited: z.boolean(), incomplete: z.boolean().optional() }),
   z.object({ status: z.literal('error') }),

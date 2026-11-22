@@ -7,6 +7,12 @@ export const quoteDraft = z.object({
   rate: z.union(quoteRates.map(rate => z.literal(rate))).nullable(),
 });
 export type DraftLine = z.infer<typeof quoteLine>;
+/** Mêmes arrondis que le serveur (`calculateQuote`, lib/domain.ts) : sous-total entier en centimes, TVA arrondie une fois sur le sous-total. */
+export function quoteTotals(lines: readonly { quantity: number; unit_price_cents: number }[], rate: number | null) {
+  const subtotal = lines.reduce((sum, line) => sum + line.quantity * line.unit_price_cents, 0);
+  const tax = rate === null ? null : Math.round((subtotal * rate) / 100);
+  return { subtotal, tax, total: tax === null ? null : subtotal + tax };
+}
 
 export const pendingPhoto = z.object({ fileId: z.uuid(), key: z.string().regex(/^[A-Za-z0-9+/]{43}=$/) });
 export type PendingPhoto = z.infer<typeof pendingPhoto>;
