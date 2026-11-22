@@ -5,12 +5,15 @@ import { uuid, validated } from "@/lib/supabase/validation";
 import { stripeClient, appUrl, commissionBps } from "@/lib/supabase/stripe";
 import { safeCheckoutUrl } from "@/lib/shared/stripe-checkout-url";
 
+/** Second Checkout on a settled dossier (stale tab, double submit after the payment). */
+export const CHECKOUT_ALREADY_SETTLED = "Ce dossier est déjà réglé. Aucun nouveau paiement n’a été lancé et rien de plus n’a été débité.";
 /** Known server refusals before any provider call, told as they are (never « the dossier
  * changed, refresh »): nothing is debited and the payer knows what unblocks the payment. */
 export const CHECKOUT_REFUSALS: Record<string, string> = {
   "Recipient account not ready": "Le paiement n’est pas encore ouvert : le compte de règlement de l’artisan doit d’abord être validé par la plateforme. Rien n’a été débité ; réessayez plus tard ou contactez l’assistance.",
   "Accepted completed work required": "Le paiement s’ouvre une fois le devis accepté et l’intervention terminée par l’artisan. Rien n’a été débité.",
   "Conflicting settlement method": "Un autre mode de règlement est déjà engagé pour ce dossier. Rien n’a été débité ; contactez l’assistance pour le finaliser.",
+  "Payment already settled": CHECKOUT_ALREADY_SETTLED,
   "Invalid agreed amount": "Le montant convenu de ce dossier doit être vérifié avant paiement. Rien n’a été débité ; contactez l’assistance.",
 };
 export function checkoutDbError(error: { code?: string; message?: string } | null | undefined) {
@@ -75,7 +78,8 @@ export async function createQuoteCheckout(request:Request){
   for(let cycle=0;cycle<2;cycle++){
    const begun=await db.rpc("begin_platform_checkout_with_saved_customer",{p_quote_id:quote_id,p_live:live});checkoutDbError(begun.error);if(!uuid.safeParse(begun.data).success)throw unavailable();
    let l=await read(admin,user.id,begun.data,quote_id,live);
-   if(["needs_review","awaiting_bank","paid","expired"].includes(l.status))throw conflict();
+   if(l.status==="paid")throw new ApiError(409,CHECKOUT_ALREADY_SETTLED);
+   if(["needs_review","awaiting_bank","expired"].includes(l.status))throw conflict();
    if(l.session_id){
     const s=checkSession(await stripe.checkout.sessions.retrieve(l.session_id),l,live);
     if(s.status==="open"&&s.payment_status==="unpaid"){if(!safeCheckoutUrl(s.url))throw unavailable();await read(admin,user.id,l.id,quote_id,live);return Response.json({url:s.url},{headers:PAYMENT_HEADERS});}

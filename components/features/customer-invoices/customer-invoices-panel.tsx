@@ -3,7 +3,7 @@
 // issued to the current account (service invoices for clients / organisations, platform
 // commission invoices for artisans). PDFs only through /api/invoices/:id/pdf. No issue, refund or
 // payment action; a document's state never stands for a payment state.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   BASIS_LABEL,
   DEFAULT_INVOICES_CONTEXT,
@@ -77,11 +77,13 @@ function Panel({ filters, api, context = DEFAULT_INVOICES_CONTEXT, demo = false,
     void ctrl.load({ ...filters, kind: k }); // a filter change always restarts from page 1
   };
   const locked = Boolean(filters.kind);
+  // Two panels can share a page (artisan documents: service + commission): one heading id each.
+  const titleId = useId();
 
   return (
-    <section className={styles.panel} aria-labelledby="customer-invoices-title" data-invoices-panel={state.phase}>
+    <section className={styles.panel} aria-labelledby={titleId} data-invoices-panel={state.phase}>
       <div className={styles.head}>
-        <h2 id="customer-invoices-title">{title}</h2>
+        <h2 id={titleId}>{title}</h2>
       </div>
       <p className={styles.hint}>{INVOICES_COPY.notPayment}</p>
       {state.phase === "demo" && <p className={styles.note} data-invoices-demo="">{INVOICES_COPY.demo}</p>}

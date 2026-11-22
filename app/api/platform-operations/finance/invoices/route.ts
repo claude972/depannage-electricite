@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { authenticatedClient, assertOrigin, dbError } from "@/lib/supabase/server";
+import { authenticatedClient, assertOrigin } from "@/lib/supabase/server";
+import { financeWriteError } from "@/lib/features/platform-operations/mfa";
 import { uuid, validated } from "@/lib/supabase/validation";
 import { failed, invalidQuery, invoiceFields, listRows, objectResult, ok, requireScope } from "@/lib/features/platform-operations/http";
 import type { Invoice } from "@/lib/features/platform-operations/types";
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
       : data.action === "issue"
         ? await db.rpc("platform_issue_invoice", { p_request_id: data.request_id, p_basis: data.basis, p_payment_id: data.payment_id })
         : await db.rpc("platform_issue_credit_note", { p_request_id: data.request_id, p_invoice_id: data.invoice_id, p_amount_cents: data.amount_cents, p_reason: data.reason });
-    dbError(result.error);
+    financeWriteError(result.error);
     return ok(objectResult(result.data, "L’opération de facturation n’a pas été confirmée."));
   } catch (error) { return failed(error); }
 }

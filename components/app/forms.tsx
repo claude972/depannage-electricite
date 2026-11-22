@@ -46,6 +46,7 @@ import { ReviewEstimate } from "../features/indicative-prices/indicative-range";
 import { useMessageReadState } from "../features/message-read/use-message-read-state";
 import { MessageReadBadge, MessageReadControl } from "../features/message-read/message-read-control";
 import { useWarrantyHistory } from "../features/warranty-corrective/use-warranty-history";
+import { siteAddressParts } from "./site-address";
 import { RecordedTerms } from "../features/warranty-policy/recorded-terms";
 import { HISTORY_COPY as WARRANTY_COPY, claimAllowed } from "../features/warranty-corrective/warranty-history";
 import { EnterpriseContractsPanel, type EnterpriseContractsContext, NO_CONTRACTS_CONTEXT } from "../features/enterprise-contracts/enterprise-contracts-panel";
@@ -412,7 +413,13 @@ export function RequestForm({
                   onInvalid={() => setSiteError("Choisissez le site professionnel concerné par cette demande.")}
                   onChange={(e) => {
                     setSiteError("");
-                    setValues({ ...values, site_id: e.target.value || undefined });
+                    // The intervention takes place at the chosen site: its address prefills the fields
+                    // (still editable; whatever cannot be recognised stays to be typed).
+                    const parts = siteAddressParts(sites.find((s) => s.id === e.target.value)?.address);
+                    if (parts) {
+                      const { location: _location, ...rest } = values;
+                      setValues({ ...rest, ...parts, site_id: e.target.value });
+                    } else setValues({ ...values, site_id: e.target.value || undefined });
                   }}
                 >
                   <option value="">{siteRequired ? "Choisir un site" : "Adresse personnelle ou autre lieu"}</option>

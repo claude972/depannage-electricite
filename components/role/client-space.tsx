@@ -1081,7 +1081,9 @@ function DetailView({
           busy={session.busy}
         />
       )}
-      {currentBookingStatus?.kind === "booking" && !(currentBookingStatus.payment.method === "on_site" && (i.status === "completed" || i.status === "paid")) && (
+      {/* A settled dossier no longer says « empreinte… ce n’est pas un débit »: the hold was captured for
+          the accepted amount (the settlement line below states it). */}
+      {!(currentBookingStatus?.kind === "booking" && currentBookingStatus.payment.method === "card_hold" && i.status === "paid") && currentBookingStatus?.kind === "booking" && !(currentBookingStatus.payment.method === "on_site" && (i.status === "completed" || i.status === "paid")) && (
         <p className={styles.paymentLine} role="status" data-booking-payment-status={currentBookingStatus.payment.method}>
           <Icon name={currentBookingStatus.payment.method === "on_site" ? "clock" : "lock"} size={16} />
           <span>{bookingPaymentText(currentBookingStatus.payment, dateTime, i.status === "cancelled")}</span>
@@ -1101,15 +1103,17 @@ function DetailView({
       )}
       {accepted && payment && (
         <p
-          className={`${styles.paymentLine} ${payment.status === "paid" ? styles.ok : payment.status === "failed" ? styles.ko : ""}`}
+          className={`${styles.paymentLine} ${payment.status === "paid" ? styles.ok : payment.status === "failed" && payment.failure_code !== "expired" ? styles.ko : ""}`}
           role="status"
         >
-          <Icon name={payment.status === "paid" ? "check" : payment.status === "failed" ? "warning" : "clock"} size={16} />
+          <Icon name={payment.status === "paid" ? "check" : payment.status === "failed" && payment.failure_code !== "expired" ? "warning" : "clock"} size={16} />
           <span>
             {payment.status === "paid" && isDeclaredOnSite(payment)
               ? `Règlement de ${money(payment.total_cents)} déclaré reçu sur place par l’artisan${payment.paid_at ? ` le ${dateTime(payment.paid_at)}` : ""}. Ce n’est pas une confirmation bancaire.`
               : payment.status === "paid"
               ? `Règlement de ${money(payment.total_cents)} confirmé par la plateforme${payment.paid_at ? ` le ${dateTime(payment.paid_at)}` : ""}.`
+              : payment.status === "failed" && payment.failure_code === "expired"
+                ? "La session de paiement a expiré. Rien n’a été débité. Relancez le paiement."
               : payment.status === "failed"
                 ? "Le paiement n’a pas abouti selon Stripe. Le règlement reste à effectuer ; vérifiez auprès de votre banque avant de recommencer."
                 : "Paiement en attente de confirmation Stripe. Rien n’est considéré comme réglé tant que la plateforme ne l’a pas confirmé."}
@@ -1582,7 +1586,8 @@ function DetailView({
         <>
           <ReviewForm
             existing={session.data.reviews.find((r) => r.intervention_id === i.id)}
-            enabled
+            // Same rule as the server (submit_review): the requester of the dossier only.
+            enabled={session.mode === "demo" || i.client_id === session.profileId}
             busy={session.busy}
             onSubmit={async (values) => {
               await session.submitReview(i.id, values);

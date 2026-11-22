@@ -3,7 +3,8 @@ import { taxRateSchema } from "@/lib/tax-rates";
 // Reuses the canonical document writer; no live issuer/payment lookup or invented legal text.
 import { z } from "zod";
 import { PdfDocument, wrapText, textWidth, type PdfPage, type FontName } from "../quote-documents/pdf-writer";
-import { formatEuro, formatTaxRate, formatDateTimeUtc } from "../quote-documents/format";
+import { formatEuro, formatTaxRate, formatDateTimeMartinique } from "../quote-documents/format";
+import { orderReference } from "@/shared/order-reference";
 import type { InvoiceDocumentInput } from "./invoice-document";
 
 export type InvoicePdfInput = InvoiceDocumentInput & { basis: "service" | "platform_commission" };
@@ -161,10 +162,10 @@ export function renderInvoicePdf(value: InvoicePdfInput): Uint8Array<ArrayBuffer
   const input = parseInvoicePdfInput(value);
   const document = new PdfDocument();
   const layout = new InvoiceLayout(document, input);
-  layout.paragraph(`Émis le ${formatDateTimeUtc(input.issued_at)}`, { size: 9.5, color: MUTED, gap: 13 });
+  layout.paragraph(`Émis le ${formatDateTimeMartinique(input.issued_at)}`, { size: 9.5, color: MUTED, gap: 13 });
   parties(layout);
   layout.paragraph(`Devis : ${input.quote_reference}`, { size: 9.5 });
-  layout.paragraph(`Dossier : INT-${input.intervention_id.slice(0, 8).toUpperCase()}`, { size: 9, color: MUTED, gap: 12 });
+  layout.paragraph(`Dossier : ${orderReference(input.intervention_id)}`, { size: 9, color: MUTED, gap: 12 });
   if (input.kind === "credit_note") {
     layout.paragraph(`Avoir lié à la facture ${input.related_number}`, { font: "bold", color: NAVY, gap: 5 });
     layout.paragraph(`Motif : ${input.reason}`, { size: 9.5, gap: 12 });

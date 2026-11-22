@@ -32,6 +32,17 @@ export function formatDateTimeUtc(value: string | null | undefined): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}${NBSP}UTC`;
 }
+/** ISO timestamp → "31/10/2026 19:59 (heure de Martinique)". The service area is Martinique only
+ * (America/Martinique: UTC−4 all year, no daylight saving), so the offset is applied without Intl
+ * and the printed time matches the one shown in the application. The zone is printed. */
+export function formatDateTimeMartinique(value: string | null | undefined): string {
+  if (!value) return "";
+  const time = Date.parse(value);
+  if (Number.isNaN(time)) return value;
+  const d = new Date(time - 4 * 3600000);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())} (heure de Martinique)`;
+}
 
 export const CATEGORY_LABELS: Record<string, string> = {
   outage: "Coupure de courant",

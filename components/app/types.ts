@@ -67,6 +67,8 @@ export type Payment = {
   status: "pending" | "paid" | "failed" | string;
   created_at: string;
   paid_at?: string | null;
+  /** Why a « failed » payment failed: « expired » = the Checkout page lapsed, no debit was attempted. */
+  failure_code?: "expired" | "async_payment_failed" | string | null;
 };
 export type Site = {
   id: string;
@@ -454,6 +456,17 @@ export type PaymentStatusReport = {
   /** E80 (contract A, optional): dispute state for the assigned artisan who authored the accepted
    *  quote; independent of payment.status, no finance detail. Absent on older servers. */
   artisan_dispute?: ArtisanDisputeState;
+  /** ART-11 (optional): commission and net share of a settled job, for the artisan who authored the
+   *  quote only. Server snapshot; « transfer » never states a payout to a bank account. */
+  artisan_settlement?: ArtisanSettlementReport;
+};
+export type ArtisanSettlementReport = {
+  channel: "checkout" | "card_hold";
+  amount_cents: number;
+  fee_bps: number;
+  fee_cents: number;
+  net_cents: number;
+  transfer: "with_payment" | "confirmed";
 };
 export type ArtisanDisputeState = "none" | "open" | "under_review" | "resolved" | "closed";
 export type ArtisanPerformanceReport = {

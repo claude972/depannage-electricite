@@ -102,6 +102,7 @@ import { anchorEntryVisible, leafScope, platformEntries } from "./anchors";
 import { PlatformPage } from "./platform-anchor";
 import { FeatureUnavailable } from "./feature-unavailable";
 import { CustomerInvoicesPanel } from "../features/customer-invoices/customer-invoices-panel";
+import { artisanSettlementView, type ArtisanSettlementView } from "../app/artisan-settlement";
 import { AvailableMissionsPanel } from "../features/available-missions/available-missions-panel";
 import { CoverageNotice } from "../features/coverage/coverage-notice";
 import { artisanNotCoveredNotice } from "../features/coverage/model";
@@ -1680,6 +1681,10 @@ function WorkDossier({ session, intervention: i }: { session: Session; intervent
           {["completed", "paid"].includes(i.status) && (
             <PaymentPanel session={session} intervention={i} />
           )}
+          {/* Service invoice / credit notes of this paid dossier, issued in the artisan's name. */}
+          {i.status === "paid" && (
+            <CustomerInvoicesPanel title="Factures et avoirs de ce dossier" filters={{ intervention_id: i.id, basis: "service" }} context={session.mutationContext} demo={session.mode === "demo"} />
+          )}
           {session.data.reviews.filter(review => review.intervention_id === i.id).map(review =>
             <ReviewContestationPanel key={review.id} reviewId={review.id} context={session.mutationContext} demo={session.mode === "demo"} />
           )}
@@ -2491,9 +2496,12 @@ const DISPUTE_LINE: Partial<Record<ArtisanDisputeState, { tone: Tone; label: str
   resolved: { tone: "neutral", label: "Litige résolu", text: "Le litige enregistré sur ce règlement est résolu." },
   closed: { tone: "neutral", label: "Litige clos", text: "Le litige enregistré sur ce règlement est clos." },
 };
-/** E80: dispute state of the accepted quote, from GET /api/payments/status (optional field). */
-function useArtisanDispute(session: Session, quoteId: string | null): ArtisanDisputeState | null {
-  const [state, setState] = useState<{ key: string; value: ArtisanDisputeState | null } | null>(null);
+/** E80 + ART-11: dispute state and settlement breakdown (commission, net share) of the accepted
+ *  quote, from one GET /api/payments/status read (both fields optional). */
+type ArtisanPaymentFacts = { dispute: ArtisanDisputeState | null; settlement: ArtisanSettlementView | null };
+const NO_PAYMENT_FACTS: ArtisanPaymentFacts = { dispute: null, settlement: null };
+function useArtisanPaymentFacts(session: Session, quoteId: string | null): ArtisanPaymentFacts {
+  const [state, setState] = useState<{ key: string; value: ArtisanPaymentFacts } | null>(null);
   // Keyed by identity + session generation + quote: never survives a session change; every rights /
   // workspace refresh (refreshedAt) re-reads it for the same quote (no loop: the read changes neither).
   const key = quoteId && session.mode === "live" ? `${session.profileId}|${session.mutationContext.generation()}|${quoteId}` : "";
@@ -2506,17 +2514,29 @@ function useArtisanDispute(session: Session, quoteId: string | null): ArtisanDis
     let active = true;
     void load.current(quoteId).then((report) => {
       const value = report?.artisan_dispute;
-      if (active) setState({ key, value: value && value in DISPUTE_LINE ? value : null });
+      if (active)
+        setState({
+          key,
+          value: {
+            dispute: value && value in DISPUTE_LINE ? value : null,
+            settlement: report?.payment?.status === "paid" ? artisanSettlementView(report.artisan_settlement) : null,
+          },
+        });
     }).catch(() => undefined);
     return () => {
       active = false;
     };
   }, [key, quoteId, refreshed]);
-  return state && state.key === key ? state.value : null;
+  return state && state.key === key ? state.value : NO_PAYMENT_FACTS;
 }
 function PaymentPanel({ session, intervention: i }: { session: Session; intervention: Intervention }) {
   const { accepted, payment } = paymentFor(session.data.quotes, session.data.payments, i.id);
-  const dispute = useArtisanDispute(session, accepted?.id ?? null);
+  const { dispute, settlement: reported } = useArtisanPaymentFacts(session, accepted?.id ?? null);
+  // Shown only against the same confirmed payment the workspace knows (same amount, card payment).
+  const settlement =
+    reported && payment?.status === "paid" && !isDeclaredOnSite(payment) && reported.amountCents === payment.total_cents
+      ? reported
+      : null;
   const disputeLine = dispute ? DISPUTE_LINE[dispute] : undefined;
   let tag: ReactNode;
   let text: string;
@@ -2529,6 +2549,9 @@ function PaymentPanel({ session, intervention: i }: { session: Session; interven
   } else if (payment?.status === "pending") {
     tag = <Tag tone="amber">Paiement en cours</Tag>;
     text = "Une session de paiement est ouverte côté client ; la confirmation arrive par Stripe.";
+  } else if (payment?.status === "failed" && payment.failure_code === "expired") {
+    tag = <Tag tone="neutral">Session de paiement expirée</Tag>;
+    text = "La session de paiement ouverte par le client a expiré sans règlement : rien n’a été débité. Le règlement reste attendu ; le client peut relancer le paiement depuis son dossier.";
   } else if (payment?.status === "failed") {
     tag = <Tag tone="red">Paiement échoué</Tag>;
     text = "Le dernier paiement n’a pas abouti selon Stripe. Le règlement reste attendu ; aucune nouvelle tentative n’est lancée automatiquement.";
@@ -2548,10 +2571,28 @@ function PaymentPanel({ session, intervention: i }: { session: Session; interven
       {accepted && typeof accepted.accepted_total_cents === "number" && accepted.accepted_total_cents !== accepted.total_cents && (
         <p data-artisan-accepted-total="">Total accepté, avenants compris : {money(accepted.accepted_total_cents)}</p>
       )}
-      {payment?.status === "paid" && !isDeclaredOnSite(payment) && (
+      {payment?.status === "paid" && !isDeclaredOnSite(payment) && !settlement && (
         <p data-artisan-paid-amount="">Montant réglé confirmé par la plateforme : {money(payment.total_cents)}</p>
       )}
+      {/* ART-11: commission and net share frozen by the server on this settlement (never recomputed here). */}
+      {settlement && (
+        <dl className={styles.facts} data-artisan-settlement="">
+          <div>
+            <dt>Montant réglé</dt>
+            <dd data-artisan-paid-amount="">{money(settlement.amountCents)}</dd>
+          </div>
+          <div>
+            <dt>{settlement.commissionLabel}</dt>
+            <dd data-artisan-commission="">− {money(settlement.feeCents)}</dd>
+          </div>
+          <div>
+            <dt>Net à percevoir</dt>
+            <dd data-artisan-net="">{money(settlement.netCents)}</dd>
+          </div>
+        </dl>
+      )}
       <p>{text}</p>
+      {settlement && <p data-artisan-payout="">{settlement.payout}</p>}
       {disputeLine && (
         <p data-artisan-dispute={dispute ?? undefined}>
           <Tag tone={disputeLine.tone}>{disputeLine.label}</Tag> {disputeLine.text}
@@ -2898,6 +2939,9 @@ function Documents({
         onRefresh={session.refresh}
       />
       {/* FIN-05: platform commission invoices addressed to this artisan (read-only, private PDFs). */}
+      {/* Service invoices and credit notes issued in this artisan's name for his paid jobs (same
+          read-only register and private PDFs as the client side: GET /api/invoices?basis=service). */}
+      <CustomerInvoicesPanel filters={{ basis: "service" }} context={session.mutationContext} demo={session.mode === "demo"} title="Factures et avoirs de prestation émis en votre nom" />
       <CustomerInvoicesPanel filters={{ basis: "platform_commission" }} context={session.mutationContext} demo={session.mode === "demo"} title="Factures de commission de la plateforme" />
     </>
   );

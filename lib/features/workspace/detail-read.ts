@@ -8,7 +8,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export const DETAIL_PROJECTIONS = {
   intervention: "id,client_id,artisan_id,site_id,category,description,address,postal_code,city,urgency,estimate_min_cents,estimate_max_cents,status,created_at,updated_at,completed_at,paid_at,travel_stage",
   quotes: "id,intervention_id,artisan_id,lines,subtotal_cents,tax_rate,tax_cents,total_cents,status,created_at,accepted_at",
-  payments: "id,quote_id,total_cents,currency,status,created_at,paid_at,method",
+  payments: "id,quote_id,total_cents,currency,status,created_at,paid_at,method,failure_code",
   messages: "id,intervention_id,author_id,body,created_at,attachment_id",
   documents: "id,intervention_id,owner_id,name,mime_type,created_at",
   appointments: "intervention_id,starts_at,ends_at,note,updated_by,updated_at",
@@ -44,7 +44,7 @@ const rowSchemas = {
     estimate_min_cents: cents, estimate_max_cents: cents, status: z.enum(["requested", "assigned", "quoted", "accepted", "in_progress", "completed", "paid", "cancelled"]),
     created_at: date, updated_at: date, completed_at: date.nullable(), paid_at: date.nullable(), travel_stage: z.enum(["planned", "en_route", "on_site"]) }).strict(),
   quotes: z.object({ id: detailIdSchema, intervention_id: detailIdSchema, artisan_id: detailIdSchema, lines: z.array(quoteLine), subtotal_cents: cents, tax_rate: taxRateSchema, tax_cents: cents, total_cents: cents, accepted_total_cents: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(), status: z.enum(["sent", "accepted", "rejected"]), created_at: date, accepted_at: date.nullable() }).strict(),
-  payments: z.object({ id: detailIdSchema, quote_id: detailIdSchema, total_cents: cents, currency: z.literal("eur"), status: z.enum(["pending", "paid", "failed"]), created_at: date, paid_at: date.nullable(), method: z.enum(["stripe", "on_site_declared"]).optional() }).strict(),
+  payments: z.object({ id: detailIdSchema, quote_id: detailIdSchema, total_cents: cents, currency: z.literal("eur"), status: z.enum(["pending", "paid", "failed"]), created_at: date, paid_at: date.nullable(), method: z.enum(["stripe", "on_site_declared"]).optional(), failure_code: z.enum(["expired", "async_payment_failed"]).nullable().optional() }).strict(),
   messages: z.object({ id: detailIdSchema, intervention_id: detailIdSchema, author_id: detailIdSchema, body: z.string(), created_at: date, attachment_id: detailIdSchema.nullable().optional() }).strict(),
   documents: z.object({ id: detailIdSchema, intervention_id: detailIdSchema, owner_id: detailIdSchema, name: z.string(), mime_type: z.string(), created_at: date }).strict(),
   appointments: z.object({ intervention_id: detailIdSchema, starts_at: date, ends_at: date, note: z.string(), updated_by: detailIdSchema, updated_at: date }).strict(),

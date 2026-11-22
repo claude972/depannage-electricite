@@ -5,7 +5,7 @@ import { useCallback, useState, type ReactNode } from "react";
 import type { ContractState, Dispute, DisputeOutcome, FinanceConfig, FinanceReport, Invoice, InvoiceReadiness, LedgerEntry, Page, PlatformAccess, PlatformClient, PlatformViewScope, RefundRequest } from "../../../lib/features/platform-operations/types";
 import { COMMISSION_NOT_CONFIGURED, refundExecutionMessage } from "../../../lib/features/platform-operations/config";
 import { ApiRequestError } from "../../app/api";
-import { platformMfaRequired } from "../../../shared/platform-mfa";
+import { PLATFORM_MFA_MESSAGE, platformMfaRequired } from "../../../shared/platform-mfa";
 import { PlatformMfaPanel } from "./platform-mfa-panel";
 import { RefundExecutionPanel } from "../refund-execution/refund-execution-panel";
 import { ReconciliationPanel } from "../finance-reconciliation/reconciliation-panel";
@@ -113,7 +113,8 @@ export function LedgerBasis({ basis }: { basis: Record<string, unknown> | null |
   );
 }
 
-type Ctx = { client: PlatformClient; demo?: PlatformDemo; canWrite: boolean; superAdmin: boolean; notify: (m: { kind: "ok" | "error"; text: string } | null) => void; busy: boolean; act: (work: () => Promise<unknown | null>, done: string, after?: () => void) => Promise<void>; scopeKey: string; rendering: boolean; refundExecution: boolean; /** Server-reported provider state (never a secret): the honest reason when execution is off. */ paymentProvider: PlatformAccess["config"]["payment_provider"] | null; userId: string; /** Opens the exact target (dossier by id) through the anchor. */ onNavigate?: (view: string, param?: string) => void };
+type RefundDraft = { paymentId: string; amount: string; reason: string; requestId: string };
+type Ctx = { client: PlatformClient; demo?: PlatformDemo; canWrite: boolean; superAdmin: boolean; notify: (m: { kind: "ok" | "error"; text: string } | null) => void; busy: boolean; act: (work: () => Promise<unknown | null>, done: string, after?: () => void) => Promise<void>; scopeKey: string; rendering: boolean; refundExecution: boolean; /** Server-reported provider state (never a secret): the honest reason when execution is off. */ paymentProvider: PlatformAccess["config"]["payment_provider"] | null; userId: string; /** Refund request being typed: kept above the tab so an MFA step-up (or a rights refresh) never empties it. */ refundDraft: RefundDraft; setRefundDraft: (d: RefundDraft) => void; /** True while the refund writes wait for the MFA step-up. */ refundMfaPending: boolean; /** Opens the exact target (dossier by id) through the anchor. */ onNavigate?: (view: string, param?: string) => void };
 
 export function PlatformFinanceView(props: PlatformFinanceViewProps) {
   return <Gate state={props.state} unavailableMessage={props.unavailableMessage} title="Finance plateforme"><Inner key={scopeKey(props.scope)} {...props} /></Gate>;
@@ -124,6 +125,7 @@ function Inner({ scope, client, context, demo, onNavigate }: PlatformFinanceView
   const [message, notify] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [mfaRequired, setMfaRequired] = useState(false);
+  const [refundDraft, setRefundDraft] = useState<RefundDraft>(() => ({ paymentId: "", amount: "", reason: "", requestId: newRequestId() }));
   const act = useCallback(async (work: () => Promise<unknown | null>, done: string, after?: () => void) => {
     if (busy || (tab === "refunds" && mfaRequired)) return;
     if (demo) { notify({ kind: "error", text: DEMO_NOTE }); return; }
@@ -138,7 +140,7 @@ function Inner({ scope, client, context, demo, onNavigate }: PlatformFinanceView
   if (me.error && !me.data) return <ErrorBox message={me.error} onRetry={me.reload} />;
   if (!me.data?.capabilities.finance) return <div className="forbidden"><strong>Cet espace nécessite le scope finance.</strong><p>Demandez l’habilitation à un super administrateur.</p></div>;
   const canWrite = scope.authority.canWrite && !demo && (me.data.super_admin || me.data.scopes.includes("finance_write"));
-  const ctx: Ctx = { client, demo, canWrite, superAdmin: !demo && scope.authority.canWrite && me.data.super_admin, notify, busy: busy || (tab === "refunds" && mfaRequired), act, scopeKey: scopeKey(scope), rendering: me.data.capabilities.invoice_rendering === true, refundExecution: canWrite && me.data.capabilities.refund_execution === true, userId: scope.userId, paymentProvider: me.data.config?.payment_provider ?? null, onNavigate };
+  const ctx: Ctx = { client, demo, canWrite, superAdmin: !demo && scope.authority.canWrite && me.data.super_admin, notify, busy: busy || (tab === "refunds" && mfaRequired), act, scopeKey: scopeKey(scope), rendering: me.data.capabilities.invoice_rendering === true, refundExecution: canWrite && me.data.capabilities.refund_execution === true, userId: scope.userId, refundDraft, setRefundDraft, refundMfaPending: tab === "refunds" && mfaRequired, paymentProvider: me.data.config?.payment_provider ?? null, onNavigate };
   return (
     <div className={styles.view} data-module="platform-operations" data-platform-view="finance">
       <div className={styles.head}><div><h2>Finance plateforme</h2><p>Consultez les paiements confirmés et les documents associés. {ctx.refundExecution ? "Les demandes approuvées et éligibles peuvent être remboursées via Stripe." : "L’exécution des remboursements est indisponible dans cet espace."}</p></div></div>
@@ -196,7 +198,7 @@ function Overview({ ctx }: { ctx: Ctx }) {
         action={ctx.canWrite && <button type="button" className={`${styles.button} ${styles.primary}`} disabled={ctx.busy} onClick={() => ctx.act(() => ctx.client.command.reconcile({ limit: 200 }), "Rapprochement exécuté ; le taux appliqué est le paramètre serveur. Les déclarations sur place restent des déclarations, pas des preuves bancaires.", data.reload)}>Rapprocher les règlements</button>}>
         <div className={styles.strip}>
           <Stat label="Paiements réglés" value={`${r.payments.paid_count} · ${money(r.payments.paid_cents)}`} note={`Inclut les règlements déclarés reçus sur place par l’artisan (pas une preuve bancaire). En attente : ${r.payments.pending_count} · échoués : ${r.payments.failed_count} · tentatives échouées : ${r.payments.failed_attempts}`} />
-          <Stat label="Règlements au registre" value={`${r.ledger.settled_count} · ${money(r.ledger.settled_cents)}`} note={r.ledger.missing_settlement ? `${r.ledger.missing_settlement} règlement(s) sans écriture : lancez le rapprochement.` : "Tous les règlements sont inscrits. Le registre peut inclure des déclarations sur place, qui ne sont pas une preuve bancaire."} />
+          <Stat label="Règlements au registre" value={`${r.ledger.settled_count} · ${money(r.ledger.settled_cents)}`} note={r.ledger.missing_settlement ? `${r.ledger.missing_settlement} règlement(s) confirmé(s) pas encore inscrit(s) au registre : étape normale après un paiement, le rapprochement les inscrit.` : "Tous les règlements sont inscrits. Le registre peut inclure des déclarations sur place, qui ne sont pas une preuve bancaire."} />
           <Stat label="Écarts de montant" value={String(r.ledger.amount_mismatches)} note="Écritures dont le montant ou la devise diffère du paiement." />
           <Stat label="Commission estimée (non prélevée)" value={`${r.ledger.commission_estimated_count} · ${money(r.ledger.commission_estimated_cents)}`} note={r.commission_setting ? `Au taux ${(r.commission_setting.bps / 100).toFixed(2)} % (version ${r.commission_setting.version}).` : COMMISSION_NOT_CONFIGURED} />
           <Stat label="Commission prélevée (confirmée)" value={`${r.ledger.commission_withheld_count} · ${money(r.ledger.commission_withheld_cents)}`} note="Connue uniquement par événement fournisseur confirmé." />
@@ -451,13 +453,17 @@ function Refunds({ ctx }: { ctx: Ctx }) {
   );
 }
 function RefundForm({ ctx, onCreated }: { ctx: Ctx; onCreated: () => void }) {
-  const [paymentId, setPaymentId] = useState(""); const [amount, setAmount] = useState(""); const [reason, setReason] = useState(""); const [errors, setErrors] = useState<Record<string, string>>({}); const [requestId, setRequestId] = useState(newRequestId);
+  // The typed values live in the view (ctx.refundDraft): an MFA demand keeps them, with the same request id.
+  const { paymentId, amount, reason, requestId } = ctx.refundDraft;
+  const patch = (next: Partial<RefundDraft>) => ctx.setRefundDraft({ ...ctx.refundDraft, ...next });
+  const [errors, setErrors] = useState<Record<string, string>>({});
   return (
     <Panel title="Nouvelle demande" intro="Créer une demande n’exécute aucun remboursement.">
-      <form className={styles.form} noValidate onSubmit={(e) => { e.preventDefault(); const next: Record<string, string> = {}; if (!UUID_RE.test(paymentId.trim())) next.payment = "Identifiant de paiement invalide."; const cents = validateAmountCents(amount, 10000000); if ("error" in cents) next.amount = cents.error; const r = validateText(reason, 10, 2000, "Motif"); if (r) next.reason = r; setErrors(next); if (Object.keys(next).length || "error" in cents) return; void ctx.act(() => ctx.client.command.requestRefund({ request_id: requestId, payment_id: paymentId.trim().toLowerCase(), amount_cents: cents.cents, reason: reason.trim() }), "Demande enregistrée (statut : demandée).", () => { setAmount(""); setReason(""); setRequestId(newRequestId()); onCreated(); }); }}>
-        <Field label="Identifiant du paiement" error={errors.payment}><input value={paymentId} onChange={(e) => setPaymentId(e.target.value)} autoComplete="off" /></Field>
-        <Field label="Montant (€)" error={errors.amount}><input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" /></Field>
-        <Field label="Motif" error={errors.reason} full><textarea value={reason} onChange={(e) => setReason(e.target.value)} maxLength={2000} /></Field>
+      <form className={styles.form} noValidate onSubmit={(e) => { e.preventDefault(); const next: Record<string, string> = {}; if (!UUID_RE.test(paymentId.trim())) next.payment = "Identifiant de paiement invalide."; const cents = validateAmountCents(amount, 10000000); if ("error" in cents) next.amount = cents.error; const r = validateText(reason, 10, 2000, "Motif"); if (r) next.reason = r; setErrors(next); if (Object.keys(next).length || "error" in cents) return; void ctx.act(() => ctx.client.command.requestRefund({ request_id: requestId, payment_id: paymentId.trim().toLowerCase(), amount_cents: cents.cents, reason: reason.trim() }), "Demande enregistrée (statut : demandée).", () => { ctx.setRefundDraft({ paymentId, amount: "", reason: "", requestId: newRequestId() }); onCreated(); }); }}>
+        <Field label="Identifiant du paiement" error={errors.payment}><input value={paymentId} onChange={(e) => patch({ paymentId: e.target.value })} autoComplete="off" /></Field>
+        <Field label="Montant (€)" error={errors.amount}><input value={amount} onChange={(e) => patch({ amount: e.target.value })} inputMode="decimal" /></Field>
+        <Field label="Motif" error={errors.reason} full><textarea value={reason} onChange={(e) => patch({ reason: e.target.value })} maxLength={2000} /></Field>
+        {ctx.refundMfaPending && <p className={`${styles.alert} ${styles.full}`} role="status" data-refund-mfa-pending="">Votre saisie est conservée. {PLATFORM_MFA_MESSAGE} La vérification se fait dans le cadre affiché en haut de cet onglet ; enregistrez ensuite à nouveau la demande.</p>}
         <div className={`${styles.actions} ${styles.full}`}><button type="submit" className={`${styles.button} ${styles.primary}`} disabled={ctx.busy}>Enregistrer la demande</button></div>
       </form>
     </Panel>

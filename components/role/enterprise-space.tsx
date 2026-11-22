@@ -1,4 +1,5 @@
 "use client";
+import { payerMemberLabels } from "../features/delegated-payer/member-labels";
 import { DemoBanner } from "../app/demo-banner";
 import floatingNav from "./floating-navigation.module.css";
 // Espace entreprise cliente (rôle "manager") : syndics, restauration, bureaux et ERP pilotant
@@ -2015,7 +2016,7 @@ export function DossierView({ c, id, initialQuoteId }: { c: Ctx; id: string; ini
                 context={session.mutationContext}
                 demo={demo}
                 onStatus={(st) => setAdvancedRead({ quoteId: displayed.id, status: st })}
-                loadMembers={c.organization ? () => session.loadOrganization(c.organization!.id).then((o) => o?.members.map((m) => ({ id: m.user_id, label: m.full_name || `Membre ${m.user_id.slice(0, 8)}` })) ?? null) : undefined}
+                loadMembers={c.organization ? () => session.loadOrganization(c.organization!.id).then((o) => (o ? payerMemberLabels(o.members, MEMBER_ROLE) : null)) : undefined}
               />
             )}
             {/* ENT-13: contract source of the displayed quote (server-stated) and the owner's grid access. */}
@@ -2194,9 +2195,11 @@ export function DossierView({ c, id, initialQuoteId }: { c: Ctx; id: string; ini
 
           {intervention.status === "paid" && (
             <>
+              {/* Only the requester of the dossier may post the review (server rule of submit_review:
+                  client_id = signed-in user). A read-only member or a delegated payer sees no form. */}
               <ReviewForm
                 existing={review}
-                enabled
+                enabled={!demo ? intervention.client_id === session.profileId : true}
                 busy={session.busy}
                 onSubmit={async (values) => {
                   await session.submitReview(id, values);
@@ -2237,7 +2240,12 @@ export function DossierView({ c, id, initialQuoteId }: { c: Ctx; id: string; ini
                     <strong>{money(acceptedQuote.total_cents)}</strong>
                   </div>
                 )}
-                {payment?.status === "failed" && (
+                {payment?.status === "failed" && payment.failure_code === "expired" && (
+                  <p className={cx("alert")} role="status">
+                    La session de paiement a expiré. Rien n’a été débité. Relancez le paiement.
+                  </p>
+                )}
+                {payment?.status === "failed" && payment.failure_code !== "expired" && (
                   <p className={cx("alert error")} role="alert">
                     Le dernier paiement n’a pas abouti selon Stripe. Le règlement reste à effectuer ; vérifiez auprès de votre banque avant de recommencer.
                   </p>
@@ -2289,7 +2297,7 @@ export function DossierView({ c, id, initialQuoteId }: { c: Ctx; id: string; ini
                 interventionId={intervention.id}
                 context={session.mutationContext}
                 demo={demo}
-                loadMembers={c.organization ? () => session.loadOrganization(c.organization!.id).then((o) => o?.members.map((m) => ({ id: m.user_id, label: m.full_name || `Membre ${m.user_id.slice(0, 8)}` })) ?? null) : undefined}
+                loadMembers={c.organization ? () => session.loadOrganization(c.organization!.id).then((o) => (o ? payerMemberLabels(o.members, MEMBER_ROLE) : null)) : undefined}
               />
             )}
           </section>
@@ -3341,7 +3349,7 @@ export function SiteSheet({ c, id }: { c: Ctx; id: string }) {
             siteId={site.id}
             context={session.mutationContext}
             demo={session.mode === "demo"}
-            loadMembers={c.organization ? () => session.loadOrganization(c.organization!.id).then((o) => o?.members.map((m) => ({ id: m.user_id, label: m.full_name || `Membre ${m.user_id.slice(0, 8)}` })) ?? null) : undefined}
+            loadMembers={c.organization ? () => session.loadOrganization(c.organization!.id).then((o) => (o ? payerMemberLabels(o.members, MEMBER_ROLE) : null)) : undefined}
           />
         </section>
 

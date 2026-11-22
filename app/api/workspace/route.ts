@@ -52,7 +52,7 @@ export async function GET(request: Request) {
       db.from("reviews").select("*").limit(100),
       db
         .from("payments")
-        .select("id,quote_id,total_cents,currency,status,created_at,paid_at,method")
+        .select("id,quote_id,total_cents,currency,status,created_at,paid_at,method,failure_code")
         .limit(100),
       db.from("organization_members").select("organization_id,user_id,role").limit(500),
       db.from("artisan_profiles").select("*").eq("user_id", user.id).maybeSingle(),

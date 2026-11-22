@@ -39,7 +39,9 @@ test("French accents, euro and exact cents survive; absent VAT identity is expli
   assert.ok(text.includes("\\311metteur")); // WinAnsi É, not a black box or replacement glyph.
   assert.ok(text.includes("240,02\\240\\200")); // literal cents and euro in WinAnsi.
   assert.ok(text.includes("non renseign\\351e"));
-  assert.ok(text.includes("Dossier : INT-10000000"));
+  assert.ok(text.includes("Dossier : INT-100000"));
+  assert.ok(!text.includes("INT-10000000"), "same short reference as the application (6 characters)");
+  assert.ok(text.includes("heure de Martinique") && !/\d{2}:\d{2}.{0,6}UTC/.test(text), "issue date printed in Martinique time, not UTC");
   assert.ok(!text.includes(sample().intervention_id), "the internal full dossier UUID must not be printed");
   assert.ok(!text.includes("acquitt"));
   assert.ok(!text.includes("rembours\\351"));

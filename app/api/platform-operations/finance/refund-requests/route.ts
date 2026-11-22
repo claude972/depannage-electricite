@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { authenticatedClient, assertOrigin } from "@/lib/supabase/server";
-import { platformWriteError } from "@/lib/features/platform-operations/mfa";
+import { financeWriteError } from "@/lib/features/platform-operations/mfa";
 import { uuid, validated } from "@/lib/supabase/validation";
 import { failed, invalidQuery, listRows, objectResult, ok, refundFields, requireScope } from "@/lib/features/platform-operations/http";
 import type { RefundRequest } from "@/lib/features/platform-operations/types";
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     await requireScope(db, "finance_write");
     const data = await validated(request, schema);
     const result = await db.rpc("platform_request_refund", { p_request_id: data.request_id, p_payment_id: data.payment_id, p_amount_cents: data.amount_cents, p_reason: data.reason });
-    platformWriteError(result.error);
+    financeWriteError(result.error);
     return ok(objectResult(result.data, "La demande de remboursement n’a pas été confirmée."), 201);
   } catch (error) { return failed(error); }
 }

@@ -35,8 +35,37 @@ async function markReview(admin:ReturnType<typeof adminClient>,l:Settlement){con
 function transferProof(t:Stripe.Transfer,l:Settlement,charge:string,p:Provider){
  return t.livemode===p.live&&t.amount===l.transfer_cents&&t.currency==="eur"&&idOf(t.destination)===l.account_id&&idOf(t.source_transaction)===charge&&t.transfer_group===`guest-settlement:${l.id}`&&t.metadata?.settlement_id===l.id&&t.metadata?.actor_id===l.actor_id&&t.amount_reversed===0&&t.reversed===false&&/^tr_[A-Za-z0-9]{1,200}$/.test(t.id);
 }
+/** Books the commission kept on a paid card-hold settlement in the platform ledger (service-only
+ * RPC platform_record_commission_withheld). The amount is the frozen difference between the captured
+ * amount and the transfer already proven at the provider; the key is the settlement itself, so a
+ * replay writes nothing (the RPC answers false, or « Commission already recorded »). Best effort:
+ * the money has already moved, a ledger refusal never turns a confirmed settlement into an error. */
+// Écriture de la commission d’un règlement sur place au grand livre : désactivée par défaut. La
+// fonction SQL utilisée a été conçue pour des événements du fournisseur ; l’exploitant doit valider
+// cet usage (et le libellé de l’écriture) avant d’activer GUEST_SETTLEMENT_LEDGER_COMMISSION_ENABLED.
+const LEDGER_COMMISSION_ENABLED=()=>env.GUEST_SETTLEMENT_LEDGER_COMMISSION_ENABLED==="true";
+export async function recordSettlementCommission(admin:ReturnType<typeof adminClient>,l:Settlement):Promise<"recorded"|"existing"|"skipped"|"failed">{
+ try{
+  if(l.status!=="paid"||l.transfer_cents===null||!l.transfer_id||!/^tr_[A-Za-z0-9]{1,200}$/.test(l.transfer_id))return"skipped";
+  const fee=l.amount_cents-l.transfer_cents;
+  // A zero commission has no ledger entry (the register only holds positive amounts).
+  if(!Number.isSafeInteger(fee)||fee<1||fee>=l.amount_cents)return"skipped";
+  const pay=await admin.from("payments").select("id,status,session_id,total_cents,currency").eq("quote_id",l.quote_id).maybeSingle();
+  const row=pay.data as{id?:unknown;status?:unknown;session_id?:unknown;total_cents?:unknown;currency?:unknown}|null;
+  if(pay.error){console.error("guest settlement commission not booked",{settlement:l.id,code:pay.error.code});return"failed";}
+  if(!row||typeof row.id!=="string"||row.status!=="paid"||row.session_id!==l.session_id||row.total_cents!==l.amount_cents||row.currency!=="eur")return"skipped";
+  const r=await admin.rpc("platform_record_commission_withheld",{p_payment_id:row.id,p_event_id:`guest-settlement-commission:${l.id}`,p_event_type:"guest_settlement.transfer_confirmed",p_session_id:l.session_id,p_provider_reference:l.transfer_id,p_provider_status:"succeeded",p_amount_cents:fee,p_currency:"eur"});
+  if(r.error){
+   if(r.error.code==="P0001"&&r.error.message==="Commission already recorded")return"existing";
+   console.error("guest settlement commission not booked",{settlement:l.id,code:r.error.code});return"failed";
+  }
+  return r.data===true?"recorded":"existing";
+ }catch{console.error("guest settlement commission not booked",{settlement:l.id});return"failed";}
+}
 export async function executeSettlement(admin:ReturnType<typeof adminClient>,l:Settlement,p:Provider){
- if(l.status==="paid"||l.status==="needs_review")return;
+ // A settled dossier replays only the (idempotent) commission booking, never a provider call.
+ if(l.status==="paid"){if(LEDGER_COMMISSION_ENABLED())await recordSettlementCommission(admin,l);return;}
+ if(l.status==="needs_review")return;
  if(!await qualifiedAccount(p,l.account_id,l.artisan_id))throw conflict();
  const q=await admin.rpc("qualify_guest_settlement",{p_id:l.id,p_actor:l.actor_id,p_account:l.account_id,p_fee:l.fee_bps??p.fee});dbError(q.error);l=await settlementLedger(admin,l.id,l.actor_id);
  if(l.transfer_cents===null||l.fee_bps===null)throw unknown();
@@ -68,6 +97,7 @@ export async function executeSettlement(admin:ReturnType<typeof adminClient>,l:S
  if(!transferProof(transfer,l,proof.charge.id,p))throw unknown();
  if(!await qualifiedAccount(p,l.account_id,l.artisan_id)){await markReview(admin,l);return;}
  const final=await admin.rpc("record_guest_settlement",{p_id:l.id,p_actor:l.actor_id,p_charge:proof.charge.id,p_amount:l.amount_cents,p_transfer:transfer.id,p_net:transfer.amount,p_account:l.account_id});dbError(final.error);
+ if(LEDGER_COMMISSION_ENABLED())await recordSettlementCommission(admin,{...l,status:"paid",transfer_id:transfer.id});
 }
 
 export async function settlementReady(p:Provider,source:Record<string,unknown>){

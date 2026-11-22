@@ -1,7 +1,8 @@
 import { z } from "zod";
-import { authenticatedClient, ApiError, dbError } from "@/lib/supabase/server";
+import { authenticatedClient, adminClient, ApiError, dbError } from "@/lib/supabase/server";
 import { uuid } from "@/lib/supabase/validation";
 import { PAYMENT_HEADERS } from "@/lib/features/payments/checkout";
+import { readArtisanSettlement, type ArtisanSettlement } from "@/lib/features/payments/artisan-settlement";
 export const dynamic = "force-dynamic";
 const date=z.string().refine(v=>Number.isFinite(Date.parse(v)));
 const fields={status:z.enum(["pending","paid","failed"]),total_cents:z.number().int().positive().max(2147483647),currency:z.literal("eur"),failure_code:z.enum(["expired","async_payment_failed"]).nullable(),created_at:date,updated_at:date,paid_at:date.nullable(),method:z.enum(["stripe","on_site_declared"])};
@@ -27,7 +28,14 @@ export async function GET(request: Request) {
     dbError(dispute.error);
     artisanDispute = disputeState.parse(dispute.data);
   }
+  // ART-11: commission and net share of the settled job, for the artisan who authored the quote only
+  // (optional field; the frozen server snapshot is read with the service role after this check).
+  let artisanSettlement: ArtisanSettlement | null = null;
+  if (quote.data.artisan_id === user.id && p.data?.status === "paid" && p.data.method === "stripe") {
+    try { artisanSettlement = await readArtisanSettlement(adminClient(), quoteId, user.id, p.data); } catch { artisanSettlement = null; }
+  }
   return Response.json({payment:p.data,attempts:a.data,attempts_limit:50,history_limited:attempts.count!>50,
-    ...(artisanDispute === undefined ? {} : { artisan_dispute: artisanDispute })},{headers:PAYMENT_HEADERS});
+    ...(artisanDispute === undefined ? {} : { artisan_dispute: artisanDispute }),
+    ...(artisanSettlement === null ? {} : { artisan_settlement: artisanSettlement })},{headers:PAYMENT_HEADERS});
  }catch(e){const status=e instanceof ApiError?e.status:503;return Response.json({error:e instanceof ApiError?e.message:"Le règlement est momentanément indisponible. Réessayez."},{status,headers:{...PAYMENT_HEADERS,...(status===503?{"Retry-After":"2"}:{})}});}
 }

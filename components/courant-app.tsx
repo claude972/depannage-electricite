@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { createClient } from "../lib/supabase/client";
+import { showsMobileAppReturn } from "./app/mobile-return";
 import { UNVERIFIED_RECEIPT, validSupportReceipt } from "./app/support-receipt";
 import { api, ApiRequestError, contractStateFromError, uploadDocument } from "./app/api";
 import { createGuard, createRunner, runForResult, type RunContext, type Runner } from "./app/guard";
@@ -465,7 +466,9 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
     // (React StrictMode in development) would otherwise parse an empty query and drop the return.
     if (bootReturn.current === undefined) bootReturn.current = parseReturnParams(window.location.search);
     const back = bootReturn.current;
-    if (back?.kind === "payment" && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(back.interventionId))
+    // Deep link to the native app: phones/tablets (or small viewports) only, never a desktop return.
+    if (back?.kind === "payment" && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(back.interventionId)
+      && showsMobileAppReturn(window.navigator.userAgent, window.innerWidth))
       setMobileReturnId(back.interventionId);
     if (back) {
       const url = new URL(window.location.href);
@@ -3178,7 +3181,7 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
     role === "manager" ? <EnterpriseSpace key={sessionKey} session={session} /> :
     role === "admin" ? <AdminSpace key={sessionKey} session={session} /> : <ClientSpace key={sessionKey} session={session} />;
   return <>
-    {mobileReturnId && <div className="notice" role="region" aria-label="Retour du paiement">
+    {mobileReturnId && <div className="notice" role="region" aria-label="Retour du paiement" style={{ padding: "10px 16px", textAlign: "center", overflowWrap: "anywhere", whiteSpace: "normal" }}>
       <a href={`depannageelectrique://dossier/${mobileReturnId}?retourPaiement=1`}>Revenir à mon dossier dans l’application mobile</a>
     </div>}
     {space}
