@@ -4,6 +4,7 @@
 // clicks « Envoyer ma demande » ⇒ ONE idempotent POST /api/bookings (contact in the booking body,
 // never in the description; never the legacy /api/interventions). A double click is refused; any
 // failure keeps the draft and the booking; the component is remounted on identity change.
+import { URGENCY_NOTICE } from "../../shared/commercial-facts";
 import { useEffect, useRef, useState } from "react";
 import { PAYMENT_LABEL, SLOT_LABEL, contactErrors, type BookingDraft, type PaymentChoice } from "../app/booking-draft";
 import { category, money } from "../app/format";
@@ -153,6 +154,7 @@ export function BookingConfirm({
               <ReviewEstimate category={draft.category} scope={REVIEW_SCOPES.bookingConfirm} />
             )}{" "}
             <small>(fourchette, pas un prix garanti)</small>
+            {draft.urgency === "urgent" && <small data-urgency-surcharge=""> {URGENCY_NOTICE}</small>}
           </dd>
         </div>
         <div>

@@ -1,16 +1,16 @@
 # Identité, territoire et assistance
 
-**BROUILLON — non publiable en l’état.** Marque utilisée par l’application : DomDépannage. Cela n’établit ni sa disponibilité juridique ni l’identité de l’exploitant.
+**Partiellement validé le 21 novembre 2026** (identité et territoire publiés ; contacts, TVA, médiateur, horaires encore à renseigner). Marque utilisée par l’application : DomDépannage. Cela n’établit ni sa disponibilité juridique ni l’identité de l’exploitant.
 
 ## Fiche de l’exploitant
 
 | Donnée | Valeur à valider |
 | --- | --- |
-| Raison sociale et nom commercial | [À RENSEIGNER] |
-| Forme juridique, capital si applicable | [À RENSEIGNER] |
-| SIREN / SIRET et immatriculation | [À RENSEIGNER] |
-| Adresse du siège et adresse de correspondance | [À RENSEIGNER] |
-| Représentant et directeur de publication | [À RENSEIGNER] |
+| Raison sociale et nom commercial | TTBM SARL (validé le 21 novembre 2026) ; nom commercial de l’application : DomDépannage |
+| Forme juridique, capital si applicable | SARL (validé) ; capital [À RENSEIGNER] |
+| SIREN / SIRET et immatriculation | SIREN 929 507 762 ; SIRET 929 507 762 00011 ; RCS Fort-de-France (validés) |
+| Adresse du siège et adresse de correspondance | Cité Eucalyptus, 97240 Le François (validé) |
+| Représentant et directeur de publication | Brafa Claude Thierry, gérant (validé) |
 | Régime fiscal / identification TVA applicable | [À RENSEIGNER avec le conseil comptable] |
 | Contact client et horaires de réponse | [À RENSEIGNER] |
 | Contact artisans | [À RENSEIGNER] |
@@ -27,7 +27,7 @@ DomDépannage permet de décrire un besoin de dépannage électrique, de demande
 
 | Couverture | Valeur à valider |
 | --- | --- |
-| Territoire / communes / codes postaux | [À RENSEIGNER — le contexte Martinique ne suffit pas à promettre une couverture] |
+| Territoire / communes / codes postaux | Martinique entière, codes postaux 972xx (validé le 21 novembre 2026, publié) |
 | Jours, plages horaires et jours exclus | [À RENSEIGNER] |
 | Zone de déplacement et éventuels frais hors zone | [À RENSEIGNER] |
 | Urgence disponible ou uniquement rendez-vous | [À DÉCIDER] |

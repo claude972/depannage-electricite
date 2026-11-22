@@ -7,6 +7,7 @@ import {
   COVERAGE, EMAIL_PATTERN, MAX_VERSION, OPERATOR_PROFILE_FIELDS, OPERATOR_PROFILE_REQUIRED, POSTAL_CODE_PATTERN,
   PUBLIC_PATHS, WARRANTY_TERMS, siretMatchesSiren, type FieldRule, type OperatorProfileField,
 } from '../../../../shared/public-contract';
+import { OPERATOR_REGISTRATION, PRICING_RULES, VALIDATED_OPERATOR } from '../../../../shared/commercial-facts';
 
 export { PUBLIC_PATHS };
 
@@ -90,6 +91,22 @@ export function operatorRows(profile: OperatorProfile): Row[] {
   add('Direction de la publication', profile.publication_director);
   return rows;
 }
+/**
+ * Identité affichée : les valeurs publiées depuis l’administration, complétées par les données
+ * validées par le propriétaire (shared/commercial-facts.ts) pour les rubriques qu’elles couvrent.
+ */
+export function operatorIdentityRows(published: OperatorProfile | null): Row[] {
+  // Un profil publié en administration est la seule source : deux entités ne sont jamais mélangées.
+  if (published) return operatorRows(published);
+  const rows = operatorRows(VALIDATED_OPERATOR);
+  const siret = rows.findIndex(row => row.label === 'SIRET de l’établissement');
+  rows.splice(siret + 1, 0, { label: 'Immatriculation', value: OPERATOR_REGISTRATION });
+  return rows;
+}
+export const validatedServiceArea = (published: OperatorProfile | null): string | null =>
+  published ? published.service_area ?? null : VALIDATED_OPERATOR.service_area;
+/** Règles tarifaires validées (mêmes libellés que la page Tarifs du Web). */
+export const pricingRuleRows = (): Row[] => PRICING_RULES.map(rule => ({ label: rule.label, value: rule.text }));
 export type Channel = Row & { action: string; url: string };
 const mailto = (address: string) => `mailto:${encodeURIComponent(address).replace(/%40/g, '@')}`;
 /** Canaux réellement publiés ; le téléphone est facultatif et n’apparaît que s’il est publié. */

@@ -1,6 +1,6 @@
 # Dossier de préparation commerciale — DomDépannage
 
-19 novembre 2026, heure de Martinique. **Version de travail, non publiée, à modifier avec le propriétaire.** Créée à sa demande : les documents commerciaux n’existent pas encore. Leur rédaction ne vaut ni approbation des données ni activation des encaissements réels.
+19 novembre 2026, heure de Martinique ; **mis à jour le 21 novembre 2026 : commission, zone, garantie, règles de prix et identité de l’exploitant validées par le propriétaire et publiées** (voir `docs/DECISIONS.md`). Le reste demeure une version de travail. Créée à sa demande : les documents commerciaux n’existent pas encore. Leur rédaction ne vaut ni approbation des données ni activation des encaissements réels.
 
 ## Documents à travailler
 

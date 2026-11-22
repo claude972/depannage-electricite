@@ -29,7 +29,7 @@ Approbations avancées, fiches de site complètes, contrats cadres, reporting co
 - Distinguer estimation, devis accepté et montant effectivement payé ; ne pas transformer une fourchette en prix garanti.
 - Prévoir une attribution de mission atomique pour empêcher les doubles acceptations.
 - Vérifier côté serveur les permissions, transitions de statut, montants et confirmations de paiement.
-- La commission de 15 à 25 %, les abonnements et les contrats cadres sont des orientations de monétisation : ne pas figer un taux ou un tarif sans décision explicite.
+- Commission de la plateforme : 10 %, décision explicite du propriétaire du 21 novembre 2026 (voir `docs/DECISIONS.md` et `shared/commercial-facts.ts`). Les abonnements et les contrats cadres restent des orientations de monétisation : ne pas figer d’autre taux ou tarif sans décision explicite.
 - Les verticales B2B couvrent respectivement équipements critiques/SLA, maintenance/budgets et audits/sécurité/conformité.
 
 ## Méthode de travail

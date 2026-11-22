@@ -9,7 +9,7 @@ import { useResource } from '@/lib/api';
 import { apiOrigin } from '@/lib/config';
 import {
   COVERAGE_COPY, PUBLIC_PATHS, contactChannels, coveragePath, coverageResult, coverageSchema, isPostalCode, operatorPublicationSchema,
-  operatorRows, publishedStamp, publishedState, warrantyTermsSchema, type Channel, type Published, type Row,
+  operatorIdentityRows, pricingRuleRows, publishedStamp, publishedState, validatedServiceArea, warrantyTermsSchema, type Channel, type Published, type Row,
 } from '@/lib/published-info';
 import { releaseLabel } from '@/lib/release';
 
@@ -29,25 +29,25 @@ export default function MobileHelp({ embedded = false }: { embedded?: boolean } 
       <Action label="Retrouver mon intervention" onPress={() => router.push('/retrouver')} />
     </Card>
 
-    <CoverageCheck serviceArea={profile?.service_area ?? null} />
+    <CoverageCheck serviceArea={validatedServiceArea(profile)} />
+
+    <Card>
+      <Copy kind="subtitle">Tarifs</Copy>
+      <Rows rows={pricingRuleRows()} />
+    </Card>
 
     <Card>
       <Copy kind="subtitle">Contact</Copy>
       <Pending state={operator} onRetry={operatorRead.reload}
         failed="Les coordonnées publiées n’ont pas pu être lues. Aucune coordonnée n’est affichée à leur place."
-        absent="L’exploitant n’a pas encore publié de coordonnées de contact. Aucune adresse ni aucun numéro n’est affiché à leur place." />
+        absent="L’adresse e-mail et le téléphone de l’exploitant ne sont pas encore publiés. Une fois connecté, écrivez à l’assistance depuis votre espace." />
       {profile && <Contact channels={contactChannels(profile)} />}
     </Card>
 
     <Card>
       <Copy kind="subtitle">Exploitant du service</Copy>
-      <Pending state={operator} onRetry={operatorRead.reload}
-        failed="Les informations de l’exploitant n’ont pas pu être lues. Aucune information n’est affichée à leur place."
-        absent="L’exploitant n’a pas encore publié ses informations légales. Aucune société ni aucun identifiant n’est affiché à leur place." />
-      {operator.phase === 'published' && <>
-        <Rows rows={operatorRows(operator.value.profile)} />
-        <Copy kind="muted">{publishedStamp(operator.value)}</Copy>
-      </>}
+      <Rows rows={operatorIdentityRows(profile)} />
+      {operator.phase === 'published' && <Copy kind="muted">{publishedStamp(operator.value)}</Copy>}
     </Card>
 
     <Card>

@@ -16,7 +16,7 @@ import { PublicHome } from "./public-home";
 import { requestPrefill } from "./public-request-prefill";
 import { PublicChrome, type HomeHandlers } from "./public-chrome";
 import formStyles from "./public-forms.module.css";
-import { ABOUT_VALUES, CONTACT_CHANNELS, FAQ, HELP_PROCESS, JOIN_FACTS, JOIN_REVIEW, JOIN_STEPS, JOIN_TILES, LEGAL_SECTIONS, OPERATOR_FIELDS, PENDING, PRICING_PENDING, PRIVACY_CONTROLS, PRIVACY_DATA, PRIVACY_THIRD_PARTIES, numbered, pricingRows } from "./public-lists";
+import { ABOUT_VALUES, CONTACT_CHANNELS, FAQ, HELP_PROCESS, JOIN_FACTS, JOIN_REVIEW, JOIN_STEPS, JOIN_TILES, LEGAL_SECTIONS, OPERATOR_FIELDS, PENDING, PRIVACY_CONTROLS, PRIVACY_DATA, PRIVACY_THIRD_PARTIES, numbered, pricingRows } from "./public-lists";
 import styles from "./public.module.css";
 import { paragraphs, publishedStamp, publishedValue, type PublicProfileState } from "../features/public-operator-profile/model";
 import { usePublishedOperatorProfile } from "../features/public-operator-profile/use-published-profile";
@@ -27,6 +27,7 @@ import { PublicWarrantyTerms } from "../features/warranty-policy/public-warranty
 import type { PublicTermsState } from "../features/warranty-policy/model";
 import type { OperatorField } from "../../lib/features/public-operator-profile/contract";
 import { releaseLabel } from "../../shared/release";
+import { NETWORK_COMMISSION_TEXT, OPERATOR_REGISTRATION, PRICING_RULES, URGENCY_SURCHARGE_PERCENT } from "../../shared/commercial-facts";
 import viewStyles from "./public-views.module.css";
 
 const PUBLIC_VIEWS: View[] = ["home", "new", "auth", "help", "pricing", "join", "join-organization", "demo", "about", "privacy", "legal"];
@@ -36,10 +37,11 @@ const PUBLIC_VIEWS: View[] = ["home", "new", "auth", "help", "pricing", "join", 
 const OperatorContext = createContext<PublicProfileState | null>(null);
 // "join" reads the published network terms (PUB-07); nothing else is derived from it there.
 const OPERATOR_VIEWS: View[] = ["help", "pricing", "about", "privacy", "legal", "join"];
-type Source = { fields: OperatorField[]; optional?: OperatorField[]; join?: string };
+type Source = { fields: OperatorField[]; optional?: OperatorField[]; join?: string; /** Owner-validated fact with no profile field. */ fixed?: string };
 /** Published value for a field label, or null ⇒ pending. Required parts must all be published. */
 function sourced(state: PublicProfileState | null, source: Source | undefined): string | null {
   if (!source) return null;
+  if (source.fixed) return state?.phase === "ready" && state.published ? null : source.fixed;
   const parts = source.fields.map((f) => publishedValue(state, f));
   if (parts.some((p) => p === null)) return null;
   const extra = (source.optional ?? []).map((f) => publishedValue(state, f)).filter((v): v is string => v !== null);
@@ -319,7 +321,13 @@ function PublishedBlock({ field, title, headingId }: { field: "team_text" | "net
 function NetworkTerms() {
   const value = publishedValue(useContext(OperatorContext), "network_terms");
   if (!value)
-    return <Unavailable title="Commission, délais de règlement et conditions du réseau" reason="Non définis à ce stade. Aucun pourcentage, aucun délai de versement ni condition contractuelle n’est publié avant décision de l’exploitant." blocker="Q-PDF-15 / Q-PDF-05" />;
+    return (
+      <section className={`panel ${styles.block}`} aria-labelledby="join-network-terms" data-network-commission="">
+        <h2 id="join-network-terms">Commission de la plateforme</h2>
+        <p>{NETWORK_COMMISSION_TEXT}</p>
+        <p className={styles.footnote}>Aucun paiement n’est demandé à l’inscription. Le suivi des règlements se fait depuis l’espace artisan.</p>
+      </section>
+    );
   return <PublishedBlock field="network_terms" title="Conditions du réseau publiées par l’exploitant" headingId="join-network-terms" />;
 }
 /** Full published privacy notice, or the existing honest placeholder while it is not published. */
@@ -403,6 +411,7 @@ function HelpView({ onNew, onLogin, warrantyTerms }: { onNew: () => void; onLogi
 
 // ---- Pricing (M38) --------------------------------------------------------------------------
 function PricingView({ onNew }: { onNew: () => void }) {
+  const operator = useContext(OperatorContext);
   const rows = pricingRows(CATEGORIES, category);
   return (
     <div className={styles.page}>
@@ -412,15 +421,21 @@ function PricingView({ onNew }: { onNew: () => void }) {
           <p className={styles.subtitle}>L’estimation indicative, le devis que vous acceptez et le montant effectivement réglé sont trois choses distinctes.</p>
         </div>
         <div>
-          <Unavailable title="Barème officiel, frais de déplacement et majorations" reason="À définir par l’exploitant. Aucun tarif public, frais de déplacement ou majoration (soir, week-end, urgence) n’est publié tant que cette décision n’est pas prise." blocker="PUB-02" />
-          <PendingFields fields={PRICING_PENDING} label="Décisions tarifaires en attente" sources={{ "Zone desservie": { fields: ["service_area"] } }} />
+          <dl className={styles.legalFields} aria-label="Règles tarifaires" data-pricing-rules="">
+            {PRICING_RULES.map((rule) => (
+              <div key={rule.label}>
+                <dt>{rule.label} :</dt>
+                <dd>{rule.label === "Zone desservie" ? publishedValue(operator, "service_area") ?? rule.text : rule.text}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
       </div>
       <div id="zones" tabIndex={-1} style={{ scrollMarginTop: 88 }}><PostalCoverageCheck /></div>
       <section className={`panel ${styles.priceTableCard}`} aria-labelledby="pricing-table">
         <h2 id="pricing-table" className={styles.srOnly}>Fourchettes indicatives par type de panne</h2>
         <table className={styles.table}>
-          <caption>Fourchettes indicatives de préparation du service, pas un barème contractuel.</caption>
+          <caption>Grille indicative par type de panne. Le prix ferme est celui du devis précis que vous acceptez avant travaux.</caption>
           <thead>
             <tr>
               <th scope="col">Type de problème</th>
@@ -444,7 +459,7 @@ function PricingView({ onNew }: { onNew: () => void }) {
             ))}
           </tbody>
         </table>
-        <p className={styles.footnote}>TVA : selon le taux applicable indiqué sur le devis. Les montants ci-dessus n’incluent ni déplacement ni majoration, qui restent à définir.</p>
+        <p className={styles.footnote}>TVA : selon le taux applicable indiqué sur le devis. Les montants ci-dessus s’entendent hors majoration d’urgence (+{URGENCY_SURCHARGE_PERCENT} %) ; le déplacement est détaillé sur le devis.</p>
       </section>
       <section className={`panel ${styles.block}`} aria-labelledby="pricing-steps">
         <h2 id="pricing-steps">Trois montants, trois moments</h2>
@@ -555,7 +570,7 @@ function AboutView({ onNew, onJoin, onLogin }: { onNew: () => void; onJoin: () =
         <div className={styles.heroInner}>
           <div className={styles.heroCopy}>
             <h1 id="about-title" className={styles.title}>À propos de l’application</h1>
-            <p>Une application de dépannage électrique en préparation. Cette page décrit ce qu’elle fait, pas plus.</p>
+            <p>Une application de dépannage électrique en Martinique. Cette page décrit ce qu’elle fait, pas plus.</p>
           </div>
         </div>
       </section>
@@ -604,7 +619,7 @@ function AboutView({ onNew, onJoin, onLogin }: { onNew: () => void; onJoin: () =
         />
         <PublishedStamp />
         <WhenUnpublished>
-          <Unavailable title="Identité de l’exploitant, équipe et coordonnées à renseigner" reason="Le nom définitif, la société exploitante, les personnes responsables et les moyens de contact seront publiés avant l’ouverture commerciale. Aucune information de substitution n’est affichée." blocker="PUB-08 / PUB-09" />
+          <Unavailable title="Équipe et coordonnées de contact à renseigner" reason="L’identité de l’exploitant est publiée ci-dessus. La présentation de l’équipe, l’adresse e-mail et le téléphone seront ajoutés par l’exploitant ; aucune information de substitution n’est affichée." blocker="PUB-09" />
         </WhenUnpublished>
       </section>
       <div className={styles.narrowBlock}>
@@ -679,7 +694,7 @@ function PrivacyView({ onHome, onLogin }: { onHome: () => void; onLogin: () => v
       </section>
       <p className={styles.docFoot}>
         <Icon name="shield" size={20} />
-        <span>Aucune adresse de contact n’est affichée tant que l’exploitant n’est pas désigné ; aucun cookie analytique ou marketing n’est utilisé.</span>
+        <span>L’adresse de contact dédiée sera affichée dès sa publication par l’exploitant ; aucun cookie analytique ou marketing n’est utilisé.</span>
       </p>
     </div>
   );
@@ -694,13 +709,14 @@ const LEGAL_SOURCES: Record<string, Record<string, Source>> = {
     "Raison sociale et forme juridique": { fields: ["legal_name", "legal_form"] },
     "Adresse du siège": { fields: ["hq_address"] },
     "Numéro SIREN et numéro de TVA": { fields: ["siren"], optional: ["vat_number"], join: " · TVA " },
+    "Immatriculation": { fields: [], fixed: OPERATOR_REGISTRATION },
     [SIRET_ROW]: { fields: ["siret"] },
     "Directeur ou directrice de la publication": { fields: ["publication_director"] },
     "Adresse de contact": { fields: ["public_email"] },
   },
   "Hébergeur": { "Nom de l’hébergeur": { fields: ["host_name"] }, "Adresse": { fields: ["host_address"] }, "Coordonnées de contact": { fields: ["host_contact"] } },
   "Propriété intellectuelle": { "Titulaire des droits sur le nom, le logo et les contenus": { fields: ["rights_holder"] } },
-  "Données personnelles": { "Contact pour l’exercice des droits": { fields: ["privacy_email"] } },
+  "Données personnelles": { "Responsable du traitement": { fields: ["privacy_controller"] }, "Contact pour l’exercice des droits": { fields: ["privacy_email"] } },
 };
 /** Published presentation text and display name, only when published. */
 function OperatorAbout() {
@@ -717,12 +733,15 @@ function OperatorAbout() {
 }
 function LegalView({ onHome }: { onHome: () => void }) {
   const siretPublished = publishedValue(useContext(OperatorContext), "siret") !== null;
-  const rows = (fields: string[]) => (siretPublished ? fields.flatMap((field) => (field === SIRET_AFTER ? [field, SIRET_ROW] : [field])) : fields);
+  const operator = useContext(OperatorContext);
+  const adminPublished = operator?.phase === "ready" && operator.published !== null;
+  const rows = (fields: string[]) => (siretPublished ? fields.flatMap((field) => (field === SIRET_AFTER ? [field, SIRET_ROW] : [field])) : fields)
+    .filter((field) => !(adminPublished && field === "Immatriculation"));
   return (
     <div className={`${styles.page} ${styles.document}`}>
       <Crumb onHome={onHome} current="Mentions légales" />
       <h1 className={styles.title}>Mentions légales</h1>
-      <p className={styles.subtitle}>Structure des mentions obligatoires. Chaque champ sera complété par l’exploitant avant publication.</p>
+      <p className={styles.subtitle}>Identité de l’exploitant de la plateforme. Les rubriques encore signalées « à renseigner » seront complétées par l’exploitant.</p>
       {LEGAL_SECTIONS.map((section, index) => (
         <section key={section.title} className={styles.docSection} aria-labelledby={`legal-section-${index}`}>
           <h2 id={`legal-section-${index}`}>{numbered(index, section.title)}</h2>
@@ -732,7 +751,7 @@ function LegalView({ onHome }: { onHome: () => void }) {
       <PublishedStamp />
       <p className={styles.footnote} data-app-version="">{releaseLabel()}</p>
       <WhenUnpublished>
-        <Unavailable title="Mentions légales à compléter" reason="Aucune société, adresse ou identifiant fictif n’est affiché. Les informations ci-dessus seront renseignées par l’exploitant avant l’ouverture commerciale." blocker="PUB-08" />
+        <Unavailable title="Mentions légales à compléter" reason="L’identité de l’exploitant est publiée. L’adresse de contact, l’hébergeur, le numéro de TVA et le titulaire des droits restent à renseigner par l’exploitant ; aucune valeur de substitution n’est affichée." blocker="PUB-08" />
       </WhenUnpublished>
     </div>
   );

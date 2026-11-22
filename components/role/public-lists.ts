@@ -117,10 +117,8 @@ export const CONTACT_CHANNELS: { label: string; state: "available" | "pending"; 
 ];
 /** Operator presentation (PUB-09): fields the owner must provide; nothing is filled in by default. */
 export const OPERATOR_FIELDS: string[] = ["Nom de l’exploitant et forme juridique", "Personnes responsables", "Équipe", "Zone d’intervention couverte", "Coordonnées de contact"];
-/** Pricing decisions still pending (PUB-02). */
-export const PRICING_PENDING: string[] = ["Barème officiel", "Frais de déplacement", "Majorations (soir, week-end, urgence)", "Zone desservie"];
 export const LEGAL_SECTIONS: { title: string; fields: string[] }[] = [
-  { title: "Éditeur", fields: ["Raison sociale et forme juridique", "Adresse du siège", "Numéro SIREN et numéro de TVA", "Directeur ou directrice de la publication", "Adresse de contact"] },
+  { title: "Éditeur", fields: ["Raison sociale et forme juridique", "Adresse du siège", "Numéro SIREN et numéro de TVA", "Immatriculation", "Directeur ou directrice de la publication", "Adresse de contact"] },
   { title: "Hébergeur", fields: ["Nom de l’hébergeur", "Adresse", "Coordonnées de contact"] },
   { title: "Propriété intellectuelle", fields: ["Titulaire des droits sur le nom, le logo et les contenus"] },
   { title: "Données personnelles", fields: ["Responsable du traitement", "Contact pour l’exercice des droits"] },
@@ -170,7 +168,7 @@ export function publicStrings(): string[] {
   for (const item of PRIVACY_DATA) out.push(item.label, item.text);
   for (const item of PRIVACY_THIRD_PARTIES) out.push(item.name, item.text);
   for (const item of CONTACT_CHANNELS) out.push(item.label, item.text);
-  out.push(...PRIVACY_CONTROLS, ...OPERATOR_FIELDS, ...PRICING_PENDING);
+  out.push(...PRIVACY_CONTROLS, ...OPERATOR_FIELDS);
   for (const section of LEGAL_SECTIONS) out.push(section.title, ...section.fields);
   out.push(...JOIN_REVIEW, PENDING);
   return out;

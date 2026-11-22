@@ -33,7 +33,9 @@ test("pricing rows come from the domain categories with ordered bounds and no ha
 test("legal and privacy documents keep their fields and number their sections like M63 / V8-C05", () => {
   assert.equal(numbered(0, "Éditeur"), "1. Éditeur");
   assert.equal(numbered(3, "Données personnelles"), "4. Données personnelles");
-  assert.deepEqual(LEGAL_SECTIONS.map((s) => s.fields.length), [5, 3, 1, 2]);
+  // Éditeur carries the « Immatriculation » row (owner-validated registration) since 2026-11-21.
+  assert.deepEqual(LEGAL_SECTIONS.map((s) => s.fields.length), [6, 3, 1, 2]);
+  assert.deepEqual(LEGAL_SECTIONS[0].fields.filter((f) => /SIREN|Immatriculation|Directeur/.test(f)), ["Numéro SIREN et numéro de TVA", "Immatriculation", "Directeur ou directrice de la publication"]);
   assert.equal(PRIVACY_DATA.length, 15);
   for (const label of ["Lieu d’intervention", "Demande de rappel", "Notifications du navigateur", "Préanalyse d’une photo"]) {
     assert.ok(PRIVACY_DATA.some((entry) => entry.label === label), label);

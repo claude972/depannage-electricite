@@ -26,6 +26,8 @@ Prévoir un texte et un formulaire adaptés à la conclusion à distance/hors é
 
 ## Garantie et réclamations
 
+**Décision du 21 novembre 2026 :** garantie portée par la plateforme — satisfaction, ré-intervention, remboursement. Conditions publiées dans l’aide (rubrique Garantie) et demandes activées. Durée, exclusions et délais de réponse restent à préciser par le propriétaire.
+
 La garantie commerciale d’un an figure dans l’orientation V2 du projet ; elle ne devient pas un engagement publié par ce brouillon. **À décider :** activation au lancement ou report, garant, date de départ, prestations/pièces couvertes, exclusions justifiées, bénéficiaires, justificatifs, délais de traitement et coût d’un déplacement de contrôle. Une garantie commerciale ne doit pas supprimer les droits légaux applicables.
 
 **Texte de réclamation proposé :** « Signalez votre difficulté depuis le dossier ou auprès de [CONTACT], avec le numéro d’intervention, une description et les pièces utiles. Nous vous indiquons la suite donnée à votre demande selon [DÉLAI À VALIDER]. » Définir le décideur, l’escalade, les remboursements et le médiateur compétent. Aucune promesse de remboursement automatique ou systématique n’est retenue à ce stade.

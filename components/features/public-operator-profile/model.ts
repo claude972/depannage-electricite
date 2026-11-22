@@ -6,6 +6,7 @@
 // « À renseigner par l’exploitant ». The editor sends one command at a time; its command_id is
 // stored in tab storage BEFORE the POST so a lost reply / 503 replays the same command.
 import { z } from "zod";
+import { validatedOperatorValue } from "../../../shared/commercial-facts";
 import { MINIMUM_FIELDS, command, editor, operatorProfile, publication, type EditorState, type OperatorField, type OperatorProfile, type ProfileCommand, type Publication } from "../../../lib/features/public-operator-profile/contract";
 
 export const PUBLIC_PROFILE_PATH = "/api/public/operator-profile";
@@ -86,10 +87,18 @@ export async function loadPublished(fetcher: typeof fetch = (...a) => fetch(...a
   const parsed = z.object({ published: publication.nullable() }).strict().safeParse(r.body);
   return parsed.success ? { phase: "ready", published: parsed.data.published } : { phase: "error", published: null };
 }
-/** Published value of a field, or null (⇒ the page keeps « À renseigner par l’exploitant »). */
+/**
+ * Value shown for a field. Once a profile is PUBLISHED from the administration it is the only
+ * source (two legal entities are never mixed). While nothing is published, the owner-validated
+ * commercial facts (shared/commercial-facts.ts) are shown; any other field stays null
+ * (⇒ « À renseigner par l’exploitant »).
+ */
 export function publishedValue(state: PublicProfileState | null | undefined, field: OperatorField): string | null {
-  const v = state?.phase === "ready" ? state.published?.profile[field] : undefined;
-  return typeof v === "string" && v.trim() ? v : null;
+  if (state?.phase === "ready" && state.published) {
+    const v = state.published.profile[field];
+    return typeof v === "string" && v.trim() ? v : null;
+  }
+  return validatedOperatorValue(field);
 }
 export const publishedStamp = (state: PublicProfileState | null | undefined): string | null =>
   state?.phase === "ready" && state.published

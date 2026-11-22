@@ -1,5 +1,6 @@
-// Public operator profile: public pages show the PUBLISHED values only (never the draft), null /
-// error ⇒ pending; admin editor: command_id stored before the POST, lost reply ⇒ same command,
+// Public operator profile: public pages show the PUBLISHED values (never the draft), which win over
+// the owner-validated facts of shared/commercial-facts.ts; null / error ⇒ those validated facts,
+// and pending for every field the owner has not validated; admin editor: command_id stored before the POST, lost reply ⇒ same command,
 // 409 ⇒ no replay + reload, publish blocked without the minimum fields, withdraw ⇒ public pending
 // again; non-admin ⇒ no editor; demo ⇒ zero calls. Values come only from these contract fixtures.
 import test from "node:test";
@@ -9,6 +10,7 @@ import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { loadModule } from "../documents/harness";
 import { PENDING } from "../../components/role/public-lists";
+import { VALIDATED_OPERATOR as V } from "../../shared/commercial-facts";
 import type * as Model from "../../components/features/public-operator-profile/model";
 import type * as Editor from "../../components/features/public-operator-profile/operator-profile-editor";
 
@@ -56,11 +58,19 @@ test("pages publiques : valeurs PUBLIÉES uniquement, avec « publié le … (ve
 test("rien de publié, erreur ou chargement ⇒ « À renseigner par l’exploitant », aucune valeur", async () => {
   for (const state of [{ phase: "ready", published: null }, { phase: "error", published: null }, { phase: "loading", published: null }]) {
     const legal = text(page("legal", state));
-    assert.match(legal, new RegExp(`Raison sociale et forme juridique : ${PENDING}`));
+    // Owner-validated identity (shared/commercial-facts.ts) stands in; nothing else is filled in.
+    assert.ok(legal.includes(`Raison sociale et forme juridique : ${V.legal_name}, ${V.legal_form} `), state.phase);
+    assert.ok(legal.includes(`Numéro SIREN et numéro de TVA : ${V.siren} `), state.phase);
+    for (const f of ["Adresse de contact", "Nom de l’hébergeur", "Adresse", "Coordonnées de contact", "Titulaire des droits sur le nom, le logo et les contenus", "Contact pour l’exercice des droits"]) assert.match(legal, new RegExp(`${f} : ${PENDING}`), `${state.phase}: ${f}`);
     assert.match(legal, /Mentions légales à compléter/);
     assert.doesNotMatch(legal, /publiées par l’exploitant le/);
     assert.doesNotMatch(text(page("about", state)), /@|tel:/);
+    // Field by field: validated facts only where the owner validated one, null otherwise.
+    for (const [field, value] of Object.entries(V)) assert.equal(m.publishedValue(state as never, field as never), value, `${state.phase}: ${field}`);
+    for (const field of ["public_email", "public_phone", "privacy_email", "host_name", "host_address", "host_contact", "rights_holder", "vat_number", "team_text", "network_terms", "about_text"]) assert.equal(m.publishedValue(state as never, field as never), null, `${state.phase}: ${field}`);
   }
+  // A published value always wins over the validated fact.
+  for (const field of ["legal_name", "legal_form", "siren", "hq_address", "publication_director", "service_area"] as const) assert.equal(m.publishedValue(published() as never, field), PUBLISHED_PROFILE[field], field);
   // Public read: strict, 200 null ⇒ nothing published; malformed / 503 ⇒ error (pending wording).
   const reply = (status: number, body: unknown) => (async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch;
   await Promise.all([
@@ -133,7 +143,12 @@ test("publication bloquée sans le minimum (liste affichée) ; retrait ⇒ publi
   await w.ctrl.withdraw();
   assert.deepEqual((w.posts[0].body as { action: string }).action, "withdraw");
   assert.equal(w.get().data?.published, null);
-  assert.match(text(page("legal", { phase: "ready", published: null })), new RegExp(`Raison sociale et forme juridique : ${PENDING}`));
+  // After the withdrawal the public page is back to the owner-validated identity; the withdrawn values are gone.
+  const withdrawn = text(page("legal", { phase: "ready", published: null }));
+  assert.ok(withdrawn.includes(`Raison sociale et forme juridique : ${V.legal_name}, ${V.legal_form} `));
+  assert.doesNotMatch(withdrawn, /Exploitant QA|Hébergeur QA|exploitant-qa\.invalid/);
+  assert.match(withdrawn, new RegExp(`Adresse de contact : ${PENDING}`));
+  assert.match(withdrawn, new RegExp(`Nom de l’hébergeur : ${PENDING}`));
   const src = readFileSync("components/features/public-operator-profile/operator-profile-editor.tsx", "utf8");
   assert.match(src, /data-operator-withdraw-confirm=""/, "withdraw asks for confirmation");
 });

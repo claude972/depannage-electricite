@@ -2,6 +2,7 @@
 import { RequestProgress } from "./request-progress";
 import { BookingLocationField } from "./booking-location";
 import { REQUEST_DESCRIPTION_LABEL } from "../../shared/request-details";
+import { URGENCY_NOTICE } from "../../shared/commercial-facts";
 // Operational forms extracted from the original monolith; behaviour preserved, shared by the
 // role spaces. Styling classes live in app/globals.css.
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
@@ -518,10 +519,11 @@ export function RequestForm({
                 <ReviewEstimate category={values.category} scope="request-form" />
               )}
               <p>
-                Ces montants sont des exemples de préparation du service. Le
-                prix final et les taxes applicables seront précisés dans un
-                devis à accepter avant intervention.
+                Fourchette indicative de la grille publiée. Le prix final et
+                les taxes applicables sont précisés dans un devis à accepter
+                avant intervention.
               </p>
+              {values.urgency === "urgent" && <p data-urgency-surcharge="">{URGENCY_NOTICE}</p>}
             </div>
             {mode === "public" && (
               <div className="alert warning">

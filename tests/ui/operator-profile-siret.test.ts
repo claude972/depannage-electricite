@@ -8,6 +8,7 @@ import { renderToString } from "react-dom/server";
 import { loadModule } from "../documents/harness";
 import { command } from "../../lib/features/public-operator-profile/contract";
 import { RELEASE } from "../../shared/release";
+import { VALIDATED_OPERATOR } from "../../shared/commercial-facts";
 import type * as Model from "../../components/features/public-operator-profile/model";
 import type * as Editor from "../../components/features/public-operator-profile/operator-profile-editor";
 
@@ -78,10 +79,15 @@ test("mentions légales : la ligne SIRET n’existe qu’une fois publiée, jama
   assert.match(withSiret, new RegExp(`Numéro SIRET de l’établissement : ${SIRET}`));
   assert.ok(withSiret.indexOf("Numéro SIRET de l’établissement") > withSiret.indexOf("Numéro SIREN et numéro de TVA : 000000000"), "sous la ligne SIREN");
   assert.ok(withSiret.indexOf("Numéro SIRET de l’établissement") < withSiret.indexOf("Directeur ou directrice de la publication"), "dans le bloc Éditeur");
-  assert.doesNotMatch(text(page("legal", published(PROFILE))), /SIRET/, "publié sans SIRET : aucune ligne");
+  // Rien de publié : le SIRET validé par le propriétaire (shared/commercial-facts.ts) accompagne son SIREN, jamais « à renseigner ».
   for (const state of [{ phase: "ready", published: null }, { phase: "error", published: null }, { phase: "loading", published: null }]) {
-    assert.doesNotMatch(text(page("legal", state)), /SIRET/, `${state.phase} : aucune ligne SIRET en attente`);
+    const legal = text(page("legal", state));
+    assert.ok(legal.includes(`Numéro SIREN et numéro de TVA : ${VALIDATED_OPERATOR.siren} Numéro SIRET de l’établissement : ${VALIDATED_OPERATOR.siret} `), `${state.phase} : SIRET validé sous son SIREN`);
+    assert.doesNotMatch(legal, /SIRET de l’établissement : À renseigner/, `${state.phase} : aucune ligne SIRET en attente`);
   }
+  assert.ok(VALIDATED_OPERATOR.siret.startsWith(VALIDATED_OPERATOR.siren), "le SIRET validé prolonge le SIREN validé");
+  // Un profil publié sans SIRET n’affiche pas le SIRET d’une autre entité (il doit prolonger le SIREN publié).
+  assert.doesNotMatch(text(page("legal", published(PROFILE))), /SIRET/, "publié sans SIRET : aucune ligne");
 });
 
 test("mentions légales : la version affichée vient de la source commune", () => {
