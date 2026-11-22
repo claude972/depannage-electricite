@@ -71,6 +71,7 @@ export function createMissionsApi(fetcher: typeof fetch = (...a) => fetch(...a),
 }
 
 // ---- Strict parse --------------------------------------------------------------------------------
+const capacitySchema = z.object({ active: z.number().int().nonnegative(), limit: z.union([z.literal(3), z.literal(4)]), full: z.boolean() }).strict();
 const pageSchema = z
   .object({
     items: z.array(missionOfferSchema).max(50),
@@ -80,6 +81,7 @@ const pageSchema = z
     projection: z.literal("anonymized"),
     order: z.literal("oldest_first"),
     distance: z.literal("not_calculated"),
+    capacity: capacitySchema.optional(),
   })
   .strict();
 const rankedPageSchema = z
@@ -92,6 +94,7 @@ const rankedPageSchema = z
     order: z.literal("nearest_first"),
     distance: z.literal("commune_centre_bands"),
     radius_version: z.number().int().min(1).max(2147483647),
+    capacity: capacitySchema.optional(),
   })
   .strict();
 const netEstimateSchema = z.object({
@@ -100,7 +103,8 @@ const netEstimateSchema = z.object({
 }).strict().refine(estimate => estimate.min_cents <= estimate.max_cents);
 const pointSchema = pageSchema.extend({ net_estimate: netEstimateSchema.nullish() });
 type PointOffer = MissionOffer & { net_estimate?: z.infer<typeof netEstimateSchema> };
-export type MissionsPageDTO = { items: ListedOffer[]; eligible: boolean; captured_at: string; page: { limit: 50; has_more: boolean; next_cursor: string | null }; radius_version?: number | null };
+export type MissionsCapacity = z.infer<typeof capacitySchema>;
+export type MissionsPageDTO = { items: ListedOffer[]; eligible: boolean; captured_at: string; page: { limit: 50; has_more: boolean; next_cursor: string | null }; radius_version?: number | null; capacity?: MissionsCapacity };
 /** radius_version carried by a ranked cursor (base64url JSON, strict); null if absent/undecodable. */
 export function cursorRadiusVersion(cursor: string | null): number | null {
   if (!cursor || !/^[A-Za-z0-9_-]{1,400}$/.test(cursor)) return null;
@@ -176,6 +180,8 @@ export const MISSIONS_COPY = {
   ineligible:
     "Aucune offre ne vous est proposée pour le moment : votre compte n’est pas disponible pour de nouvelles missions (disponibilité en pause, compte suspendu ou candidature non approuvée).",
   empty: "Aucune offre ne correspond à vos zones et à vos compétences pour le moment.",
+  capacityFull: (active: number, limit: number) =>
+    `Aucune nouvelle offre ne vous est proposée : vous avez ${active} mission${active > 1 ? "s" : ""} en cours pour une limite de ${limit} missions simultanées. Les offres réapparaîtront dès qu’une mission sera terminée${limit === 3 ? " ; vous pouvez aussi passer votre préférence à 4 missions dans votre profil" : ""}.`,
   gone: "Cette offre n’est plus disponible avec vos droits actuels.",
   moreFailed: "La suite des offres n’a pas pu être chargée. Réessayez.",
   anonymized: "Offres anonymisées : l’adresse, le contact et la description sont transmis après acceptation. Distance non calculée.",
@@ -204,15 +210,17 @@ export type MissionsState = {
   point: PointState | null;
   accepting: string | null;
   acceptError: string;
+  /** First page only, when it is empty: the simultaneous-missions limit as read by the server. */
+  capacity?: MissionsCapacity | null;
 };
-export const MISSIONS_INITIAL: MissionsState = { phase: "loading", eligible: false, items: [], nearestRefused: false, radiusVersion: null, captured: [], page: null, error: "", loadingMore: false, moreError: "", point: null, accepting: null, acceptError: "" };
+export const MISSIONS_INITIAL: MissionsState = { phase: "loading", eligible: false, items: [], nearestRefused: false, radiusVersion: null, captured: [], page: null, error: "", loadingMore: false, moreError: "", point: null, accepting: null, acceptError: "", capacity: null };
 
 const failure = (status: number) => (status === 401 ? MISSIONS_COPY.session : status === 403 ? MISSIONS_COPY.forbidden : MISSIONS_COPY.loadFailed);
 export function applyFirst(s: MissionsState, r: MissionsResult, order: MissionsOrder = "oldest_first"): MissionsState {
   if (order === "nearest_first" && r.status === 422) return { ...s, phase: "error", items: [], captured: [], page: null, nearestRefused: true, radiusVersion: null, error: NEAREST_COPY.refused };
   const p = r.status === 200 ? parseMissionsPage(r.body, order) : null;
   if (!p) return { ...s, phase: "error", items: [], captured: [], page: null, nearestRefused: false, radiusVersion: null, error: failure(r.status) };
-  return { ...s, phase: "ready", eligible: p.eligible, items: p.items, captured: [p.captured_at], page: p.page, nearestRefused: false, radiusVersion: p.radius_version ?? null, error: "", moreError: "" };
+  return { ...s, phase: "ready", eligible: p.eligible, items: p.items, captured: [p.captured_at], page: p.page, nearestRefused: false, radiusVersion: p.radius_version ?? null, error: "", moreError: "", capacity: p.capacity ?? null };
 }
 /** Next page: appended with dedup by id; a 422 (cursor refused) is handled by the controller. */
 export function applyMore(s: MissionsState, r: MissionsResult, order: MissionsOrder = "oldest_first"): MissionsState {

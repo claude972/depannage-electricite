@@ -22,6 +22,21 @@ function cursorJson(raw: string): unknown {
   return JSON.parse(bytes.toString("utf8"));
 }
 
+const ACTIVE_STATUSES = ["assigned", "quoted", "accepted", "in_progress"] as const;
+type Db = Awaited<ReturnType<typeof authenticatedClient>>["db"];
+/** Same rule as artisan_capacity_private.has_slot: preference 4, otherwise 3. Null when unreadable. */
+async function activeCapacity(db: Db, userId: string): Promise<{ active: number; limit: 3 | 4; full: boolean } | null> {
+  try {
+    const [profile, active] = await Promise.all([
+      db.from("artisan_profiles").select("capacity_limit").eq("user_id", userId).maybeSingle(),
+      db.from("interventions").select("id", { count: "exact", head: true }).eq("artisan_id", userId).in("status", [...ACTIVE_STATUSES]),
+    ]);
+    if (profile.error || active.error || typeof active.count !== "number") return null;
+    const limit = profile.data?.capacity_limit === 4 ? 4 : 3;
+    return { active: active.count, limit, full: active.count >= limit };
+  } catch { return null; }
+}
+
 export async function GET(request: Request) {
   try {
     const { db, user } = await authenticatedClient(request);
@@ -71,6 +86,9 @@ export async function GET(request: Request) {
       actor_id: user.id, created_at: last.created_at, id: last.id,
       ...("distance_band_km" in last ? { distance_band_km: last.distance_band_km, radius_version: version } : {}),
     } : null;
+    // An empty first page may come from the simultaneous-missions limit (mission_eligible): say so
+    // instead of letting the artisan believe nothing matches their zones and skills.
+    const capacity = !selected && !cursor && data.eligible && !items.length ? await activeCapacity(db, user.id) : null;
     const fee = selected ? checkoutCommissionBps(env) : null;
     const selectedEstimate = selected && items[0] && fee !== null && fee < 10000 ? {
       min_cents: items[0].estimate_min_cents - Math.round(items[0].estimate_min_cents * fee / 10000),
@@ -80,6 +98,7 @@ export async function GET(request: Request) {
       page: { limit: 50, has_more: hasMore, next_cursor: next ? Buffer.from(JSON.stringify(next)).toString("base64url") : null },
       projection: "anonymized", order: ranked ? "nearest_first" : "oldest_first", distance: ranked ? "commune_centre_bands" : "not_calculated",
       ...(ranked ? { radius_version: version } : {}),
+      ...(capacity ? { capacity } : {}),
     }, { headers });
   } catch (error) {
     const status = error instanceof ApiError ? error.status : 503;

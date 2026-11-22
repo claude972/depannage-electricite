@@ -50,3 +50,20 @@ test('nearest feed rejects improper bands, private projection and reversed order
   assert.equal((await setup(rankedData(ordered.toReversed())).get(req('?order=nearest'))).status, 503);
   assert.equal((await setup(null).get(req(`?order=nearest&id=${id(1)}`))).status, 422);
 });
+
+test('empty first page reports the simultaneous-missions limit read under the caller session', async () => {
+  const filters: unknown[] = [];
+  const chain = (result: unknown) => { const c: any = { select: () => c, eq: (k: string, v: unknown) => (filters.push([k, v]), c), in: (k: string, v: unknown) => (filters.push([k, v]), c), maybeSingle: async () => result, then: (r: (x: unknown) => unknown) => Promise.resolve(result).then(r) }; return c; };
+  const make = (limit: number | null, count: number) => ({
+    rpc: async () => ({ data: { eligible: true, captured_at: '2026-11-06T12:30:00Z', items: [] }, error: null }),
+    from: (table: string) => table === 'artisan_profiles' ? chain({ data: { capacity_limit: limit }, error: null }) : chain({ count, error: null }),
+  });
+  const run = async (db: unknown, suffix = '') => { const m = loadModule('app/api/artisan/missions/route.ts', { '@/lib/supabase/server': fakeServerHelpers({ authenticated: true, db }) }); const r = await (m.GET as (r: Request) => Promise<Response>)(req(suffix)); assert.equal(r.status, 200); return r.json(); };
+  assert.deepEqual(JSON.parse(JSON.stringify((await run(make(null, 3))).capacity)), { active: 3, limit: 3, full: true });
+  assert.deepEqual(JSON.parse(JSON.stringify(filters)), [['user_id', actor], ['artisan_id', actor], ['status', ['assigned', 'quoted', 'accepted', 'in_progress']]]);
+  assert.deepEqual(JSON.parse(JSON.stringify((await run(make(4, 3))).capacity)), { active: 3, limit: 4, full: false });
+  // Unreadable capacity never breaks the feed; non-empty pages carry no capacity key.
+  assert.equal((await run({ rpc: make(3, 3).rpc })).capacity, undefined);
+  const withItems = { ...make(3, 3), rpc: async () => ({ data: { eligible: true, captured_at: '2026-11-06T12:30:00Z', items: [offer(1)] }, error: null }) };
+  assert.equal((await run(withItems)).capacity, undefined);
+});

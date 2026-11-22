@@ -145,7 +145,11 @@ export function AvailableMissionsPanel(props: AvailableMissionsProps) {
         </div>
       )}
       {state.phase === "ready" && !state.eligible && <p className={styles.note} data-available-ineligible="">{MISSIONS_COPY.ineligible}</p>}
-      {state.phase === "ready" && state.eligible && !state.items.length && !point && <p className={styles.hint} data-available-empty="">{MISSIONS_COPY.empty}</p>}
+      {state.phase === "ready" && state.eligible && !state.items.length && !point && (
+        state.capacity?.full
+          ? <p className={styles.note} data-available-capacity-full="">{MISSIONS_COPY.capacityFull(state.capacity.active, state.capacity.limit)}</p>
+          : <p className={styles.hint} data-available-empty="">{MISSIONS_COPY.empty}</p>
+      )}
 
       {point && (
         <div className={styles.summary} data-available-point={point.phase} role="region" aria-label="Résumé de l’offre">

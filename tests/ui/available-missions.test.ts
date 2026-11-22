@@ -212,3 +212,21 @@ test("demo-only openDemo: local summary for demo-* ids, no API call; live open()
   assert.equal(s.point?.phase, "gone");
   assert.equal(calls, 0, "no request at all");
 });
+
+test("page vide à capacité pleine : la limite de missions simultanées est dite, pas « zones et compétences »", async () => {
+  const full = harness([ok({ ...pageBody([], null), capacity: { active: 3, limit: 3, full: true } })]);
+  await full.ctrl.load();
+  assert.deepEqual(json(full.get().capacity), { active: 3, limit: 3, full: true });
+  const out = html(createElement(p.AvailableMissionsPanel as never, { initial: full.get(), onAccept: async () => true, onOpenAccepted() {} } as never));
+  assert.match(out, /data-available-capacity-full=""/);
+  assert.match(out, /vous avez 3 missions en cours pour une limite de 3 missions simultanées/);
+  assert.match(out, /passer votre préférence à 4 missions/);
+  assert.doesNotMatch(out, /data-available-empty|Aucune offre ne correspond/);
+  const free = harness([ok({ ...pageBody([], null), capacity: { active: 1, limit: 4, full: false } })]);
+  await free.ctrl.load();
+  const out2 = html(createElement(p.AvailableMissionsPanel as never, { initial: free.get(), onAccept: async () => true, onOpenAccepted() {} } as never));
+  assert.match(out2, /data-available-empty=""/);
+  assert.doesNotMatch(out2, /data-available-capacity-full/);
+  for (const bad of [{ active: -1, limit: 3, full: true }, { active: 3, limit: 5, full: true }, { active: 3, limit: 3, full: true, extra: 1 }])
+    assert.equal(m.parseMissionsPage({ ...pageBody([], null), capacity: bad }), null);
+});
