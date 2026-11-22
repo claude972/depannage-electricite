@@ -9,6 +9,7 @@ import {
   homeFor,
   parseHash,
   parseReturnParams,
+  paymentReturnLink,
   pickQuote,
   quoteVersions,
 } from "../../components/app/session";
@@ -164,4 +165,14 @@ test("public mode: a direct #new link opens the public request form; private vie
   assert.equal(canAccess("new", null, "demo"), false, "no role outside public mode ⇒ closed");
   assert.equal(canAccess("new", "artisan", "live"), false, "artisans still cannot create requests");
   assert.equal(canAccess("new", "client", "live"), true);
+});
+
+test("FIN-03 : un retour de paiement lu hors session devient le lien profond du dossier (identifiant bien formé seulement)", () => {
+  const id = "30000000-0000-4000-8000-0000000000AB";
+  assert.deepEqual(paymentReturnLink(parseReturnParams(`?payment=pending&intervention=${id}`)), { view: "detail", param: id.toLowerCase() });
+  assert.deepEqual(paymentReturnLink(parseReturnParams(`?payment=cancelled&intervention=${id}`)), { view: "detail", param: id.toLowerCase() });
+  assert.equal(paymentReturnLink(parseReturnParams("?payment=pending&intervention=abc")), null);
+  assert.equal(paymentReturnLink(parseReturnParams("?payment=pending")), null);
+  assert.equal(paymentReturnLink(parseReturnParams("?connect=returned")), null);
+  assert.equal(paymentReturnLink(null), null);
 });

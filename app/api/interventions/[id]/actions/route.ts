@@ -9,6 +9,7 @@ import {
   dbError,
 } from "@/lib/supabase/server";
 import { quoteLine, uuid, validated } from "@/lib/supabase/validation";
+import { releaseCancelledDossierHold } from "@/lib/features/guest/card-hold";
 const schema = z
   .object({
     action: z.enum([
@@ -62,6 +63,13 @@ export async function POST(
     if (error?.code === "P0001" && error.message === "report_photos_required")
       throw new ApiError(409, "Enregistrez le compte rendu avec les photos avant et après pour terminer l’intervention.");
     dbError(error);
+    // FIN-04: a cancelled dossier backed by a card hold releases the authorization at the provider.
+    // The cancellation is already recorded; the outcome is reported honestly, never assumed.
+    if (data.action === "cancel") {
+      const owner = (result as { client_id?: unknown } | null)?.client_id;
+      const card_hold = typeof owner === "string" && uuid.safeParse(owner).success ? await releaseCancelledDossierHold(owner, id) : "none";
+      return Response.json(card_hold === "none" ? { intervention: result } : { intervention: result, card_hold });
+    }
     return Response.json({ intervention: result });
   } catch (error) {
     return apiError(error);

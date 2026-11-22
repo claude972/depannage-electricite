@@ -84,7 +84,8 @@ export function mapView(snapshot: TrackingSnapshot, now: number): MapView {
   } else if (display.kind === "stale") {
     sharing = { kind: "stale", text: display.knownTime ? `Dernière position partagée à ${hhmm(display.knownTime)} : périmée (plus d’une minute), non affichée.` : "Position périmée, non affichée." };
   } else if (display.kind === "stopped") {
-    sharing = { kind: "stopped", text: "Partage de position arrêté par l’artisan." };
+    // « stopped » = nothing shared (never started, stopped, or ended by a destination change): no cause is attributed.
+    sharing = { kind: "stopped", text: t.consent_at ? "Partage de position arrêté." : "L’artisan ne partage pas sa position (aucun accord de partage en cours)." };
   } else if (t.shared) {
     sharing = { kind: "no_position", text: "Partage accepté par l’artisan, en attente d’une première position." };
   } else {

@@ -366,3 +366,18 @@ test("quote documents first access: unknown → one real GET for the exact targe
   await pending;
   assert.deepEqual(s.states, [], "no availability recorded for the previous identity");
 });
+
+test("FIN-04 : une commande plateforme qui répond 404 JSON (objet métier introuvable) ne désactive pas la vue ; un 404 sans JSON reste « missing »", async () => {
+  const business = Object.assign(new ApiRequestError(404, "Ce dossier est introuvable.", { json: true }));
+  const h = harness(() => Promise.reject(business));
+  const client = createPlatformClient(h.deps);
+  await assert.rejects(client.command.openDispute({ request_id: "r", payment_id: "p", origin: "client", subject: "Objet", description: "Description du litige" } as never), (e) => e === business);
+  assert.deepEqual(h.states, [], "l’erreur est rendue en ligne, l’état du module est inchangé");
+  const framework = harness(() => Promise.reject(new ApiRequestError(404, "Cette fonction n’est pas encore activée sur ce service.")));
+  await assert.rejects(createPlatformClient(framework.deps).command.openDispute({} as never));
+  assert.deepEqual(framework.states, [["platformOperations", "missing"]]);
+  // Une LECTURE 404 garde sa classification (route absente du déploiement).
+  const read = harness(() => Promise.reject(business));
+  await assert.rejects(createPlatformClient(read.deps).load.finance());
+  assert.deepEqual(read.states, [["platformOperations", "missing"]]);
+});

@@ -69,7 +69,8 @@ import styles from "./client.module.css";
 import theme from "./client-theme.module.css";
 import { ThemeSurface } from "../app/theme-provider";
 import { PublicContactActions } from "./public-contact-actions";
-import { CLIENT_STEPS, currentStepIndex, detailHistory, requestAmount, quoteDecisionState, quoteLineCells } from "./client-lists";
+import { CLIENT_STEPS, currentStepIndex, detailHistory, requestAmount, quoteDecisionState, quoteLineCells, acceptedQuoteSummary } from "./client-lists";
+import type { OverviewAmendment } from "../../lib/features/quote-documents/types";
 import { HeaderBell, NotificationsPage } from "./notifications-anchor";
 import { PreferencesPanel } from "../features/notifications/notification-center";
 import { FeatureUnavailable, useProbeWhenUnknown } from "./feature-unavailable";
@@ -90,6 +91,8 @@ import { SEARCH_COPY, rowsSignal, toListRows, useRequestsSearch } from "../featu
 import { QUOTES_COPY, useRecipientQuote, useRecipientQuotes, type QuoteFilter } from "../features/recipient-quotes/use-recipient-quotes";
 import { ClientAddressesPanel, usePreferredAddress } from "../features/client-addresses/client-addresses-panel";
 import { CustomerInvoicesPanel } from "../features/customer-invoices/customer-invoices-panel";
+import { useDossierPoll } from "../app/dossier-poll";
+import { CoverageNotice } from "../features/coverage/coverage-notice";
 import { AppointmentReminderPanel } from "../features/appointment-reminders/appointment-reminder-panel";
 import { ProviderTeamsPanel } from "../features/provider-teams/provider-teams-panel";
 import { ContractSourceLine } from "../features/quote-grid/quote-grid";
@@ -809,23 +812,55 @@ function useOperations(session: Session, id: string, dependency: string) {
   const refreshed = session.refreshedAt;
   const [ops, setOps] = useState<Operations | null | undefined>(undefined);
   const [version, setVersion] = useState(0);
+  // SYS-05: slot / report changes by the other party are not pushed (unpublished tables): polled.
+  const tick = useDossierPoll(session.mode === "live" && Boolean(id));
+  const polled = useRef(tick);
   // An explicit re-read of the SAME dossier keeps the shown values (and any open form) until the
   // reply arrives; another dossier / dependency starts from the loader.
   const shown = useRef("");
   useEffect(() => {
     let active = true;
     const key = `${id}|${dependency}`;
+    // A background poll that fails keeps what is shown; only an explicit read may report a failure.
+    const background = polled.current !== tick && shown.current === key;
+    polled.current = tick;
     if (shown.current !== key) setOps(undefined);
     shown.current = key;
     if (!id) return;
     void ref.current.loadOperations(id).then((result) => {
-      if (active) setOps(result);
+      if (active && (result || !background)) setOps(result);
     });
     return () => {
       active = false;
     };
-  }, [id, dependency, version, refreshed]);
-  return { ops, reload: () => setVersion((v) => v + 1) };
+  }, [id, dependency, version, refreshed, tick]);
+  return { ops, reload: () => setVersion((v) => v + 1), tick };
+}
+
+/** CLI-07: amendments of the dossier (quote documents read, exact dossier). null = not known (demo,
+ *  loading, refusal, failure): the caller then falls back to the workspace's accepted total. Re-read
+ *  on every workspace refresh and on the dossier polling tick (amendments are not pushed live). */
+function useDossierAmendments(session: Session, interventionId: string, enabled: boolean, tick: number): OverviewAmendment[] | null {
+  const [state, setState] = useState<{ key: string; amendments: OverviewAmendment[] } | null>(null);
+  const key = enabled && interventionId ? `${session.profileId}|${session.mutationContext.generation()}|${interventionId}` : "";
+  const client = useRef(session.features.quoteDocuments);
+  client.current = session.features.quoteDocuments;
+  const refreshed = session.refreshedAt;
+  useEffect(() => {
+    if (!key) return;
+    let active = true;
+    void Promise.resolve()
+      .then(() => client.current.load({ interventionId }))
+      .then((overview) => {
+        // null = stale chain: nothing changes. A failure keeps the last verified list.
+        if (active && overview) setState({ key, amendments: overview.quotes.flatMap((q) => q.amendments) });
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [key, interventionId, refreshed, tick]);
+  return key && state && state.key === key ? state.amendments : null;
 }
 
 function DetailView({
@@ -840,11 +875,13 @@ function DetailView({
   const i = rows.find((x) => x.id === id);
   const demo = session.mode === "demo";
   const [keptDraft, setKeptDraft] = useState<string | null>(null);
-  const { ops, reload } = useOperations(
+  const { ops, reload, tick } = useOperations(
     session,
     i?.id || "",
     `${i?.status || ""}|${i?.updated_at || ""}|${i?.travel_stage || ""}|${session.mode}`,
   );
+  const hasAcceptedQuote = Boolean(i && session.data.quotes.some((q) => q.intervention_id === i.id && q.status === "accepted"));
+  const amendments = useDossierAmendments(session, i?.id || "", !demo && hasAcceptedQuote, tick);
   // Deep link to a dossier absent from the cached workspace: one causal refresh before « introuvable ».
   const presence = useDetailPresence(session, "client-detail", id, Boolean(i));
   // Booking dossier (POST /api/bookings): its payment mode comes from the server status; the
@@ -924,6 +961,7 @@ function DetailView({
   const payment = accepted
     ? session.data.payments.find((p) => p.quote_id === accepted.id)
     : undefined;
+  const acceptedSummary = accepted ? acceptedQuoteSummary(accepted, amendments) : null;
   const participants = ops?.participants || [];
   const artisan = participants.find((p) => p.role === "artisan");
   const photos = session.data.documents.filter(
@@ -1025,6 +1063,8 @@ function DetailView({
         )}
       </section>
 
+      {/* CLI-03: still searching and the postal code is outside the published coverage ⇒ honest notice. */}
+      {!demo && i.status === "requested" && !i.artisan_id && <CoverageNotice key={i.id} postalCode={i.postal_code} />}
       {primary && <div className={styles.actionBar}>{primary}</div>}
       {/* On-site booking, completed or paid: the cash widget carries the state (planned / declared);
           the generic « aucun encaissement » line would contradict a declaration, so it is not shown. */}
@@ -1042,7 +1082,7 @@ function DetailView({
       {currentBookingStatus?.kind === "booking" && !(currentBookingStatus.payment.method === "on_site" && (i.status === "completed" || i.status === "paid")) && (
         <p className={styles.paymentLine} role="status" data-booking-payment-status={currentBookingStatus.payment.method}>
           <Icon name={currentBookingStatus.payment.method === "on_site" ? "clock" : "lock"} size={16} />
-          <span>{bookingPaymentText(currentBookingStatus.payment, dateTime)}</span>
+          <span>{bookingPaymentText(currentBookingStatus.payment, dateTime, i.status === "cancelled")}</span>
         </p>
       )}
       {/* Final settlement of a card hold: only a completed booking dossier with an accepted quote.
@@ -1264,6 +1304,44 @@ function DetailView({
                 Voir le devis
               </button>
             </div>
+            {/* CLI-07: amendments of the accepted quote and the total consistent with the amount due. */}
+            {accepted && acceptedSummary && shown.id === accepted.id && (acceptedSummary.pending.length > 0 || acceptedSummary.due_cents !== accepted.total_cents) && (
+              <div data-dossier-amendments="">
+                {acceptedSummary.pending.length > 0 && (
+                  <div className="alert warning" role="status" data-dossier-amendments-pending={acceptedSummary.pending.length}>
+                    <span>
+                      {acceptedSummary.pending.length > 1
+                        ? `${acceptedSummary.pending.length} avenants proposés par l’artisan attendent votre décision.`
+                        : "Un avenant proposé par l’artisan attend votre décision."}{" "}
+                      Rien n’est ajouté au montant à régler sans votre accord.
+                    </span>
+                  </div>
+                )}
+                {acceptedSummary.pending.length > 0 && (
+                  <button type="button" className="button outline" onClick={() => session.go("quote", accepted.id)}>
+                    <Icon name="document" size={17} />
+                    Consulter l’avenant
+                  </button>
+                )}
+                <div className={styles.totals}>
+                  {[...acceptedSummary.accepted, ...acceptedSummary.pending].map((a) => (
+                    <div key={a.id}>
+                      <span>
+                        Avenant {a.reference} — {a.status === "accepted" ? "accepté" : "à valider"}
+                        {a.reason ? <small> {a.reason}</small> : null}
+                      </span>
+                      <span>{a.status === "accepted" ? "+ " : ""}{money(a.total_cents)} TTC</span>
+                    </div>
+                  ))}
+                  {acceptedSummary.due_cents !== accepted.total_cents && (
+                    <div className={styles.grand}>
+                      <span>Total TTC, avenants acceptés compris</span>
+                      <strong data-dossier-accepted-total="">{money(acceptedSummary.due_cents)}</strong>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             {versions.length > 1 && (
               <label className={styles.inlineSelect}>
                 Version affichée
@@ -1484,7 +1562,7 @@ function DetailView({
         {["requested", "assigned", "quoted"].includes(i.status) ? (
           <ConfirmAction
             label="Annuler la demande"
-            message="Annuler cette demande ? Cette action ne peut pas être annulée."
+            message={`Annuler cette demande ? Cette action ne peut pas être annulée.${currentBookingStatus?.kind === "booking" && currentBookingStatus.payment.method === "card_hold" ? " La libération de votre empreinte bancaire sera demandée au prestataire de paiement ; rien ne sera débité." : ""}`}
             confirmLabel="Confirmer l’annulation"
             busy={session.busy}
             danger

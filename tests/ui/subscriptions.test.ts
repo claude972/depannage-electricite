@@ -344,7 +344,7 @@ test("reprise (ROOT /api/subscriptions/resume) : bouton seulement si ready + che
 
 test("montages : profil client après les moyens de paiement, profil artisan après les données du compte ; aucune action de résiliation propre", () => {
   const client = readFileSync("components/role/client-space.tsx", "utf8");
-  assert.match(client, /<SavedPaymentMethodsPanel [^\n]*\/>\n\s*<SubscriptionsPanel key=\{`\$\{session\.mode\}:\$\{session\.mutationContext\.userId\(\) \?\? "anon"\}:\$\{session\.mutationContext\.generation\(\)\}`\} role="client" demo=\{demo\} context=\{session\.mutationContext\} \/>/);
+  assert.match(client, /<SavedPaymentMethodsPanel [^\n]*\/>\n\s*<SubscriptionsPanel key=\{`subs:\$\{session\.mode\}:\$\{session\.mutationContext\.userId\(\) \?\? "anon"\}:\$\{session\.mutationContext\.generation\(\)\}`\} role="client" demo=\{demo\} context=\{session\.mutationContext\} \/>/);
   const artisan = readFileSync("components/role/artisan-space.tsx", "utf8");
   // Realigned (phase 2 lot B): AccountDataPanel now also carries `erasureRequests` (data-requests
   // contract) and the subscriptions key is prefixed « subscriptions: » (R01: sibling key collision).

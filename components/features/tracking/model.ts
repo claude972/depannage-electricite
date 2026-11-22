@@ -85,7 +85,9 @@ export function trackingDisplay(snapshot: TrackingSnapshot | null, now: number):
   }
   const knownTime = t.position?.sampled_at ?? null;
   if (t.position_state === "stale") return { ...base, kind: "stale", position: null, knownTime, reason: "Position périmée" };
-  if (t.position_state === "stopped") return { ...base, kind: "stopped", position: null, knownTime, reason: "Partage arrêté par l’artisan" };
+  // The server says « stopped » whenever nothing is shared: never started, stopped by the artisan, or
+  // ended by a destination change. The cause is not known here, so it is not attributed to anyone.
+  if (t.position_state === "stopped") return { ...base, kind: "stopped", position: null, knownTime, reason: t.consent_at ? "Partage de position arrêté" : "Aucun partage de position en cours" };
   return { ...base, kind: "no_position", position: null, knownTime: null, reason: t.shared ? "En attente d’une première position" : "Aucune position partagée" };
 }
 
@@ -485,8 +487,8 @@ export class ShareController {
    * « Reprendre le partage » après rechargement (le serveur partage encore, aucun watch local) : le serveur refuse un
    * nouveau start (409) tant que l’ancienne session est active. Sur clic explicite : `stop` avec le `session_id` du
    * snapshot, puis — seulement si réussi — retour à l’écran de consentement ; le `start` (nouvelle session) n’est envoyé
-   * qu’après confirmation via `start()`. Échec du stop : relecture du snapshot et affichage de l’état serveur, aucun start,
-   * aucune nouvelle tentative automatique.
+   * qu’après confirmation via `start()`. Échec du stop : relecture du snapshot et affichage de l’état serveur, aucun start.
+   * Seul un 409 (snapshot dépassé) est repris : partage déjà terminé ⇒ consentement ; version plus récente ⇒ un seul nouvel essai.
    */
   async closeStaleSession(snapshot: TrackingSnapshot, reload: () => Promise<TrackingSnapshot | null>) {
     if (this.disposed || this.watchId !== null) return;
@@ -505,6 +507,25 @@ export class ShareController {
       const fresh = await reload().catch(() => null);
       if (gen !== this.generation || this.disposed) return;
       if (fresh) this.deps.onSnapshot(fresh);
+      // CLI-05: a 409 means the shown snapshot was outdated (e.g. the client confirmed a destination,
+      // which already ended the session). The re-read state decides: nothing shared any more ⇒ the
+      // goal of the stop is reached, go to the consent; still shared under a newer version ⇒ ONE
+      // retry with the re-read version. No start is ever sent here.
+      if (f.status === 409 && fresh && fresh.permissions.can_share) {
+        const ft = fresh.tracking;
+        if (!ft.shared) return this.deps.onStatus({ kind: "consent" });
+        if (ft.session_id && ft.control_version !== t.control_version) {
+          try {
+            const next = await this.deps.command({ action: "stop", expected_version: ft.control_version, payload: { session_id: ft.session_id } });
+            if (gen !== this.generation || this.disposed || next === null) return;
+            this.deps.onSnapshot(next);
+            return this.deps.onStatus({ kind: "consent" });
+          } catch (again) {
+            if (gen !== this.generation || this.disposed) return;
+            return this.deps.onStatus({ kind: "error", message: failureOf(again).message, retryable: false });
+          }
+        }
+      }
       this.deps.onStatus({ kind: "error", message: f.message, retryable: false });
     }
   }

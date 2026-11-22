@@ -9,7 +9,8 @@ import { operatorViewAllowed, platformViewAllowed, type OperatorView } from "../
 import { SupportCenter } from "./support-tickets";
 import { OperatorDataRequests } from "../features/data-requests/operator-data-requests";
 import { OperatorCallbacks } from "../features/public-callback/operator-callbacks";
-import { PageTitle, Unavailable } from "../app/ui";
+import { Forbidden, PageTitle, Unavailable } from "../app/ui";
+import { homeFor } from "../app/session";
 import type { Session } from "../app/session-types";
 import { PLATFORM_DEMO } from "../../lib/features/platform-operations/demo";
 import { PLATFORM_ENTRIES, platformAuthority, platformPageRetry } from "./anchors";
@@ -70,8 +71,12 @@ export function PlatformPage({
       </>
     );
   }
+  if (!platformViewAllowed(access, view) && state === "available")
+    // The server answered and this account's rights do not cover the section (ordinary account or
+    // limited operator): the standard « hors de votre espace » page, like any other foreign view.
+    return <Forbidden onHome={() => session.go(homeFor(session.role, session.mode))} />;
   if (!platformViewAllowed(access, view)) {
-    // Aucune réponse serveur, service indisponible ou droit absent : état explicite, aucun appel.
+    // Aucune réponse serveur ou service indisponible : état explicite, aucun appel.
     const reason =
       state !== "available" && state !== "unknown"
         ? CONTRACT_MESSAGES[state]

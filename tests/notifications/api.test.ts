@@ -76,7 +76,17 @@ test("preferences expose defaults, honest channel availability and strict saves"
   assert.deepEqual(body.preferences, { user_id: me, muted_kinds: [], email_enabled: false, sms_enabled: false, push_enabled: false, version: 0 });
   assert.equal(body.channels.in_app, "available");
   for (const channel of ["email", "sms", "push"]) { assert.equal(body.channels[channel], "unavailable", channel); assert.match(body.channels.reasons[channel], /aucun fournisseur configuré/i); }
-  assert.ok(body.kinds.length >= 20 && body.kinds.every((k: Row) => typeof k.label === "string" && !/_/.test(String(k.label))));
+  assert.ok(body.kinds.length >= 10 && body.kinds.every((k: Row) => typeof k.label === "string" && !/_/.test(String(k.label))));
+  // The list is filtered by the caller's role, server-side: a client never sees artisan / organisation events.
+  const kindsOf = async (role: string) => (await (await routes({ role, tables: { notifications: rows, notification_preferences: [] } }).preferences()).json()).kinds.map((k: Row) => k.kind) as string[];
+  const clientKinds = body.kinds.map((k: Row) => k.kind) as string[];
+  for (const foreign of ["mission_received", "mission_reassigned", "account_approved", "account_suspended", "approval_requested", "member_joined", "credential_reminder"]) assert.equal(clientKinds.includes(foreign), false, foreign);
+  for (const own of ["quote_received", "mission_assigned", "message_received", "payment_confirmed", "appointment_saved", "support_replied"]) assert.ok(clientKinds.includes(own), own);
+  const artisanKinds = await kindsOf("artisan");
+  assert.ok(artisanKinds.includes("mission_received") && artisanKinds.includes("account_suspended") && !artisanKinds.includes("quote_received") && !artisanKinds.includes("member_joined"));
+  const managerKinds = await kindsOf("manager");
+  assert.ok(managerKinds.includes("approval_requested") && managerKinds.includes("member_joined") && !managerKinds.includes("mission_received"));
+  assert.equal((await kindsOf("admin")).length, 24);
   assert.match(body.channels_note, /Aucun e-mail, SMS ni notification push/);
   const saved = routes({ rpcData: { preferences: { user_id: me, muted_kinds: ["message_received"], email_enabled: true, sms_enabled: false, push_enabled: false, version: 1 } } });
   const save = await saved.save({ muted_kinds: ["message_received", "message_received"], email_enabled: true, sms_enabled: false, push_enabled: false, expected_version: 0 });

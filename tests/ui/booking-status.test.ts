@@ -88,3 +88,18 @@ test("provenance: a payment declared received on site is never worded as a bank/
   const artisan = readFileSync("components/role/artisan-space.tsx", "utf8");
   assert.match(artisan, /isDeclaredOnSite\(payment\)\s*\? "Règlement déclaré reçu sur place\. Ce n’est pas une confirmation bancaire\."/);
 });
+
+test("FIN-04 : dossier annulé — plus de « pourra être prélevé » ; avis d’annulation selon l’issue vérifiée par le serveur", async () => {
+  const { cancelHoldNotice, CANCELLED_HOLD_TEXT } = await import("../../components/app/booking-status");
+  const hold = { method: "card_hold", status: "authorization_recorded", checked_at: "2026-11-01T15:00:00Z" } as const;
+  const cancelled = bookingPaymentText(hold, (iso) => iso, true);
+  assert.equal(cancelled, CANCELLED_HOLD_TEXT);
+  assert.doesNotMatch(cancelled, /pourra être prélevé|Empreinte bancaire enregistrée/);
+  assert.match(cancelled, /ne sera pas débitée/);
+  assert.match(bookingPaymentText(hold, (iso) => iso), /Empreinte bancaire enregistrée/);
+  assert.match(bookingPaymentText({ method: "on_site", status: "due_on_site" }, (iso) => iso, true), /aucun paiement n’est dû/);
+  assert.match(cancelHoldNotice("released")!, /a été libérée/);
+  assert.match(cancelHoldNotice("release_failed")!, /n’a pas pu être confirmée/);
+  assert.doesNotMatch(cancelHoldNotice("release_failed")!, /a été libérée/);
+  for (const other of [undefined, null, "none", "RELEASED", {}]) assert.equal(cancelHoldNotice(other), null);
+});

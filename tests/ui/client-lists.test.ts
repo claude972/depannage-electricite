@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { CLIENT_STEPS, currentStepIndex, detailHistory, requestAmount, isSettled, quoteDecisionState, quoteLineCells, recentRowDescriptor } from "../../components/role/client-lists";
+import { acceptedQuoteSummary, CLIENT_STEPS, currentStepIndex, detailHistory, requestAmount, isSettled, quoteDecisionState, quoteLineCells, recentRowDescriptor } from "../../components/role/client-lists";
 
 const label = (id: string) => ({ panel: "Tableau électrique", outage: "Coupure de courant" })[id] ?? id;
 const money = (cents: number) => `${(cents / 100).toFixed(2).replace(".", ",")} €`;
@@ -100,4 +100,21 @@ test("montant client : dernier devis envoyé du dossier et montant accepté à r
   const accepted = { ...quote, status: "accepted", accepted_total_cents: 24200 };
   assert.equal(requestAmount({ ...intervention, status: "completed" }, [accepted, latest], [], money), "À régler : 242,00 €", "includes server accepted total, never treats completed as paid");
   assert.equal(requestAmount({ ...intervention, status: "paid" }, [accepted], [], money), "Devis accepté : 242,00 €", "paid dossier alone is not a payment receipt");
+});
+
+test("CLI-07 : avenants du devis accepté — total cohérent avec le montant dû, avenant proposé jamais compté", () => {
+  const quote = { id: "q1", total_cents: 16780, accepted_total_cents: 16780 };
+  const a = (id: string, status: string, total_cents: number, base_quote_id = "q1") => ({ id, base_quote_id, reference: `AV-${id}`, status, reason: "", total_cents });
+  // Lecture des avenants inconnue : total accepté du serveur, sinon total de base.
+  assert.deepEqual(acceptedQuoteSummary({ ...quote, accepted_total_cents: 21120 }, null), { pending: [], accepted: [], due_cents: 21120 });
+  assert.equal(acceptedQuoteSummary({ id: "q1", total_cents: 16780 }, null).due_cents, 16780);
+  // Avenant proposé : visible, mais le total reste celui du devis.
+  const proposed = acceptedQuoteSummary(quote, [a("1", "proposed", 4340)]);
+  assert.deepEqual(proposed.pending.map((x) => x.id), ["1"]);
+  assert.equal(proposed.due_cents, 16780);
+  // Accepté : devis + avenants acceptés ; refusé, retiré ou d’un autre devis : ignorés.
+  const mixed = acceptedQuoteSummary(quote, [a("1", "accepted", 4340), a("2", "rejected", 999), a("3", "withdrawn", 999), a("4", "accepted", 999, "q2"), a("5", "proposed", 1000)]);
+  assert.deepEqual(mixed.accepted.map((x) => x.id), ["1"]);
+  assert.deepEqual(mixed.pending.map((x) => x.id), ["5"]);
+  assert.equal(mixed.due_cents, 21120);
 });

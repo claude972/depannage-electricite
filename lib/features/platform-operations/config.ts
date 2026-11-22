@@ -32,6 +32,15 @@ export function financeConfig(
     invoice_issuer: { configured: issuerConfigured },
   };
 }
-/** User-facing availability of real money actions: never available in this lot. */
-export const REFUND_EXECUTION_MESSAGE = "Exécution indisponible : fournisseur de paiement non configuré. Une demande approuvée n’est pas un remboursement effectué.";
+/** User-facing reason why refunds cannot be executed here (FIN-04). The provider state comes from
+ *  the server (/me config): « non configuré » is only said when it is true; a configured provider
+ *  (test or live) without the execution capability says exactly that. */
+export function refundExecutionMessage(provider: Pick<FinanceConfig["payment_provider"], "configured" | "mode"> | null | undefined): string {
+  const reason = !provider
+    ? "état du fournisseur de paiement non vérifié"
+    : !provider.configured
+      ? "fournisseur de paiement non configuré"
+      : `l’exécution des remboursements n’est pas activée pour votre accès sur ce service (fournisseur de paiement configuré${provider.mode === "test" ? ", mode test" : ""})`;
+  return `Exécution indisponible : ${reason}. Une demande approuvée n’est pas un remboursement effectué.`;
+}
 export const COMMISSION_NOT_CONFIGURED = "Taux de commission non configuré : aucune estimation n’est calculée.";

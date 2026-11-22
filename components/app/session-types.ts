@@ -71,6 +71,9 @@ export interface PublicSession {
   startDemo(role?: Role, view?: View, param?: string): void;
   /** Keeps an anonymous request draft and routes to account creation. */
   saveDraft(values: RequestValues, photos?: File[]): void;
+  /** Silently keeps the recap of the public request form in the tab's local draft (same canonical
+   *  store as saveDraft): a reload before the account step restores it. No navigation, nothing sent. */
+  keepDraft(values: RequestValues): void;
   /** Invitation code waiting for a login (view join-organization/CODE). */
   pendingInvitation: string | null;
   /** Stores a manually shared organisation invitation code, then routes to login. */

@@ -16,7 +16,7 @@ import { PLATFORM_DEMO } from "../lib/features/platform-operations/demo";
 import { demoNotificationPage } from "../lib/features/notifications/demo";
 import { createRevalidationScheduler, startAccessRevalidation } from "./app/revalidate";
 import { createRefreshCoordinator, refreshContextKey, type ReadResult, type RefreshCoordinator } from "./app/workspace-refresh";
-import { safeCheckoutUrl } from "./app/booking-status";
+import { cancelHoldNotice, safeCheckoutUrl } from "./app/booking-status";
 import { CARD_RETURN_COPY, PENDING_COPY, cancelCardReturn, cardAction, lookupPending, sameReturn, verifyCardReturn, type CardReturn } from "./app/card-return";
 import { createWorkspaceReader, loadInitialWorkspace } from "./app/workspace-reader";
 import {
@@ -73,6 +73,7 @@ import {
   monthPeriods,
   parseHash,
   parseReturnParams,
+  paymentReturnLink,
   paymentReturnMessage,
   protectedLink,
   pickQuote,
@@ -165,6 +166,7 @@ const ACTION_NOTICES: Record<string, string> = {
   send_quote: "Devis envoyé au client.",
   accept_quote: "Devis accepté. Il sert de base au règlement après l’intervention.",
   reject_quote: "Devis refusé. L’artisan peut vous proposer une nouvelle version.",
+  cancel: "Demande annulée.",
   start: "Intervention démarrée.",
   complete: "Intervention terminée.",
   save_appointment: "Rendez-vous enregistré.",
@@ -606,6 +608,10 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
       return;
     }
     if (mode !== "live") {
+      // FIN-03: a payment return read while signed out keeps its dossier as the pending deep link,
+      // so the login lands on #detail/<id> (server-read state there), never on a status from the URL.
+      const dossier = paymentReturnLink(returnContext);
+      if (dossier) pendingLink.current = dossier;
       setAuthMode("login");
       navigate("auth");
       setError(
@@ -984,9 +990,10 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
         throw new Error("La simulation de paiement n’existe qu’en démonstration.");
       if (name === "accept_quote" && !extra?.quote_id)
         throw new Error("Le devis affiché est introuvable. Rechargez le dossier.");
-      await api(`/api/interventions/${id}/actions`, { action: name, ...extra });
+      const reply = await api<{ card_hold?: unknown }>(`/api/interventions/${id}/actions`, { action: name, ...extra });
       if (ctx.alive()) await refresh();
-      ctx.notice(actionNotice(name, false));
+      // FIN-04: cancelling a dossier with a card hold reports the verified release outcome.
+      ctx.notice((name === "cancel" && cancelHoldNotice(reply?.card_hold)) || actionNotice(name, false));
     });
   }
 
@@ -2828,6 +2835,9 @@ export default function CourantApp({ supportWhatsAppPhone, showSupportPreview }:
       setAuthMode("signup");
       navigate("auth");
       setNotice(draftNotice(saved)); // quota/refusal: the input stays in memory, never a false « saved »
+    },
+    keepDraft(values) {
+      savePublicDraft(getDraftStorage(), values); // refusal (quota, private mode): the form keeps its values in memory
     },
     async signIn(email, password) {
       return run(async (ctx) => {

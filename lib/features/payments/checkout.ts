@@ -85,7 +85,7 @@ export async function createQuoteCheckout(request:Request){
    }
    if(Date.now()-Date.parse(l.created_at)>=23*3600000){await reconcile(admin,l,"needs_review");throw conflict();}
    const account=await stripe.v2.core.accounts.retrieve(l.account_id,{include:["configuration.recipient"]});
-   if(account.id!==l.account_id||account.configuration?.recipient?.capabilities?.stripe_balance?.stripe_transfers?.status!=="active")throw new ApiError(409,"Le compte de règlement de l’artisan doit être validé avant paiement.");
+   if(account.id!==l.account_id||account.configuration?.recipient?.capabilities?.stripe_balance?.stripe_transfers?.status!=="active")throw new ApiError(409,CHECKOUT_REFUSALS["Recipient account not ready"]);
    const qualified=await admin.rpc("qualify_platform_checkout",{p_id:l.id,p_actor:user.id,p_account:l.account_id,p_fee:l.fee_bps??fee,p_origin:l.return_origin??origin});dbError(qualified.error);
    l=await read(admin,user.id,l.id,quote_id,live);if(l.fee_cents===null||!l.return_origin)throw unavailable();
    if (l.savedCustomer) {

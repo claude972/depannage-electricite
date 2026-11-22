@@ -218,3 +218,21 @@ test("montages minimaux : « Tarifs » public et Paramètres admin", () => {
   const admin = readFileSync("components/role/admin-space.tsx", "utf8");
   assert.match(admin, /<CoverageEditor key=\{`coverage\|\$\{session\.mutationContext\.userId\(\) \?\? "-"\}\|\$\{session\.mutationContext\.generation\(\)\}`\} demo=\{demo\} context=\{session\.mutationContext\} \/>/);
 });
+
+test("CLI-03 : avis « hors zone publiée » seulement sur une réponse not_covered vérifiée ; jamais bloquant, jamais sur un échec", async () => {
+  const calls: string[] = [];
+  const reply = (body: unknown, status = 200) => (async (url: RequestInfo | URL) => { calls.push(String(url)); return json(body, status); }) as typeof fetch;
+  assert.equal(await m.readNotCovered(reply({ status: "not_covered", version: 2 }), "97217"), true);
+  assert.deepEqual(calls, ["/api/public/coverage?postal_code=97217"]);
+  assert.equal(await m.readNotCovered(reply({ status: "covered", version: 2 }), "97200"), false);
+  assert.equal(await m.readNotCovered(reply({ status: "unknown", version: null }), "97200"), false);
+  assert.equal(await m.readNotCovered(reply({ error: "panne" }, 503), "97200"), false);
+  assert.equal(await m.readNotCovered(reply({ status: "not_covered" }), "97200"), false, "réponse hors contrat ignorée");
+  const before = calls.length;
+  assert.equal(await m.readNotCovered(reply({ status: "not_covered", version: 2 }), "9721"), false);
+  assert.equal(calls.length, before, "code invalide : aucun appel");
+  const text = m.notCoveredNotice("97217");
+  assert.match(text, /97217 ne figure pas dans la zone publiée/);
+  assert.match(text, /reste enregistrée/);
+  assert.doesNotMatch(text, /refus|impossible|bloqu/i);
+});

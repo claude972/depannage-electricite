@@ -3,7 +3,7 @@
 // Approving a request and executing its refund are separate actions.
 import { useCallback, useState, type ReactNode } from "react";
 import type { ContractState, Dispute, DisputeOutcome, FinanceConfig, FinanceReport, Invoice, InvoiceReadiness, LedgerEntry, Page, PlatformAccess, PlatformClient, PlatformViewScope, RefundRequest } from "../../../lib/features/platform-operations/types";
-import { COMMISSION_NOT_CONFIGURED, REFUND_EXECUTION_MESSAGE } from "../../../lib/features/platform-operations/config";
+import { COMMISSION_NOT_CONFIGURED, refundExecutionMessage } from "../../../lib/features/platform-operations/config";
 import { ApiRequestError } from "../../app/api";
 import { platformMfaRequired } from "../../../shared/platform-mfa";
 import { PlatformMfaPanel } from "./platform-mfa-panel";
@@ -113,7 +113,7 @@ export function LedgerBasis({ basis }: { basis: Record<string, unknown> | null |
   );
 }
 
-type Ctx = { client: PlatformClient; demo?: PlatformDemo; canWrite: boolean; superAdmin: boolean; notify: (m: { kind: "ok" | "error"; text: string } | null) => void; busy: boolean; act: (work: () => Promise<unknown | null>, done: string, after?: () => void) => Promise<void>; scopeKey: string; rendering: boolean; refundExecution: boolean; userId: string; /** Opens the exact target (dossier by id) through the anchor. */ onNavigate?: (view: string, param?: string) => void };
+type Ctx = { client: PlatformClient; demo?: PlatformDemo; canWrite: boolean; superAdmin: boolean; notify: (m: { kind: "ok" | "error"; text: string } | null) => void; busy: boolean; act: (work: () => Promise<unknown | null>, done: string, after?: () => void) => Promise<void>; scopeKey: string; rendering: boolean; refundExecution: boolean; /** Server-reported provider state (never a secret): the honest reason when execution is off. */ paymentProvider: PlatformAccess["config"]["payment_provider"] | null; userId: string; /** Opens the exact target (dossier by id) through the anchor. */ onNavigate?: (view: string, param?: string) => void };
 
 export function PlatformFinanceView(props: PlatformFinanceViewProps) {
   return <Gate state={props.state} unavailableMessage={props.unavailableMessage} title="Finance plateforme"><Inner key={scopeKey(props.scope)} {...props} /></Gate>;
@@ -138,7 +138,7 @@ function Inner({ scope, client, context, demo, onNavigate }: PlatformFinanceView
   if (me.error && !me.data) return <ErrorBox message={me.error} onRetry={me.reload} />;
   if (!me.data?.capabilities.finance) return <div className="forbidden"><strong>Cet espace nécessite le scope finance.</strong><p>Demandez l’habilitation à un super administrateur.</p></div>;
   const canWrite = scope.authority.canWrite && !demo && (me.data.super_admin || me.data.scopes.includes("finance_write"));
-  const ctx: Ctx = { client, demo, canWrite, superAdmin: !demo && scope.authority.canWrite && me.data.super_admin, notify, busy: busy || (tab === "refunds" && mfaRequired), act, scopeKey: scopeKey(scope), rendering: me.data.capabilities.invoice_rendering === true, refundExecution: canWrite && me.data.capabilities.refund_execution === true, userId: scope.userId, onNavigate };
+  const ctx: Ctx = { client, demo, canWrite, superAdmin: !demo && scope.authority.canWrite && me.data.super_admin, notify, busy: busy || (tab === "refunds" && mfaRequired), act, scopeKey: scopeKey(scope), rendering: me.data.capabilities.invoice_rendering === true, refundExecution: canWrite && me.data.capabilities.refund_execution === true, userId: scope.userId, paymentProvider: me.data.config?.payment_provider ?? null, onNavigate };
   return (
     <div className={styles.view} data-module="platform-operations" data-platform-view="finance">
       <div className={styles.head}><div><h2>Finance plateforme</h2><p>Consultez les paiements confirmés et les documents associés. {ctx.refundExecution ? "Les demandes approuvées et éligibles peuvent être remboursées via Stripe." : "L’exécution des remboursements est indisponible dans cet espace."}</p></div></div>
@@ -418,7 +418,7 @@ function Refunds({ ctx }: { ctx: Ctx }) {
       <p className={styles.alert} role="note">
         {ctx.refundExecution
           ? "Une demande approuvée n’est pas un remboursement effectué : seul un remboursement confirmé par la plateforme (exécution réussie et demande soldée) l’est."
-          : REFUND_EXECUTION_MESSAGE}
+          : refundExecutionMessage(ctx.paymentProvider)}
       </p>
       <Panel title="Demandes de remboursement" action={<div className={styles.toolbar}><label>Statut<select value={status} onChange={(e) => { setStatus(e.target.value); list.resetCursor(); }}><option value="">Tous</option>{(["requested", "approved", "rejected", "cancelled", "settled"] as const).map((s) => <option key={s} value={s}>{refundStatusLabel(s)}</option>)}</select></label></div>}>
         {list.loading && !list.data ? <Loading /> : list.error && !list.data ? <ErrorBox message={list.error} onRetry={list.reload} /> : !list.data?.requests.length ? <EmptyState title="Aucune demande">Une demande se crée pour un paiement confirmé, dans la limite du montant réglé.</EmptyState> : (

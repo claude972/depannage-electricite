@@ -2,6 +2,8 @@
 // `supabase_realtime` publication are subscribed: a binding on an unpublished table (payments) makes
 // the server reject the whole postgres_changes join (« Unable to subscribe ») after SUBSCRIBED.
 // Payments are reflected through intervention updates and the manual refresh.
+// Appointments, reports and quote amendments are not published either: an open dossier re-reads
+// them on a light polling tick (dossier-poll.ts) instead of a binding that would break the join.
 // `wait: true` holds SUBSCRIBED until the server confirms the postgres_changes subscription.
 export const REALTIME_TABLES = ["interventions", "quotes", "messages"] as const;
 export const REALTIME_CHANNEL_CONFIG = { config: { postgres_changes_options: { wait: true } } } as const;

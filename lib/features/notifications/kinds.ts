@@ -1,4 +1,4 @@
-import type { NotificationKind } from "./types";
+import { NOTIFICATION_KINDS, type NotificationKind } from "./types";
 // User-facing French labels of each notification kind (preferences panel, filters). No internal names.
 export const KIND_LABELS: Record<NotificationKind, string> = {
   mission_assigned: "Électricien attribué à ma demande",
@@ -52,3 +52,17 @@ export const KIND_ICONS: Record<NotificationKind, string> = {
   member_joined: "users",
   membership_removed: "users",
 };
+
+// Kinds a role can actually receive (recipients of public.notify in the migrations). Display filter of
+// the preferences list only: stored muted kinds are never rewritten by it. An unknown role (or an
+// admin, who may hold any history) sees every kind.
+const REQUESTER: NotificationKind[] = ["mission_assigned", "quote_received", "work_started", "work_completed", "payment_confirmed", "payment_reminder", "appointment_saved", "appointment_reminder", "message_received", "support_replied", "support_status_changed"];
+const ROLE_KINDS: Record<string, NotificationKind[]> = {
+  client: REQUESTER,
+  manager: [...REQUESTER, "compliance_reminder", "approval_requested", "approval_decided", "member_joined", "membership_removed"],
+  artisan: ["mission_received", "mission_reassigned", "quote_rejected", "quote_accepted", "payment_confirmed", "mission_cancelled", "appointment_saved", "appointment_reminder", "credential_reminder", "message_received", "account_approved", "account_suspended", "support_replied", "support_status_changed"],
+};
+export function kindsForRole(role: unknown): NotificationKind[] {
+  const allowed = typeof role === "string" && Object.hasOwn(ROLE_KINDS, role) ? new Set(ROLE_KINDS[role]) : null;
+  return allowed ? NOTIFICATION_KINDS.filter((kind) => allowed.has(kind)) : [...NOTIFICATION_KINDS];
+}

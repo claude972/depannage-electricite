@@ -13,6 +13,7 @@ import { EnterpriseBookingLink } from "./enterprise-booking-link";
 import { serviceBySlug } from "./public-service-catalog";
 import { RequestProgress } from "../app/request-progress";
 import { Field } from "../app/ui";
+import { CoverageNotice } from "../features/coverage/coverage-notice";
 import { ReservedEstimate, ReviewEstimate } from "../features/indicative-prices/indicative-range";
 import { REVIEW_COPY, REVIEW_SCOPES } from "../features/indicative-prices/model";
 
@@ -233,6 +234,7 @@ export function BookingConfirm({
           <dt>Adresse d’intervention</dt>
           <dd>
             {draft.address}, {draft.postal_code} {draft.city}
+            {!demo && <CoverageNotice postalCode={draft.postal_code} />}
           </dd>
         </div>
         <div>

@@ -166,7 +166,7 @@ const FIELD_ERRORS: Record<string, string> = {
   first_name: "Prénom : 1 à 100 caractères.",
   last_name: "Nom : 1 à 100 caractères.",
   address: "Adresse complète : 5 à 500 caractères (numéro et voie).",
-  postal_code: "Code postal : 2 à 20 lettres, chiffres, espaces ou tirets.",
+  postal_code: "Code postal : cinq chiffres (ex. 97200).",
   city: "Ville : 1 à 160 caractères.",
   country_code: "Pays : code à deux lettres (ex. FR).",
 };

@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   try {
     assertOrigin(request);
     const { db } = await authenticatedClient();
-    const data = await validated(request, schema);
+    const data = await validated(request, schema, "Avis invalide : vérifiez la note (de 1 à 5) et le commentaire (2 000 caractères au plus).");
     const { data: review, error } = await db.rpc("submit_review", {
       p_intervention_id: data.intervention_id,
       p_rating: data.rating,

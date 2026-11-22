@@ -6,6 +6,7 @@ import { DemoBanner } from "../app/demo-banner";
 // M65 (application), M36 (profile). Structure is reproduced, example figures are not.
 import { PaymentLinkPanel } from "./payment-link";
 import {
+  Fragment,
   useCallback,
   useEffect,
   useRef,
@@ -127,6 +128,7 @@ import { DECISION_LABEL, type Decision } from "../features/credential-reviews/cr
 import { ArtisanQuotes } from "../features/artisan-quotes/artisan-quotes";
 import { useArtisanPerformance, LivePerformanceSummary, LivePerformanceGrid, LiveRatingLine, livePerformanceSubtitle } from "../features/artisan-performance";
 import { CredentialReminderPanel } from "../features/operational-reminders/operational-reminder-panel";
+import { useDossierPoll } from "../app/dossier-poll";
 import { AppointmentReminderPanel } from "../features/appointment-reminders/appointment-reminder-panel";
 import { ProviderTeamsPanel } from "../features/provider-teams/provider-teams-panel";
 import { ContractSourceLine } from "../features/quote-grid/quote-grid";
@@ -382,16 +384,25 @@ function useOperations(session: Session, id: string, version: number) {
     load.current = session.loadOperations;
   });
   const { mode, profileId } = session;
+  // SYS-05 / CLI-04: a workspace refresh (realtime event, « Actualiser ») and a light polling tick
+  // re-read the slot / report of the open dossier silently — their tables are not pushed live.
+  const refreshed = session.refreshedAt;
+  const tick = useDossierPoll(mode === "live" && Boolean(id));
+  const shown = useRef("");
   useEffect(() => {
     let active = true;
-    setState((s) => ({ ...s, pending: true }));
+    const key = `${id}|${version}|${mode}|${profileId}`;
+    const background = shown.current === key;
+    shown.current = key;
+    if (!background) setState((s) => ({ ...s, pending: true }));
     void load.current(id).then((ops) => {
-      if (active) setState({ ops, pending: false });
+      // A background re-read that fails keeps what is shown (no loader, no false « indisponible »).
+      if (active && (ops || !background)) setState({ ops, pending: false });
     });
     return () => {
       active = false;
     };
-  }, [id, version, mode, profileId]);
+  }, [id, version, mode, profileId, refreshed, tick]);
   return state;
 }
 function useAppointments(session: Session, ids: string[]) {
@@ -1849,7 +1860,8 @@ function AppointmentPanel({
       ) : (
         <p>Aucun créneau proposé pour le moment.</p>
       )}
-      {reminder}
+      {/* CLI-04: a new slot revision remounts the reminder ⇒ it is re-read (as on the client side). */}
+      <Fragment key={version}>{reminder}</Fragment>
       {loaded && !pending && editable && !open && (
         <div className={styles.formActions}>
           <button type="button" className="button outline" disabled={busy} onClick={edit}>

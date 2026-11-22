@@ -37,6 +37,23 @@ export function requestAmount(
   return `Estimation : ${money(i.estimate_min_cents)} – ${money(i.estimate_max_cents)}`;
 }
 
+/** CLI-07: amendments of the ACCEPTED quote shown on the dossier, and the total consistent with the
+ *  amount due. `amendments` = fresh quote-documents read (null while unknown). Known ⇒ base +
+ *  accepted amendments (same rule as the server's accepted_quote_totals); unknown ⇒ the server's
+ *  accepted_total_cents of the workspace, else the base total. Refused / withdrawn are not listed. */
+export type DossierAmendment = { id: string; base_quote_id: string; reference: string; status: string; reason: string; total_cents: number };
+export function acceptedQuoteSummary<A extends DossierAmendment>(
+  accepted: Pick<Quote, "id" | "total_cents" | "accepted_total_cents">,
+  amendments: A[] | null,
+): { pending: A[]; accepted: A[]; due_cents: number } {
+  const own = (amendments ?? []).filter((a) => a.base_quote_id === accepted.id);
+  const kept = own.filter((a) => a.status === "accepted");
+  const due_cents = amendments
+    ? kept.reduce((sum, a) => sum + a.total_cents, accepted.total_cents)
+    : accepted.accepted_total_cents ?? accepted.total_cents;
+  return { pending: own.filter((a) => a.status === "proposed"), accepted: kept, due_cents };
+}
+
 /** Cellules d’une ligne de devis (V8-C06) : « quantité × PU HT » et total HT de la ligne (affichage). */
 export function quoteLineCells(line: { quantity: number; unit_price_cents: number }, money: (cents: number) => string) {
   return { unit: `${line.quantity} × ${money(line.unit_price_cents)}`, total_cents: Math.round(line.quantity * line.unit_price_cents) };

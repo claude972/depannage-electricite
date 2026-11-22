@@ -3,6 +3,7 @@ import { RequestProgress } from "./request-progress";
 import { BookingLocationField } from "./booking-location";
 import { REQUEST_DESCRIPTION_LABEL } from "../../shared/request-details";
 import { URGENCY_NOTICE } from "../../shared/commercial-facts";
+import { CoverageNotice } from "../features/coverage/coverage-notice";
 // Operational forms extracted from the original monolith; behaviour preserved, shared by the
 // role spaces. Styling classes live in app/globals.css.
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
@@ -145,7 +146,11 @@ export function RequestForm({
   initialDescription = "",
   initialUrgency = "scheduled",
   contactPhone,
+  onRecapDraft,
 }: {
+  /** Called with the validated values each time the recap step is shown (public form: the local
+   *  draft is kept so a reload before the account step does not lose the request). Sends nothing. */
+  onRecapDraft?: (values: RequestValues) => void;
   initialCategory: Category;
   /** False for a generic entry: the internal fallback is not a user selection. */
   categoryPreselected?: boolean;
@@ -248,6 +253,15 @@ export function RequestForm({
   const [phone, setPhone] = useState(contactPhone ?? "");
   const [phoneError, setPhoneError] = useState("");
   const c = category(values.category);
+  const recapDraft = useRef(onRecapDraft);
+  recapDraft.current = onRecapDraft;
+  useEffect(() => {
+    if (step !== 3 || !recapDraft.current) return;
+    const normalizedPhone = contactPhone === undefined ? null : normalizePhone(phone);
+    recapDraft.current(normalizedPhone ? { ...values, contact_phone: normalizedPhone } : values);
+    // The recap is reached only through the validated steps; values cannot change while it is shown.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
   function next(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (photoPending.current) return;
@@ -506,6 +520,7 @@ export function RequestForm({
                 {values.postal_code} {values.city}
               </span>
             </div>
+            {mode !== "demo" && <CoverageNotice postalCode={values.postal_code} />}
             {contactPhone !== undefined && <p>Téléphone de contact · {phone}</p>}
             <div className="estimate-box">
               <span>Estimation indicative</span>

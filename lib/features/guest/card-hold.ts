@@ -103,3 +103,51 @@ export async function releaseCardHold(actor: string, request: string, context: C
   if ((!pi && released.status !== "expired") || (pi && pi.status !== "canceled")) throw unavailable();
   await record(admin, b, released, pi, "release", pi ? "canceled" : "expired");
 }
+
+/**
+ * FIN-04: a dossier backed by a card hold was cancelled (the cancel RPC already succeeded). The
+ * authorization is released at the provider so the customer's funds are not kept until expiry.
+ *   "none"           — no card hold is attached to this dossier (nothing to release);
+ *   "released"       — the provider confirms the authorization is cancelled (re-read after cancel);
+ *   "release_failed" — a hold exists but its release could not be confirmed (provider down or not
+ *                      configured, unexpected object). Nothing is debited either way: a cancelled
+ *                      dossier can never be captured, and an uncaptured authorization expires.
+ * Never throws: the cancellation itself is already recorded. Only a dossier re-read as « cancelled »
+ * and owned by `actor` is ever released. The booking row is NOT rewritten here: its provider state
+ * is written only by record_phone_booking_provider, which refuses a release once a dossier exists.
+ */
+export async function releaseCancelledDossierHold(actor: string, interventionId: string): Promise<"none" | "released" | "release_failed"> {
+  let b: Booking;
+  try {
+    const admin = adminClient();
+    const r = await admin.from("phone_booking_requests").select("actor_id,request_id,method,expected_max_cents,status,intervention_id,stripe_session_id,stripe_payment_intent_id,created_at").eq("actor_id", actor).eq("intervention_id", interventionId).eq("method", "card_hold").maybeSingle();
+    if (r.error) return "release_failed";
+    if (!r.data) return "none";
+    b = r.data as Booking;
+    if (b.actor_id !== actor || b.intervention_id !== interventionId || b.method !== "card_hold") return "release_failed";
+    if (b.stripe_payment_intent_id === null) return "none"; // no authorization was ever recorded
+    if (!intentId.test(b.stripe_payment_intent_id)) return "release_failed";
+    const job = await admin.from("interventions").select("id,client_id,status").eq("id", interventionId).maybeSingle();
+    if (job.error || !job.data || job.data.client_id !== actor || job.data.status !== "cancelled") return "release_failed";
+  } catch {
+    return "release_failed";
+  }
+  try {
+    const context = cardHoldContext();
+    const id = b.stripe_payment_intent_id;
+    const read = async () => {
+      const pi = await context.stripe.paymentIntents.retrieve(id);
+      if (pi.id !== id || pi.livemode !== context.live || !metadata(pi.metadata, b) || pi.capture_method !== "manual" || pi.currency !== "eur" || pi.amount_received !== 0) throw unavailable();
+      return pi;
+    };
+    let pi = await read();
+    if (pi.status !== "canceled") {
+      if (!["requires_capture", "requires_payment_method", "requires_confirmation", "requires_action"].includes(pi.status)) return "release_failed";
+      await context.stripe.paymentIntents.cancel(id, {}, { idempotencyKey: `booking-dossier-release:${actor}:${b.request_id}` });
+      pi = await read();
+    }
+    return pi.status === "canceled" ? "released" : "release_failed";
+  } catch {
+    return "release_failed";
+  }
+}

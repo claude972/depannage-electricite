@@ -228,7 +228,7 @@ function LivePanel({ api, context = DEFAULT_ADDRESS_CONTEXT, initial, newId = ad
           </div>
           <Field label="Adresse complète" hint="Numéro et voie" error={errors.address}><input value={form.address} maxLength={500} autoComplete="street-address" onChange={(e) => setForm({ ...form, address: e.target.value })} /></Field>
           <div className={styles.grid}>
-            <Field label="Code postal" error={errors.postal_code}><input value={form.postal_code} maxLength={20} autoComplete="postal-code" onChange={(e) => setForm({ ...form, postal_code: e.target.value })} /></Field>
+            <Field label="Code postal" error={errors.postal_code}><input value={form.postal_code} maxLength={5} inputMode="numeric" pattern="[0-9]{5}" autoComplete="postal-code" onChange={(e) => setForm({ ...form, postal_code: e.target.value })} /></Field>
             <Field label="Ville" error={errors.city}><input value={form.city} maxLength={160} autoComplete="address-level2" onChange={(e) => setForm({ ...form, city: e.target.value })} /></Field>
             <Field label="Pays (code à 2 lettres)" error={errors.country_code}><input value={form.country_code} maxLength={2} autoComplete="country" onChange={(e) => setForm({ ...form, country_code: e.target.value })} /></Field>
           </div>

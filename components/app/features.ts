@@ -169,8 +169,10 @@ export async function bound<T>(deps: FeatureDeps, key: FeatureKey, task: () => P
     // A COMMAND answering a transient 503 or a network failure (status 0) proves nothing about the
     // contract already loaded: the module state is left as it is (never « available » because of
     // an error), so the leaf stays mounted with its form and the error is shown inline. Reads and
-    // every other status keep the classification below.
-    if (!(kind === "command" && error instanceof ApiRequestError && (error.status === 503 || error.status === 0))) observe(deps, key, error);
+    // every other status keep the classification below. Likewise a COMMAND answering a JSON 404 names
+    // a business object that does not exist (FIN-04: unknown payment id) — the route itself replied —
+    // so the view is never replaced by « fonction non activée »; a framework 404 (no JSON) still is.
+    if (!(kind === "command" && error instanceof ApiRequestError && (error.status === 503 || error.status === 0 || (error.status === 404 && error.json === true)))) observe(deps, key, error);
     throw error;
   }
 }
@@ -316,7 +318,7 @@ export function createPlatformClient(input: FeatureDeps): PlatformClient {
   const request = requestOf(deps);
   const key: FeatureKey = "platformOperations";
   const get = <T>(path: string) => bound(deps, key, () => request<T>(path));
-  const post = <T>(path: string, body: unknown, method?: string) => bound(deps, key, () => request<T>(path, body, method));
+  const post = <T>(path: string, body: unknown, method?: string) => bound(deps, key, () => request<T>(path, body, method), "command");
   return {
     load: {
       me: () => get<PlatformAccess>(`${PLATFORM}/me`),

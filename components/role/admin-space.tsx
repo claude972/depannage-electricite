@@ -1841,7 +1841,9 @@ function ArtisanDetailView({
   const sessionRef = useRef(session);
   sessionRef.current = session;
   const fromOverview = overview?.artisans.find((a) => a.id === id);
-  const needsItem = !fromOverview;
+  // The overview row carries no registration date: the directory item (same source as the list's
+  // « Inscrit le ») is read for it too, so the detail never says « Date non transmise » for a known date.
+  const needsItem = !fromOverview || !fromOverview.created_at;
   // undefined = loading, null = absent (404) or directory unavailable.
   const [item, setItem] = useState<DirectoryArtisan | null | undefined>(undefined);
   const [attempt, setAttempt] = useState(0);
@@ -1864,7 +1866,7 @@ function ArtisanDetailView({
     return () => nameRef.current("");
   }, [resolvedName]);
 
-  const artisan: ArtisanRow | undefined = fromOverview ?? item ?? undefined;
+  const artisan: ArtisanRow | undefined = fromOverview ? (fromOverview.created_at || !item ? fromOverview : { ...fromOverview, created_at: item.created_at }) : item ?? undefined;
   const back = (
     <button type="button" className={styles.backLink} onClick={onBack}>
       <Icon name="back" size={16} />

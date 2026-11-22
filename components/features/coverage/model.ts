@@ -61,6 +61,15 @@ export function publicMessage(code: string, r: PublicCoverage): string {
   if (r.status === "not_covered") return `Le code postal ${code} ne figure pas dans la zone publiée par l’exploitant. Vous pouvez tout de même déposer une demande.`;
   return "Zone non encore publiée : l’exploitant n’a pas encore publié la liste des codes postaux desservis. Vous pouvez déposer une demande.";
 }
+/** CLI-03: honest notice on a recap / dossier still searching. Informative: the request is never blocked. */
+export const notCoveredNotice = (code: string) =>
+  `Le code postal ${code} ne figure pas dans la zone publiée par l’exploitant : il est possible qu’aucun artisan ne puisse prendre votre demande. Elle reste enregistrée et aucun délai n’est garanti.`;
+/** Only a verified « not_covered » answer yields a notice; unknown, covered, errors and timeouts stay silent. */
+export async function readNotCovered(fetcher: typeof fetch, code: string): Promise<boolean> {
+  if (!isPostalCode(code)) return false;
+  const r = await timed(fetcher, publicUrl(code), { method: "GET", referrerPolicy: "no-referrer" });
+  return r.status === 200 && parsePublic(r.body)?.status === "not_covered";
+}
 export function publicError(status: number, retryAfterS: number | null): string {
   if (status === 422) return PUBLIC_COPY.invalid;
   if ((status === 429 || status === 503) && retryAfterS) return `Service momentanément indisponible : réessayez dans ${retryAfterS} s.`;

@@ -30,8 +30,19 @@ export async function fetchBookingStatus(interventionId: string, call: typeof ap
   }
 }
 
+export const CANCELLED_HOLD_TEXT = "Demande annulée : l’empreinte bancaire ne sera pas débitée. Sa libération est demandée au prestataire de paiement à l’annulation ; à défaut, elle expire d’elle-même. Le délai de disparition sur votre relevé dépend de votre banque.";
+/** FIN-04: notice after « Annuler la demande », from the server's verified release outcome (never assumed). */
+export function cancelHoldNotice(outcome: unknown): string | null {
+  if (outcome === "released") return "Demande annulée. L’empreinte bancaire a été libérée auprès du prestataire de paiement : rien n’est débité. Le délai de disparition sur votre relevé dépend de votre banque.";
+  if (outcome === "release_failed") return "Demande annulée. La libération de l’empreinte bancaire n’a pas pu être confirmée : rien ne sera débité et l’autorisation expirera d’elle-même. Si elle reste visible plusieurs jours, contactez l’assistance.";
+  return null;
+}
 /** Honest wording: on site ⇒ planned, nothing collected; card ⇒ recorded at a date, not a charge, not forever. */
-export function bookingPaymentText(p: BookingPayment, formatDate: (iso: string) => string): string {
+export function bookingPaymentText(p: BookingPayment, formatDate: (iso: string) => string, cancelled = false): string {
+  // FIN-04: a cancelled dossier is never settled — no « paiement prévu », no « pourra être prélevé ».
+  // The server status does not carry the release of the hold, so nothing is claimed about it here
+  // beyond what holds in every case (a cancelled dossier cannot be captured; a hold expires).
+  if (cancelled) return p.method === "on_site" ? "Demande annulée : aucun paiement n’est dû." : CANCELLED_HOLD_TEXT;
   if (p.method === "on_site") return "Paiement prévu après l’intervention, sur la plateforme (par carte depuis le suivi du dossier). Aucun paiement n’a encore été confirmé ; ne réglez jamais l’artisan directement.";
   const when = p.checked_at ? ` (vérifiée le ${formatDate(p.checked_at)})` : "";
   return `Empreinte bancaire enregistrée${when}. Ce n’est pas un débit ; seul le montant du devis accepté pourra être prélevé, et une empreinte n’est pas valable indéfiniment.`;

@@ -269,16 +269,37 @@ test("reprise après rechargement : stop de l’ancienne session, puis consentem
   assert.equal(h.watches.size, 1);
 });
 
-test("reprise : stop refusé (409) → relecture du snapshot, aucun start, aucune nouvelle tentative", async () => {
+test("reprise : stop refusé (409) → relecture du snapshot, aucun start ; partage déjà terminé ⇒ consentement, version plus récente ⇒ un seul nouvel essai", async () => {
   let reloads = 0;
-  const h = harness({ command: async (c) => (c.action === "stop" ? Promise.reject(Object.assign(new Error("Version dépassée."), { status: 409 })) : snap()) });
+  const refuse = (status: number) => async (c: { action: string; expected_version: number }) => (c.action === "stop" && c.expected_version !== 9 ? Promise.reject(Object.assign(new Error("Version dépassée."), { status })) : snap({ shared: false, session_id: null, control_version: 10 }));
+  // CLI-05: the client confirmed a destination ⇒ the session is already over on the server.
+  const h = harness({ command: refuse(409) as never });
   await h.ctrl.closeStaleSession(snap({ shared: true, session_id: "old" }), async () => {
     reloads++;
     return snap({ shared: false, session_id: null, position_state: "stopped" });
   });
   assert.equal(reloads, 1);
   assert.deepEqual(h.calls.map((c) => c.action), ["stop"]);
-  assert.equal(h.statuses.at(-1)?.kind, "error");
+  assert.equal(h.statuses.at(-1)?.kind, "consent");
+  // Still shared under a newer version: exactly one retry with the re-read version, then consent.
+  const newer = harness({ command: refuse(409) as never });
+  await newer.ctrl.closeStaleSession(snap({ shared: true, session_id: "old", control_version: 5 }), async () => snap({ shared: true, session_id: "old", control_version: 9 }));
+  assert.deepEqual(newer.calls.map((c) => [c.action, c.expected_version]), [["stop", 5], ["stop", 9]]);
+  assert.equal(newer.statuses.at(-1)?.kind, "consent");
+  // Same version re-read, or the retry refused again: an error, never a loop.
+  const same = harness({ command: refuse(409) as never });
+  await same.ctrl.closeStaleSession(snap({ shared: true, session_id: "old", control_version: 5 }), async () => snap({ shared: true, session_id: "old", control_version: 5 }));
+  assert.deepEqual(same.calls.map((c) => c.action), ["stop"]);
+  assert.equal(same.statuses.at(-1)?.kind, "error");
+  const twice = harness({ command: refuse(409) as never });
+  await twice.ctrl.closeStaleSession(snap({ shared: true, session_id: "old", control_version: 5 }), async () => snap({ shared: true, session_id: "old", control_version: 7 }));
+  assert.deepEqual(twice.calls.map((c) => c.action), ["stop", "stop"]);
+  assert.equal(twice.statuses.at(-1)?.kind, "error");
+  // Any other refusal (403…) is never retried.
+  const denied = harness({ command: refuse(403) as never });
+  await denied.ctrl.closeStaleSession(snap({ shared: true, session_id: "old" }), async () => snap({ shared: false, session_id: null, position_state: "stopped" }));
+  assert.deepEqual(denied.calls.map((c) => c.action), ["stop"]);
+  assert.equal(denied.statuses.at(-1)?.kind, "error");
   // Sans session active ou sans droit : rien n’est envoyé.
   const idle = harness();
   await idle.ctrl.closeStaleSession(snap({ shared: false }), async () => null);

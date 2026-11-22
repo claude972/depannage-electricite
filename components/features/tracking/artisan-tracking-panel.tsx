@@ -62,6 +62,14 @@ function PanelBody({ state, unavailableMessage, scope, client, demo, geolocation
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [available, client, demo]);
 
+  // CLI-05: a refused command means the shown snapshot may be outdated (e.g. the client confirmed a
+  // destination, which ended the session): re-read it so the panel shows the server state instead of
+  // a « reload » interruption that never happened.
+  const failed = status.kind === "error";
+  useEffect(() => {
+    if (failed) void reload();
+  }, [failed, reload]);
+
   // Âge de la dernière position envoyée (affichage seulement).
   useEffect(() => {
     if (status.kind !== "sharing") return;

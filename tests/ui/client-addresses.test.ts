@@ -66,6 +66,7 @@ test("formulaire : bornes du contrat, prénom et nom obligatoires, code postal /
   assert.deepEqual(errs({ address: "1 r" }), ["address"]);
   assert.deepEqual(errs({ postal_code: "9" }), ["postal_code"]);
   assert.deepEqual(errs({ postal_code: "97200!" }), ["postal_code"]);
+  assert.deepEqual(errs({ postal_code: "9724X" }), ["postal_code"]); // CLI-09: five digits only
   assert.deepEqual(errs({ city: "" }), ["city"]);
   assert.deepEqual(errs({ country_code: "FRA" }), ["country_code"]);
   assert.deepEqual(errs({ latitude: 14.6, longitude: -61, geo_source: null }), ["geo"]);

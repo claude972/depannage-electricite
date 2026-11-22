@@ -11,7 +11,7 @@ test("le contrat ne filtre pas par rôle (lecture et demande sous la session cou
   const model = readFileSync("components/features/account-data/model.ts", "utf8");
   assert.match(model, /STRICT COPY of\s+\/\/ app\/api\/profile\/data\/route\.ts from ROOT e541656/);
   for (const f of ["components/role/artisan-space.tsx", "components/role/enterprise-space.tsx", "components/role/client-space.tsx"])
-    assert.match(readFileSync(f, "utf8"), /<AccountDataPanel\s+key=\{`\$\{session\.mode\}:\$\{session\.mutationContext\.userId\(\) \?\? "anon"\}:\$\{session\.mutationContext\.generation\(\)\}`\}/, f);
+    assert.match(readFileSync(f, "utf8"), /<AccountDataPanel\s+key=\{`(?:data:)?\$\{session\.mode\}:\$\{session\.mutationContext\.userId\(\) \?\? "anon"\}:\$\{session\.mutationContext\.generation\(\)\}`\}/, f);
 });
 
 test("app réelle : profils artisan et gestionnaire montent « Mes données » (démo honnête, aucun /api)", { skip }, async () => {

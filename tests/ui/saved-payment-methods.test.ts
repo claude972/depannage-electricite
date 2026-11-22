@@ -167,7 +167,7 @@ test("états : 403 refus honnête, 503 réessai, vide, pagination after, démo s
   assert.doesNotMatch(m.COPY.returned, /ajoutée|enregistrée avec succès/);
   assert.match(m.COPY.returned, /ne prouve pas qu’une carte a été enregistrée/);
   const src = readFileSync("components/role/client-space.tsx", "utf8");
-  assert.match(src, /<SavedPaymentMethodsPanel key=\{`\$\{session\.mode\}:\$\{session\.mutationContext\.userId\(\) \?\? "anon"\}:\$\{session\.mutationContext\.generation\(\)\}`\} demo=\{demo\} context=\{session\.mutationContext\} \/>/);
+  assert.match(src, /<SavedPaymentMethodsPanel key=\{`payment:\$\{session\.mode\}:\$\{session\.mutationContext\.userId\(\) \?\? "anon"\}:\$\{session\.mutationContext\.generation\(\)\}`\} demo=\{demo\} context=\{session\.mutationContext\} \/>/);
   assert.doesNotMatch(src, /aucun moyen de paiement n’est mémorisé/);
 });
 

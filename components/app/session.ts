@@ -145,6 +145,14 @@ export function loginLanding(currentHash: string, pending: DeepLink | null, role
     if (link && canAccess(link.view, role, "live")) return link;
   return null;
 }
+/** FIN-03: the dossier named by a payment return (well-formed id only), as a login deep link. The
+ *  role guard and the server still decide whether it opens; a foreign id shows « introuvable ». */
+export function paymentReturnLink(context: ReturnContext | null): DeepLink | null {
+  if (context?.kind !== "payment") return null;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(context.interventionId)
+    ? { view: "detail", param: context.interventionId.toLowerCase() }
+    : null;
+}
 // Server return parameters are only hints to re-read state; they never set a status.
 export function parseReturnParams(search: string): ReturnContext | null {
   const q = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
