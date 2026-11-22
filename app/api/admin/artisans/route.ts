@@ -53,7 +53,8 @@ const applicationSchema = z.object({ user_id: uuid, application_version: z.numbe
 const privateHeaders = { "Cache-Control": "private, no-store" };
 const unavailable = () => new ApiError(503, "Les dossiers artisans sont momentanément indisponibles. Réessayez.");
 function failed(error: unknown) { const response = apiError(error); response.headers.set("Cache-Control", "private, no-store"); if (response.status === 503) response.headers.set("Retry-After", "2"); return response; }
-export async function GET(request?: Request) {
+// Next validates route handlers against a required Request: an optional parameter fails the build.
+export async function GET(request: Request) {
   try {
     const { db, user } = await authenticatedClient(request);
     const profile = await db.from("profiles").select("role").eq("id", user.id).single();

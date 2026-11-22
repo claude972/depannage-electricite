@@ -64,7 +64,7 @@ test("E36 — an exact suspension retry succeeds after response loss with just o
       const approval = { action: "approve", expected_version: await revision() };
       const keyed = await post({ ...approval, command_id: randomUUID() });
       assert.equal((keyed.ok ? keyed : await post(approval)).status, 200);
-      const suspension = { action: "suspend", expected_version: await revision() };
+      const suspension = { action: "suspend", expected_version: await revision(), reason: "Motif de recette synthétique" };
       const body = keyed.ok ? { ...suspension, command_id: randomUUID() } : suspension;
       const first = await post(body);
       const firstResult = await first.json();

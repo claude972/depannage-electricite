@@ -32,7 +32,7 @@ Ouvert le 22 novembre 2026. **Ce fichier est le seul registre courant** de ce qu
 |---|---|---|
 | Tests unitaires, typage, revues SQL isolées | `mini-brafa` par SSH, worktree sur le stockage externe, PGlite 0.5.13 hors application | Disponible, utilisé pour le lot 1 |
 | Builds natifs et simulateurs | `mini-brafa` uniquement | Non lancés dans cette session |
-| Base de recette (migrations) | CLI Supabase connectée sur le mini de Claude, projet `depannage-web-pwa` visible | Accès d’écriture à confirmer avant toute application (voir R-ACC-01) |
+| Base de recette (migrations) | CLI Supabase connectée sur le mini de Claude, projet `depannage-web-pwa` | Lecture prouvée ; écriture non tentée (voir R-ACC-01) |
 | Base de production | Projet `depannage-production` visible | **Aucune écriture.** |
 | MacBook Intel (Docker) | `macbookpro` | Injoignable le 22 novembre (délai dépassé) |
 
@@ -42,9 +42,9 @@ Ouvert le 22 novembre 2026. **Ce fichier est le seul registre courant** de ce qu
 |---|---|---|---|
 | R-FIN-01 | Le rapprochement manuel écrit une commission estimée pour un paiement dont la commission est déjà prélevée (double ligne de commission ; corrigé à l’affichage seulement) | **CODÉ** | Migration `20261122120000_reconcile_skips_withheld_commission.sql`. Test `tests/sql-reconcile-withheld-review.mjs` : échec reproduit avant correctif (`[1,1]` au lieu de `[1,0]`), 15 contrôles verts après. Régressions : `sql-platform-operations-review`, `sql-checkout-link-review` (88), `sql-checkout-charge-proof-review` (78), `sql-platform-deferred-checkout-review` (72) verts. **Non appliquée à la recette.** |
 | R-FIN-02 | Total des estimations remplacées calculé côté navigateur, plafonné à 1 000 lignes | **CODÉ** | Même migration : `platform_finance_report` renvoie `commission_estimated_superseded` sur tout le journal ; la route Finance le préfère et garde l’ancien calcul en repli. Tests de route verts. |
-| R-FIN-03 | Quatre écritures de commission estimée en double sur la recette (clic du 22 novembre) | OUVERT, non supprimable | Le journal est immuable : elles restent et sont comptées à part par R-FIN-02 une fois la migration appliquée. Ne pas recliquer « Rapprocher » avant application. |
+| R-FIN-03 | Écritures de commission estimée en double sur la recette | OUVERT, non supprimable | Relevé en lecture seule du 22 novembre : 14 paiements réglés, 4 règlements au journal, 11 commissions prélevées, **3 estimations en double (34,72 €)**, 10 règlements à rapprocher. Le journal est immuable : elles restent et sont comptées à part par R-FIN-02 une fois la migration appliquée. **Ne pas cliquer « Rapprocher » avant application : avec l’ancienne fonction, les 10 règlements en attente recevraient chacun une estimation en double.** |
 | R-FIN-04 | `INT-5B12D9` : rapprochement historique | PROUVÉ (antérieur) | Commit `e595ba2e` : relié, commission 2 213 c, sans doublon. Ne pas rejouer. |
-| R-FIN-05 | Écriture automatique du règlement (`payment_settled`) sans clic de rapprochement | OUVERT | Migration à écrire : poser l’écriture à la confirmation du paiement, rejeu sans effet. |
+| R-FIN-05 | Écriture automatique du règlement (`payment_settled`) sans clic de rapprochement | **CODÉ** | Migration `20261122130000_settlement_entry_at_confirmation.sql` : déclencheur sur `payments`, rejeu sans effet, un échec d’écriture ne bloque jamais la confirmation (journalisé `settlement_entry_failed`, compté dans `missing_settlement`). Test `tests/sql-settlement-at-confirmation-review.mjs` : rouge sans la migration, 18 contrôles verts avec. Pas de rattrapage : les paiements antérieurs restent à rapprocher. **Non appliquée à la recette.** |
 | R-FIN-06 | État de l’empreinte bancaire après capture | OUVERT | Migration à écrire ; empreinte TEST de 180,00 € en attente sur `INT-88FF28` (dossier annulé) à libérer ou laisser expirer. |
 | R-FIN-07 | Commission des empreintes au grand livre (`GUEST_SETTLEMENT_LEDGER_COMMISSION_ENABLED`) | DÉCISION | Code écrit, désactivé : réutilise une fonction prévue pour les événements Stripe. |
 | R-FIN-08 | Remboursement Stripe TEST de bout en bout (FIN-04) | BLOQUÉ | Exige la double authentification sur le compte admin de recette. |
@@ -52,7 +52,7 @@ Ouvert le 22 novembre 2026. **Ce fichier est le seul registre courant** de ce qu
 | R-FIN-10 | Facture de commission (FIN-05, ADM-05) | DÉCISION | Taux et numéro de TVA de l’exploitant manquants. |
 | R-FIN-11 | Session de paiement réellement expirée | OUVERT | Prouvée par simulation seulement. |
 | R-FIN-12 | Litiges FIN-04 (commit `31956ccb`) | CODÉ | À rejouer sur la recette après déploiement. |
-| R-FIN-13 | Majoration d’urgence de 25 % affichée mais non appliquée à la fourchette enregistrée | OUVERT | Fonction SQL à modifier. |
+| R-FIN-13 | Majoration d’urgence de 25 % affichée mais non appliquée à la fourchette enregistrée | DÉCISION | Le texte publié dit que la majoration est « indiquée sur le devis précis ». L’appliquer aussi à la fourchette d’estimation est une règle de prix : à confirmer avant de modifier la fonction SQL. |
 | R-FIN-14 | Pays Stripe Connect : mentions autrichiennes à l’inscription | DÉCISION | À vérifier dans le tableau de bord Stripe par le propriétaire. |
 
 ## 2. Comptes et notifications
@@ -86,7 +86,7 @@ Ouvert le 22 novembre 2026. **Ce fichier est le seul registre courant** de ce qu
 | ID | Reste | État | Preuve ou prochaine action |
 |---|---|---|---|
 | R-PAR-01 | L’artisan ne voit pas dans l’offre les photos partagées par le client (web) | OUVERT | Défaut connu du rapport. |
-| R-PAR-02 | Filtre « Site » du tableau de bord entreprise liste le site archivé | OUVERT | Défaut connu du rapport. |
+| R-PAR-02 | Filtre « Site » de la recherche d’interventions liste le site archivé sans le signaler | OUVERT | C’est un filtre de lecture sur des dossiers passés : le site doit rester trouvable, mais marqué « (archivé) » comme dans le sélecteur de portée. |
 | R-PAR-03 | Limite de missions simultanées expliquée à l’artisan | CODÉ | `43b55a91`, à rejouer. |
 | R-PAR-04 | ART-10 ponctualité | OUVERT | Non développé. |
 | R-PAR-05 | ENT-06 restauration : tableau de bord, échéance par ticket | CODÉ partiel | `846e28d3` (tests d’échéance), déployé, non requalifié. |
@@ -126,6 +126,7 @@ Ouvert le 22 novembre 2026. **Ce fichier est le seul registre courant** de ce qu
 
 | ID | Reste | État | Preuve ou prochaine action |
 |---|---|---|---|
+| R-PROD-00 | **CI de `main` rouge depuis `2cadd0d7`** (cinq exécutions en échec, dernière verte : `50cb1dcc`) | **CODÉ** | Causes lues dans les journaux CI : (1) build refusé, `GET(request?: Request)` dans `app/api/admin/artisans/route.ts` ; (2) revue SQL E80 en 503 : la lecture optionnelle des remboursements faisait tomber tout l’état de paiement quand le client de service est indisponible ; (3) revues E34 et E36 non alignées sur le motif obligatoire (ADM-02). Corrigé au lot 3 ; `npm run check` vert sur `mini-brafa`. Preuve CI attendue sur la PR de la branche. |
 | R-PROD-01 | Déployer le candidat final sur la recette et requalifier les neuf commits non couverts | OUVERT | — |
 | R-PROD-02 | Appliquer les migrations en attente à la recette | OUVERT | Voir R-ACC-01. |
 | R-PROD-03 | Sauvegarde, restauration, alertes (SYS-09) | BLOQUÉ | Procédure écrite (`EXPLOITATION_REPRISE.md`, `594d25f5`), jamais exécutée. |
@@ -138,7 +139,7 @@ Ouvert le 22 novembre 2026. **Ce fichier est le seul registre courant** de ce qu
 
 | ID | Accès | État |
 |---|---|---|
-| R-ACC-01 | Écriture SQL sur la base de recette | À confirmer. La session de qualification n’en avait pas. La CLI Supabase du mini de Claude liste le projet ; l’application d’une migration n’a pas encore été tentée. |
+| R-ACC-01 | Écriture SQL sur la base de recette | **Lecture prouvée** le 22 novembre depuis le mini de Claude (`supabase migration list` et `supabase db query --linked`) : 134 migrations appliquées, identiques au dépôt ; les deux migrations du 22 novembre sont les seules en attente. Écriture non tentée : l’application à la recette attend l’accord du propriétaire (base partagée avec les sessions de recette en cours). |
 | R-ACC-02 | `macbookpro` (Docker Intel) | Injoignable le 22 novembre. |
 | R-ACC-03 | EAS | CLI absente des deux Mac joignables. |
 
@@ -147,3 +148,5 @@ Ouvert le 22 novembre 2026. **Ce fichier est le seul registre courant** de ce qu
 | Lot | Date | Contenu | Vérification |
 |---|---|---|---|
 | 1 | 22 novembre 2026 | R-FIN-01, R-FIN-02 : rapprochement manuel idempotent face à une commission prélevée ; total des estimations remplacées calculé en base | Sur `mini-brafa`, Node 26.13.1 : `npm test` 2 515 tests, 2 217 réussis, 298 ignorés, 0 échec ; `tsc --noEmit` propre ; 5 revues SQL isolées vertes dont la nouvelle (15 contrôles). Non déployé, migration non appliquée. |
+| 2 | 22 novembre 2026 | R-FIN-05 : écriture de règlement posée à la confirmation du paiement | Rouge sans la migration, 18 contrôles verts avec. Les 97 revues SQL rejouées : 92 vertes ; 1 alignée (`sql-adv-rollback-review`, 346 lignes PASS) ; 1 instable sous charge et verte deux fois seule (`sql-guest-settlement-review`, n’exécute pas la nouvelle migration) ; 3 rouges aussi sur `main`, traitées au lot 3. |
+| 3 | 22 novembre 2026 | R-PROD-00 : réparation de la CI de `main` (signature de route, lecture optionnelle des remboursements, fixtures de motif) | `npm run check` sur `mini-brafa` : sortie 0, 2 516 tests, 2 218 réussis, 0 échec, builds Turbopack et webpack compilés. Trois revues `sql-phase2-lot-a-*` vertes (1, 3 et 4 tests). |
