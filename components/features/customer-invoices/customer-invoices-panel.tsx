@@ -32,6 +32,10 @@ export type CustomerInvoicesPanelProps = {
   context?: InvoicesContext;
   demo?: boolean;
   title?: string;
+  /** Optional: opens the dossier an invoice belongs to (the row then shows « Dossier <reference> »). */
+  onOpenDossier?: (interventionId: string) => void;
+  /** Reference shown for the dossier (e.g. INT-XXXXXX). */
+  dossierReference?: (interventionId: string) => string;
   /** Tests only. */
   initial?: InvoicesState;
 };
@@ -44,7 +48,7 @@ export function CustomerInvoicesPanel(props: CustomerInvoicesPanelProps) {
 
 const dateFr = (iso: string) => new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(iso));
 
-function Panel({ filters, api, context = DEFAULT_INVOICES_CONTEXT, demo = false, title = "Factures et avoirs", initial }: CustomerInvoicesPanelProps) {
+function Panel({ filters, api, context = DEFAULT_INVOICES_CONTEXT, demo = false, title = "Factures et avoirs", initial, onOpenDossier, dossierReference }: CustomerInvoicesPanelProps) {
   const [state, setStateRaw] = useState<InvoicesState>(initial ?? INVOICES_INITIAL);
   const ref = useRef(state);
   const set = (next: InvoicesState) => {
@@ -108,7 +112,7 @@ function Panel({ filters, api, context = DEFAULT_INVOICES_CONTEXT, demo = false,
         <>
           <ul className={styles.list}>
             {state.invoices.map((i) => (
-              <InvoiceRow key={i.id} invoice={i} open={state.detail?.id === i.id} onToggle={() => (state.detail?.id === i.id ? ctrl.closeDetail() : void ctrl.openDetail(i.id))}>
+              <InvoiceRow key={i.id} invoice={i} open={state.detail?.id === i.id} onOpenDossier={onOpenDossier} dossierReference={dossierReference} onToggle={() => (state.detail?.id === i.id ? ctrl.closeDetail() : void ctrl.openDetail(i.id))}>
                 {state.detail?.id === i.id && <Detail state={state} onRetry={() => void ctrl.openDetail(i.id)} />}
               </InvoiceRow>
             ))}
@@ -140,7 +144,7 @@ function PdfLinks({ id }: { id: string }) {
   );
 }
 
-function InvoiceRow({ invoice: i, open, onToggle, children }: { invoice: InvoiceSummary; open: boolean; onToggle: () => void; children?: React.ReactNode }) {
+function InvoiceRow({ invoice: i, open, onToggle, children, onOpenDossier, dossierReference }: { invoice: InvoiceSummary; open: boolean; onToggle: () => void; children?: React.ReactNode; onOpenDossier?: (interventionId: string) => void; dossierReference?: (interventionId: string) => string }) {
   return (
     <li className={styles.row} data-invoice-id={i.id} data-invoice-kind={i.kind}>
       <div className={styles.rowHead}>
@@ -158,6 +162,11 @@ function InvoiceRow({ invoice: i, open, onToggle, children }: { invoice: Invoice
         <button type="button" className={styles.secondary} aria-expanded={open} onClick={onToggle} data-invoice-detail="">
           {open ? "Masquer le détail" : "Détail"}
         </button>
+        {onOpenDossier && (
+          <button type="button" className={styles.secondary} onClick={() => onOpenDossier(i.intervention_id)} data-invoice-dossier={i.intervention_id}>
+            Dossier{dossierReference ? ` ${dossierReference(i.intervention_id)}` : ""}
+          </button>
+        )}
       </div>
       {children}
     </li>

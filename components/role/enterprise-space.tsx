@@ -139,6 +139,7 @@ import { leafScope, platformEntries } from "./anchors";
 import { PlatformPage } from "./platform-anchor";
 import { FeatureUnavailable, useProbeWhenUnknown } from "./feature-unavailable";
 import { EnterpriseTimeline } from "../features/enterprise-timeline/enterprise-timeline";
+import { RefundNotice } from "../features/payment-refunds/refund-notice";
 import { buildTimeline } from "../features/enterprise-timeline/timeline-model";
 import { AccountDataPanel } from "../features/account-data/account-data-panel";
 import { AccountSessionsPanel } from "../features/account-sessions/account-sessions-panel";
@@ -2300,6 +2301,10 @@ export function DossierView({ c, id, initialQuoteId }: { c: Ctx; id: string; ini
               <p className={styles.muted}>
                 Le règlement est proposé une fois l’intervention terminée par l’artisan, sur la base du devis accepté.
               </p>
+            )}
+            {/* FIN-04: refund confirmed by the payment provider on this settled dossier. */}
+            {intervention.status === "paid" && acceptedQuote && !demo && (
+              <RefundNotice quoteId={acceptedQuote.id} viewer="payer" identity={`${session.profileId}|${session.mutationContext.generation()}`} refreshedAt={session.refreshedAt} load={session.loadPaymentStatus} />
             )}
             {/* ENT-16: owner grants / revokes the payer mandate (shown only when the server says can_manage). */}
             {intervention.status !== "paid" && (
@@ -4808,6 +4813,8 @@ function InvoicesView({ c }: { c: Ctx }) {
           filters={{ organization_id: c.organization.id, ...(c.activeSite ? { site_id: c.activeSite.id } : {}), basis: "service" }}
           context={session.mutationContext}
           demo={c.demo}
+          onOpenDossier={(interventionId) => session.openIntervention(interventionId)}
+          dossierReference={shortId}
         />
       ) : (
         <Unavailable title="Factures et avoirs" reason="Choisissez une organisation pour consulter ses factures et avoirs émis." blocker="FIN-05" />

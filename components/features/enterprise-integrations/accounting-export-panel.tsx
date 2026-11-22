@@ -108,7 +108,7 @@ function Panel({ organizationId, context }: { organizationId: string; context: C
             {plural(view.summary.invoices, "facture", "factures")} · {plural(view.summary.credit_notes, "avoir", "avoirs")} · {plural(view.summary.settlements, "règlement", "règlements")} (dont {view.summary.settlements_paid} confirmé{view.summary.settlements_paid > 1 ? "s" : ""})
           </p>
           <p className={styles.muted}>
-            Périmètre : les {plural(view.summary.visible_sites, "site visible", "sites visibles")} avec vos droits. Données au {dateTime(view.summary.captured_at)}.
+            Périmètre : {view.summary.visible_sites > 1 ? `les ${view.summary.visible_sites} sites visibles` : view.summary.visible_sites === 1 ? "le seul site visible" : "aucun site visible"} avec vos droits. Données au {dateTime(view.summary.captured_at)}.
           </p>
           <div className={styles.actions}>
             <button type="button" className="button primary" onClick={() => void download()} disabled={busy} data-accounting-export-download="">
