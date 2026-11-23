@@ -75,9 +75,9 @@ Ouvert le 22 novembre 2026. **Ce fichier est le seul registre courant** de ce qu
 |---|---|---|---|
 | R-SRV-01 | Motif et refus définitif d’une candidature artisan (ADM-02) | **PROUVÉ en ligne**, un suivi ouvert | Migration `20261122170000`, appliquée à la recette. Prouvé : appel direct de la commande SQL refusé par la base (`P0001`, sonde sans écriture) ; par la route : refus sans motif 422, resoumission 409 et dossier inchangé, réouverture qui lève le refus. [preuves du 23 novembre](qa/preuves-2026-11-23-terminaison/README.md) Non vu à l’écran : le formulaire de candidature d’un artisan refusé. **Suivi (R-SRV-19).** |
 | R-SRV-02 | Signal « aucun artisan disponible » dans une commune couverte (CLI-03) | CODÉ, **API PROUVÉE en ligne** | `2cadd0d7` : `GET /api/public/coverage/availability`. Lecture publique sur la recette le 22 novembre : `97217` → `none`, `97240` → `available`, conforme au constat du rapport (aucun artisan sur 97217). Affichage web et mobile câblé (`components/features/coverage/model.ts`, `apps/mobile/src/components/coverage-notice.tsx`), non rejoué à l’écran. |
-| R-SRV-03 | Suppression réelle d’une photo de dossier (CLI-02) | CODÉ | `2cadd0d7` : `DELETE /api/documents` tant que la demande est en recherche d’artisan (retrait de l’offre, suppression de la ligne puis du fichier privé, trace d’audit). Déployé avec `846e28d3`, non requalifié. |
+| R-SRV-03 | Suppression réelle d’une photo de demande (CLI-02) | **PROUVÉ en ligne** | Suppression par le client tant que la demande est ouverte : 200, ligne supprimée, retrait de l’offre (l’artisan ne la voit plus) ; tiers 404. [preuves du 23 novembre](qa/preuves-2026-11-23-terminaison/README.md) La course avec une acceptation simultanée (R-SRV-16) reste ouverte. |
 | R-SRV-04 | Confirmation d’un créneau (CLI-04) | DÉCISION | Le serveur n’a pas de notion de créneau « confirmé » : le client voit le créneau proposé et peut le modifier (web PASS au rapport). Ajouter une confirmation explicite est un choix de parcours. |
-| R-SRV-05 | Journal d’audit des paramètres plafonné à 100 événements | CODÉ | `31956ccb` : journal unifié paginé par curseur (`/api/platform-operations/audit?journal=…`). Non déployé, à rejouer. |
+| R-SRV-05 | Journal d’audit plafonné à 100 événements | **PROUVÉ en ligne** | Journal unifié : 600 événements lus sur 6 pages par curseur, aucun doublon, total 648 ; client 403. [preuves du 23 novembre](qa/preuves-2026-11-23-terminaison/README.md) |
 | R-SRV-06 | Exécution de l’effacement des données (SYS-09) | DÉCISION | Durées de conservation à fournir (SYS-06). |
 | R-SRV-07 | Refus inter-comptes et inter-organisations | PROUVÉ (antérieur) | Matrice, colonne `serveur_permissions`, recette du 21-22 novembre sur `bda85303`. À rejouer sur le candidat final. |
 | R-SRV-10 | Trois fonctions de garde avec `search_path` modifiable (`platform_deny_mutation`, `platform_guard_grant_update`, `platform_guard_last_super_admin`) | **CODÉ** | Source : conseiller de sécurité Supabase lu sur la recette le 22 novembre (lint 0011). Migration `20261122160000_guard_functions_search_path.sql`. Test `tests/sql-function-search-path-review.mjs` : rouge avant (exactement ces trois fonctions), 10 contrôles verts après, invariant « aucune fonction publique sans `search_path` » désormais tenu par la CI. **Appliquée à la recette le 22 novembre** (voir « Application à la recette »). |
@@ -98,7 +98,7 @@ Ouvert le 22 novembre 2026. **Ce fichier est le seul registre courant** de ce qu
 
 | ID | Reste | État | Preuve ou prochaine action |
 |---|---|---|---|
-| R-PAR-01 | L’artisan ne voit pas dans l’offre les photos partagées par le client (web) | CODÉ | Déjà traité par `2cadd0d7` (galerie montée dans l’offre et dans la mission, `components/role/artisan-space.tsx`), déployé avec `846e28d3`, postérieur au rapport : à rejouer à l’écran. |
+| R-PAR-01 | L’artisan ne voyait pas dans l’offre les photos partagées par le client (web) | **PROUVÉ en ligne** | Sur la recette `a9db467b` : l’artisan éligible ouvre l’offre et voit « Photos choisies par le client » avec l’image. [preuves du 23 novembre](qa/preuves-2026-11-23-terminaison/README.md) |
 | R-PAR-02 | Filtre « Site » de la recherche d’interventions | **PROUVÉ en ligne** | Sur `a9db467b`, le filtre liste « ent Site archivé Dostaly (archivé) ». [preuves du 23 novembre](qa/preuves-2026-11-23-terminaison/README.md) |
 | R-PAR-03 | Limite de missions simultanées expliquée à l’artisan | CODÉ | `43b55a91`, à rejouer. |
 | R-PAR-04 | ART-10 ponctualité | OUVERT | Non développé. |
@@ -117,7 +117,7 @@ Ouvert le 22 novembre 2026. **Ce fichier est le seul registre courant** de ce qu
 | R-A11Y-02 | Android : le clavier masque « Vérifier » dans Aide | OUVERT | — |
 | R-A11Y-03 | iOS : barre « Terminer » du clavier absente | OUVERT | — |
 | R-A11Y-04 | iOS : une bande au-dessus de la barre d’onglets intercepte des appuis | OUVERT | — |
-| R-A11Y-05 | Tables entreprise débordant à 768 px | À revérifier | Constat du 14 novembre ; à rejouer sur le candidat final. |
+| R-A11Y-05 | Tables entreprise débordant à 768 px | **PROUVÉ en ligne**, un reste mineur | À 768 px aucune page ne déborde ; les tables sont dans une zone défilable focalisable et nommée. Reste : la zone défilable de la table des rapports n’a pas de nom accessible. [preuves du 23 novembre](qa/preuves-2026-11-23-terminaison/README.md) |
 | R-A11Y-06 | Perte réseau non rejouée sur les parcours | OUVERT | Colonne `erreurs_reprise` de la matrice : partiel partout. |
 
 ## 6. Versions mobiles finales

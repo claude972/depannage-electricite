@@ -1,0 +1,64 @@
+{
+ "base": "https://domdepannage-recette-20261112.vercel.app",
+ "at": "2026-11-23T03:08:21.702Z",
+ "views": {
+  "#overview": [
+   {
+    "table": 845,
+    "scroller": {
+     "width": 726,
+     "scrollWidth": 845,
+     "scrollable": true,
+     "label": "Interventions — tableau à défilement horizontal",
+     "tabindex": "0",
+     "withinViewport": true
+    }
+   }
+  ],
+  "#interventions": [
+   {
+    "table": 845,
+    "scroller": {
+     "width": 726,
+     "scrollWidth": 845,
+     "scrollable": true,
+     "label": "Interventions — tableau à défilement horizontal",
+     "tabindex": "0",
+     "withinViewport": true
+    }
+   }
+  ],
+  "#billing": [
+   {
+    "table": 845,
+    "scroller": {
+     "width": 726,
+     "scrollWidth": 845,
+     "scrollable": true,
+     "label": "Interventions — tableau à défilement horizontal",
+     "tabindex": "0",
+     "withinViewport": true
+    }
+   }
+  ],
+  "#reports": [
+   {
+    "table": 729,
+    "scroller": {
+     "width": 728,
+     "scrollWidth": 729,
+     "scrollable": true,
+     "label": null,
+     "tabindex": "0",
+     "withinViewport": true
+    }
+   },
+   {
+    "table": 682,
+    "scroller": null,
+    "rightEdge": 725,
+    "viewport": 768
+   }
+  ]
+ }
+}
