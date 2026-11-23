@@ -117,7 +117,7 @@ Ouvert le 22 novembre 2026. **Ce fichier est le seul registre courant** de ce qu
 | R-A11Y-02 | Android : le clavier masque « Vérifier » dans Aide | OUVERT | — |
 | R-A11Y-03 | iOS : barre « Terminer » du clavier absente | OUVERT | — |
 | R-A11Y-04 | iOS : une bande au-dessus de la barre d’onglets intercepte des appuis | OUVERT | — |
-| R-A11Y-05 | Tables entreprise débordant à 768 px | **PROUVÉ en ligne**, un reste mineur | À 768 px aucune page ne déborde ; les tables sont dans une zone défilable focalisable et nommée. Reste : la zone défilable de la table des rapports n’a pas de nom accessible. [preuves du 23 novembre](qa/preuves-2026-11-23-terminaison/README.md) |
+| R-A11Y-05 | Tables entreprise débordant à 768 px | **PROUVÉ en ligne** | À 768 px aucune page ne déborde ; les tables sont dans une zone défilable focalisable et nommée (la table des rapports par `aria-labelledby`, vérifié dans le code). [preuves du 23 novembre](qa/preuves-2026-11-23-terminaison/README.md) |
 | R-A11Y-06 | Perte réseau non rejouée sur les parcours | OUVERT | Colonne `erreurs_reprise` de la matrice : partiel partout. |
 
 ## 6. Versions mobiles finales
