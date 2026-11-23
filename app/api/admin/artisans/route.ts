@@ -141,6 +141,9 @@ export async function POST(request: Request) {
       return Response.json({ success: true, ...(data.reason ? { reason_recorded: recorded === true } : {}) }, { headers: privateHeaders });
     }
     if (incomplete(atomic.error)) throw new ApiError(422, "Un dossier complet et soumis est requis pour approuver ou réactiver cet artisan.");
+    // R-SRV-21 (migration 20261123100000): the same command id sent again with another reason.
+    if (atomic.error.code === "P0001" && (atomic.error.message === "Command replayed with a different reason" || atomic.error.message === "Command identity conflict"))
+      throw new ApiError(409, "Cette décision a déjà été enregistrée avec un autre motif. Rechargez le dossier avant de décider à nouveau.");
     // Only a database that does not have the command yet falls back to the two-step path below.
     if (atomic.error.code !== "PGRST202") dbError(atomic.error);
     const { error } = await db.rpc("decide_artisan_application", { p_user_id: data.user_id, p_action: data.action, p_expected_version: data.expected_version, p_command_id: data.command_id });
