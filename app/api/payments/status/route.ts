@@ -38,7 +38,10 @@ export async function GET(request: Request) {
   // FIN-04: refunds confirmed by the provider on this settled payment, for whoever may read the
   // quote (RLS above): client, organisation member, assigned artisan. Optional; amounts only.
   let refunds: ConfirmedRefunds | null = null;
-  if (p.data?.status === "paid" && p.data.method === "stripe") refunds = await readConfirmedRefunds(adminClient(), quoteId, p.data.total_cents);
+  // The service client itself may be unavailable: an optional field never turns the status into a 503.
+  if (p.data?.status === "paid" && p.data.method === "stripe") {
+    try { refunds = await readConfirmedRefunds(adminClient(), quoteId, p.data.total_cents); } catch { refunds = null; }
+  }
   return Response.json({payment:p.data,attempts:a.data,attempts_limit:50,history_limited:attempts.count!>50,
     ...(refunds === null ? {} : { refunds }),
     ...(artisanDispute === undefined ? {} : { artisan_dispute: artisanDispute }),

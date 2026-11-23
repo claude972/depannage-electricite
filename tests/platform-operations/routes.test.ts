@@ -37,7 +37,7 @@ function harness(actor: keyof typeof ACCESS | null, env: Record<string, string> 
       const args = init?.body ? JSON.parse(String(init.body)) : {}; calls.push({ rpc: table, args, url, method });
       if (table === rejectedRpc?.name) return Response.json({ code: rejectedRpc.code, message: rejectedRpc.message }, { status: 403 });
       if (table === "platform_access") return Response.json(ACCESS[actor ?? "none"]);
-      if (table === "platform_finance_report") return Response.json({ payments: {}, ledger: {}, refund_requests: {}, disputes: {}, invoices: {}, commission_setting: null, currency: "eur", generated_at: "2026-10-31T00:00:00Z" });
+      if (table === "platform_finance_report") return Response.json({ payments: {}, ledger: {}, refund_requests: {}, disputes: {}, invoices: {}, commission_setting: null, currency: "eur", generated_at: "2026-10-31T00:00:00Z", ...(fixtures.platform_finance_report?.[0] ?? {}) });
       return Response.json({ ok: true, rpc: table, args });
     }
     calls.push({ table, url, method });
@@ -240,4 +240,16 @@ test("FIN-06: the finance report totals the estimates already superseded by a co
   const broken = harness("finRead", {}, undefined, { platform_ledger_entries: [entry(1, 1, "commission_withheld", 1845), entry(2, 1, "commission_estimated", -1)] });
   assert.equal((await (await broken.route("finance").GET(broken.request("/finance"))).json()).report.commission_estimated_superseded, null);
   assert.equal((await harness("moderator").route("finance").GET(harness("moderator").request("/finance"))).status, 403);
+});
+test("FIN-06: the total computed by the database over the whole ledger wins over the capped client-side read", async () => {
+  const entry = (n: number, payment: number, entry_kind: string, amount_cents: number): Row => ({ id: uuid(n, "80000000"), payment_id: uuid(payment, "70000000"), entry_kind, amount_cents });
+  const ledger = [entry(1, 1, "commission_withheld", 1845), entry(2, 1, "commission_estimated", 1085)];
+  const read = async (reported: unknown, rows = ledger) => {
+    const h = harness("finRead", {}, undefined, { platform_ledger_entries: rows, platform_finance_report: [{ commission_estimated_superseded: reported } as Row] });
+    return (await (await h.route("finance").GET(h.request("/finance"))).json()).report.commission_estimated_superseded;
+  };
+  assert.deepEqual(await read({ count: 4, cents: 4557 }), { count: 4, cents: 4557 });
+  assert.deepEqual(await read({ count: 0, cents: 0 }), { count: 0, cents: 0 });
+  // A database without the migration, or an unusable value, falls back to the previous read.
+  for (const unusable of [undefined, null, "4", { count: 1 }, { count: -1, cents: 10 }, { count: 1.5, cents: 10 }, { count: 1, cents: Number.MAX_SAFE_INTEGER + 1 }, [1, 2]]) assert.deepEqual(await read(unusable), { count: 1, cents: 1085 });
 });

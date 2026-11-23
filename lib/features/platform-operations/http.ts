@@ -133,6 +133,14 @@ export async function supersededEstimates(db: Database): Promise<{ count: number
   }
   return Number.isSafeInteger(cents) ? { count, cents } : null;
 }
+/** The same total as computed by the database over the whole ledger (migration 20261122120000);
+ *  null when the database does not report it yet or the value is unusable. */
+export function reportedSupersededEstimates(value: unknown): { count: number; cents: number } | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const { count, cents } = value as { count?: unknown; cents?: unknown };
+  const amount = (n: unknown): n is number => typeof n === "number" && Number.isSafeInteger(n) && n >= 0;
+  return amount(count) && amount(cents) ? { count, cents } : null;
+}
 export function objectResult(data: unknown, message: string): Record<string, unknown> {
   if (!data || typeof data !== "object" || Array.isArray(data)) throw new ApiError(503, message);
   return data as Record<string, unknown>;

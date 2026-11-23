@@ -1058,6 +1058,7 @@ function InterventionFiltersCard({ c, list }: { c: Ctx; list: InterventionList }
             {c.scope.sites.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
+                {s.archived_at ? " (archivé)" : ""}
               </option>
             ))}
           </select>

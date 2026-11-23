@@ -134,7 +134,7 @@ test("E34 — an old approval cannot undo a later suspension; reactivation is ex
       assert.equal(approved.status, 200, JSON.stringify(approved.body));
       const current = await dossier();
       assert.equal(current.status, "approved");
-      const suspended = await post(actor, versioned ? { action: "suspend", expected_version: current.version } : { approved: false });
+      const suspended = await post(actor, versioned ? { action: "suspend", expected_version: current.version, reason: "Motif de recette synthétique" } : { approved: false });
       assert.equal(suspended.status, 200, JSON.stringify(suspended.body));
       const suspension = await dossier();
       assert.equal(suspension.status, "suspended");

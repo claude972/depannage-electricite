@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { authenticatedClient, assertOrigin, dbError } from "@/lib/supabase/server";
 import { validated } from "@/lib/supabase/validation";
-import { describeAccess, failed, invalidQuery, objectResult, ok, requireScope, supersededEstimates } from "@/lib/features/platform-operations/http";
+import { describeAccess, failed, invalidQuery, objectResult, ok, reportedSupersededEstimates, requireScope, supersededEstimates } from "@/lib/features/platform-operations/http";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 const schema = z.object({ action: z.literal("reconcile"), limit: z.number().int().min(1).max(500).optional() }).strict();
@@ -12,7 +12,10 @@ export async function GET() {
     const [report, access, superseded] = await Promise.all([db.rpc("platform_finance_report"), describeAccess(db), supersededEstimates(db).catch(() => null)]);
     dbError(report.error);
     // FIN-06: a commission already withheld is not also shown as « estimated, not withheld ».
-    return ok({ report: { ...objectResult(report.data, "Le rapport financier est indisponible."), commission_estimated_superseded: superseded }, config: access.config });
+    // The database total covers the whole ledger; the capped read stays as the fallback for a
+    // database that does not report it yet.
+    const data = objectResult(report.data, "Le rapport financier est indisponible.");
+    return ok({ report: { ...data, commission_estimated_superseded: reportedSupersededEstimates(data.commission_estimated_superseded) ?? superseded }, config: access.config });
   } catch (error) { return failed(error); }
 }
 /** The commission rate is never accepted from the browser: the database reads its audited setting. */
