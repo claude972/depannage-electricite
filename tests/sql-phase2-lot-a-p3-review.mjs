@@ -78,7 +78,7 @@ test("E36 — an exact suspension retry succeeds after response loss with just o
       assert.deepEqual(await retry.json(), firstResult);
       assert.equal((await post({ ...body, expected_version: afterFirst })).status, 409);
       assert.equal((await post(suspension)).status, 422);
-    }, {}, { rpcAllowlist: new Set(["decide_artisan_application"]) });
+    }, {}, { rpcAllowlist: new Set(["decide_artisan_application", "record_artisan_application_decision"]) });
   } finally {
     await db.close();
   }

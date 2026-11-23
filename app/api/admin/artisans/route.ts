@@ -129,8 +129,19 @@ export async function POST(request: Request) {
     }
     if (NEGATIVE_ACTIONS.includes(data.action) && !data.reason) throw new ApiError(422, REASON_REQUIRED);
     if (data.definitive && data.action !== "request_changes") throw new ApiError(422, "Seule une candidature soumise peut être refusée.");
+    const incomplete = (e: { code?: string; message?: string } | null) => e?.code === "P0001" && e.message === "A complete submitted application is required for approval or reinstatement";
+    // The decision and its log entry (reason, « definitive ») are one SQL transaction (migration
+    // 20261123090000): the refusal can no longer be lost between the two writes.
+    const atomic = await db.rpc("record_artisan_application_decision", { p_user_id: data.user_id, p_action: data.action, p_expected_version: data.expected_version, p_command_id: data.command_id, p_reason: data.reason ?? null, p_definitive: data.definitive === true });
+    if (!atomic.error) {
+      const recorded = (atomic.data as { reason_recorded?: unknown } | null)?.reason_recorded;
+      return Response.json({ success: true, ...(data.reason ? { reason_recorded: recorded === true } : {}) }, { headers: privateHeaders });
+    }
+    if (incomplete(atomic.error)) throw new ApiError(422, "Un dossier complet et soumis est requis pour approuver ou réactiver cet artisan.");
+    // Only a database that does not have the command yet falls back to the two-step path below.
+    if (atomic.error.code !== "PGRST202") dbError(atomic.error);
     const { error } = await db.rpc("decide_artisan_application", { p_user_id: data.user_id, p_action: data.action, p_expected_version: data.expected_version, p_command_id: data.command_id });
-    if (error?.code === "P0001" && error.message === "A complete submitted application is required for approval or reinstatement")
+    if (incomplete(error))
       throw new ApiError(422, "Un dossier complet et soumis est requis pour approuver ou réactiver cet artisan.");
     dbError(error);
     // The SQL command has verified the administrator and applied the decision. Its reason is then
