@@ -1,0 +1,159 @@
+{
+ "base": "https://domdepannage-recette-20261112-yfbh4tu4u-brafas-projects.vercel.app",
+ "at": "2026-11-23T01:03:34.552Z",
+ "ent": {
+  "url": "https://domdepannage-recette-20261112-yfbh4tu4u-brafas-projects.vercel.app/#overview",
+  "nav": [
+   "Tableau de bord",
+   "Interventions",
+   "Sites & contrats",
+   "Devis & approbations",
+   "Facturation",
+   "Rapports",
+   "Messages",
+   "Documents",
+   "Membres",
+   "Assistance",
+   "Profil",
+   "Accueil",
+   "Dossiers",
+   "Sites",
+   "Menu"
+  ],
+  "filterCount": 1,
+  "selects": [
+   {
+    "label": "Site",
+    "options": [
+     "Tous les sites",
+     "web17-c Restaurant Ti Punch",
+     "ent Site archivé Dostaly (archivé)",
+     "ent ERP Salle Polyvalente",
+     "ent Bureaux Pointe Simon",
+     "ent Restaurant Le Lagon",
+     "ent Résidence Eucalyptus"
+    ]
+   },
+   {
+    "label": "Type d’intervention",
+    "options": [
+     "Tous les types",
+     "Coupure de courant",
+     "Tableau électrique",
+     "Prise ou interrupteur",
+     "Éclairage",
+     "Recherche de panne"
+    ]
+   },
+   {
+    "label": "Statut",
+    "options": [
+     "Tous les statuts",
+     "Recherche d’un artisan",
+     "Artisan affecté",
+     "Devis à valider",
+     "Devis accepté",
+     "Intervention en cours",
+     "À régler",
+     "Terminée et réglée",
+     "Annulée"
+    ]
+   }
+  ],
+  "errors": []
+ },
+ "adm": {
+  "url": "https://domdepannage-recette-20261112-yfbh4tu4u-brafas-projects.vercel.app/#admin",
+  "nav": [
+   "",
+   "Tableau de bord",
+   "Artisans\n1\n1 candidatures à examiner",
+   "Interventions",
+   "Devis & Factures",
+   "Clients",
+   "Avis & Notes",
+   "Messages",
+   "Garantie",
+   "Paramètres",
+   "Opérateurs",
+   "Finance",
+   "Modération",
+   "Journal d’audit",
+   "File d’assistance",
+   "AR\nAdmin Recette\nSuper Admin",
+   "Déconnexion",
+   "Dossiers",
+   "Artisans",
+   "Finance",
+   "Menu"
+  ],
+  "report": {
+   "status": 200,
+   "data": {
+    "report": {
+     "ledger": {
+      "settled_cents": 45570,
+      "settled_count": 4,
+      "amount_mismatches": 0,
+      "missing_settlement": 10,
+      "refund_settled_cents": 1000,
+      "refund_settled_count": 1,
+      "commission_withheld_cents": 15906,
+      "commission_withheld_count": 11,
+      "commission_estimated_cents": 4557,
+      "commission_estimated_count": 4
+     },
+     "currency": "eur",
+     "disputes": {
+      "closed": 1,
+      "resolved": 1
+     },
+     "invoices": {
+      "invoice_count": 5,
+      "credit_note_count": 2
+     },
+     "payments": {
+      "paid_cents": 167536,
+      "paid_count": 14,
+      "failed_count": 0,
+      "pending_count": 0,
+      "failed_attempts": 2
+     },
+     "generated_at": "2026-11-23T01:03:56.847227+00:00",
+     "refund_requests": {
+      "settled": {
+       "cents": 1000,
+       "count": 1
+      }
+     },
+     "commission_setting": {
+      "bps": 1000,
+      "version": 1,
+      "updated_at": "2026-11-22T01:54:20.703555+00:00"
+     },
+     "commission_estimated_superseded": {
+      "count": 3,
+      "cents": 3472
+     }
+    },
+    "config": {
+     "commission": {
+      "setting_bps": 1000,
+      "setting_version": 1,
+      "checkout_bps": 1000,
+      "aligned": true
+     },
+     "payment_provider": {
+      "configured": true,
+      "mode": "test",
+      "live_enabled": false
+     },
+     "invoice_issuer": {
+      "configured": true
+     }
+    }
+   }
+  },
+  "errors": []
+ }
+}

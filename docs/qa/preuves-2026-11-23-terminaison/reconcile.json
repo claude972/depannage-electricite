@@ -1,0 +1,101 @@
+{
+ "base": "https://domdepannage-recette-20261112-yfbh4tu4u-brafas-projects.vercel.app",
+ "at": "2026-11-23T01:04:22.799Z",
+ "steps": [],
+ "before": {
+  "ledger": {
+   "settled_cents": 45570,
+   "settled_count": 4,
+   "amount_mismatches": 0,
+   "missing_settlement": 10,
+   "refund_settled_cents": 1000,
+   "refund_settled_count": 1,
+   "commission_withheld_cents": 15906,
+   "commission_withheld_count": 11,
+   "commission_estimated_cents": 4557,
+   "commission_estimated_count": 4
+  },
+  "superseded": {
+   "count": 3,
+   "cents": 3472
+  }
+ },
+ "screenBefore": [
+  "Rapprochement, ledger, factures, remboursements et litiges",
+  "Remboursements et commissions réelles indisponibles sans événement fournisseur confirmé.",
+  "Taux de commission (paramètre)",
+  "Requis pour toute facture de commission.",
+  "Rapprochement",
+  "Rapprocher les règlements",
+  "Inclut les règlements déclarés reçus sur place par l’artisan (pas une preuve bancaire). En attente : 0 · échoués : 0 · tentatives échouées : 2",
+  "Règlements au registre",
+  "10 règlement(s) confirmé(s) pas encore inscrit(s) au registre : étape normale après un paiement, le rapprochement les inscrit.",
+  "Commission estimée (non prélevée)",
+  "Au taux 10.00 % (version 1). Hors 3 estimation(s) du registre (34,72 €) portant sur des règlements dont la commission est déjà prélevée et confirmée.",
+  "Commission prélevée (confirmée)",
+  "Connue uniquement par événement fournisseur confirmé. Montant prélevé à l’origine : la part de commission éventuellement restituée par le fournisseur lors d’un remboursement n’en est pas déduite ici ; elle figure dans les observations fournisseur « à examiner ».",
+  "Confirmés par événement signé du fournisseur de paiement. Le transfert à l’artisan et la commission sont ajustés par le fournisseur selon la politique de remboursement en vigueur."
+ ],
+ "buttonCount": 1,
+ "dialog": [],
+ "posts": [
+  {
+   "status": 200,
+   "body": "{\"settled_added\":10,\"commission_bps\":1000,\"setting_version\":1,\"commission_added\":2,\"remaining_unsettled\":0}"
+  }
+ ],
+ "screenAfter": [
+  "Rapprochement, ledger, factures, remboursements et litiges",
+  "Remboursements et commissions réelles indisponibles sans événement fournisseur confirmé.",
+  "Taux de commission (paramètre)",
+  "Requis pour toute facture de commission.",
+  "Rapprochement",
+  "Rapprochement exécuté ; le taux appliqué est le paramètre serveur. Les déclarations sur place restent des déclarations, pas des preuves bancaires.",
+  "Rapprocher les règlements",
+  "Inclut les règlements déclarés reçus sur place par l’artisan (pas une preuve bancaire). En attente : 0 · échoués : 0 · tentatives échouées : 2",
+  "Règlements au registre",
+  "Tous les règlements sont inscrits. Le registre peut inclure des déclarations sur place, qui ne sont pas une preuve bancaire.",
+  "Commission estimée (non prélevée)",
+  "Au taux 10.00 % (version 1). Hors 3 estimation(s) du registre (34,72 €) portant sur des règlements dont la commission est déjà prélevée et confirmée.",
+  "Commission prélevée (confirmée)",
+  "Connue uniquement par événement fournisseur confirmé. Montant prélevé à l’origine : la part de commission éventuellement restituée par le fournisseur lors d’un remboursement n’en est pas déduite ici ; elle figure dans les observations fournisseur « à examiner ».",
+  "Confirmés par événement signé du fournisseur de paiement. Le transfert à l’artisan et la commission sont ajustés par le fournisseur selon la politique de remboursement en vigueur."
+ ],
+ "after": {
+  "ledger": {
+   "settled_cents": 167536,
+   "settled_count": 14,
+   "amount_mismatches": 0,
+   "missing_settlement": 0,
+   "refund_settled_cents": 1000,
+   "refund_settled_count": 1,
+   "commission_withheld_cents": 15906,
+   "commission_withheld_count": 11,
+   "commission_estimated_cents": 6752,
+   "commission_estimated_count": 6
+  },
+  "superseded": {
+   "count": 3,
+   "cents": 3472
+  }
+ },
+ "replay": [
+  {
+   "status": 200,
+   "body": "{\"settled_added\":0,\"commission_bps\":1000,\"setting_version\":1,\"commission_added\":0,\"remaining_unsettled\":0}"
+  }
+ ],
+ "afterReplay": {
+  "settled_cents": 167536,
+  "settled_count": 14,
+  "amount_mismatches": 0,
+  "missing_settlement": 0,
+  "refund_settled_cents": 1000,
+  "refund_settled_count": 1,
+  "commission_withheld_cents": 15906,
+  "commission_withheld_count": 11,
+  "commission_estimated_cents": 6752,
+  "commission_estimated_count": 6
+ },
+ "errors": []
+}
