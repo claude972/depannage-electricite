@@ -1,0 +1,102 @@
+{
+ "base": "https://domdepannage-recette-20261112.vercel.app",
+ "at": "2026-11-23T03:06:43.404Z",
+ "photo": {
+  "create": 201,
+  "ref": "INT-1886DC",
+  "upload": {
+   "status": 201,
+   "keys": [
+    "document"
+   ]
+  },
+  "share": {
+   "status": 200,
+   "body": {
+    "shared": true
+   }
+  },
+  "artisanApi": {
+   "items": [
+    {
+     "id": "fa711361-020b-4ef1-9972-0d07d8f16c8c"
+    }
+   ]
+  },
+  "offerListed": 1,
+  "galleryText": [
+   "Photos choisies par le client",
+   "Le client a choisi de montrer ces photos aux artisans éligibles avant attribution. Elles restent privées : ne les enregistrez pas et ne les transmettez pas."
+  ],
+  "images": 1,
+  "deleteWhileOpen": {
+   "status": 200,
+   "body": {
+    "deleted": true,
+    "id": "fa711361-020b-4ef1-9972-0d07d8f16c8c"
+   }
+  },
+  "rowAfterDelete": 0,
+  "artisanAfterDelete": {
+   "items": []
+  },
+  "thirdPartyDelete": 404,
+  "cleanup": 200,
+  "errors": []
+ },
+ "journal": {
+  "pages": 6,
+  "read": 600,
+  "duplicates": 0,
+  "total": 648,
+  "beyond100": true,
+  "clientStatus": 403
+ },
+ "tablet": {
+  "Tableau de bord": {
+   "hash": "#overview",
+   "docOverflow": 0,
+   "tables": [
+    {
+     "width": 845,
+     "containerScrolls": "visible"
+    }
+   ]
+  },
+  "Interventions": {
+   "hash": "#interventions",
+   "docOverflow": 0,
+   "tables": [
+    {
+     "width": 845,
+     "containerScrolls": "visible"
+    }
+   ]
+  },
+  "Facturation": {
+   "hash": "#billing",
+   "docOverflow": 0,
+   "tables": [
+    {
+     "width": 845,
+     "containerScrolls": "visible"
+    }
+   ]
+  },
+  "Rapports": {
+   "hash": "#reports",
+   "docOverflow": 0,
+   "tables": [
+    {
+     "width": 729,
+     "containerScrolls": "visible"
+    },
+    {
+     "width": 682,
+     "containerScrolls": "visible"
+    }
+   ]
+  },
+  "errors": []
+ }
+}

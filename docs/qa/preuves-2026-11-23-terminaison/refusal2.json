@@ -1,0 +1,58 @@
+{
+ "base": "https://domdepannage-recette-20261112-yfbh4tu4u-brafas-projects.vercel.app",
+ "at": "2026-11-23T01:10:33.284Z",
+ "start": {
+  "application_status": "submitted",
+  "application_version": 5
+ },
+ "refuseWithoutReason": {
+  "status": 422,
+  "error": "Indiquez le motif de cette décision (10 à 500 caractères) : il est conservé dans l’historique et communiqué à l’artisan."
+ },
+ "refuse": {
+  "status": 200,
+  "body": {
+   "success": true,
+   "reason_recorded": true
+  }
+ },
+ "afterRefuse": {
+  "application_status": "changes_requested",
+  "application_version": 6
+ },
+ "artisanSeesRefused": {
+  "status": 200,
+  "refused": true
+ },
+ "submitWhileRefused": {
+  "status": 409,
+  "error": "Votre candidature a été refusée par l’exploitant : elle ne peut pas être soumise à nouveau. Le motif figure dans votre dossier ; contactez l’assistance pour demander sa réouverture."
+ },
+ "afterSubmitAttempt": {
+  "application_status": "changes_requested",
+  "application_version": 6
+ },
+ "ui": {
+  "saysRefused": false,
+  "snippet": "",
+  "submitButton": "absent"
+ },
+ "reopen": {
+  "status": 200,
+  "body": {
+   "success": true,
+   "reason_recorded": true
+  }
+ },
+ "artisanAfterReopen": {
+  "refused": false
+ },
+ "end": {
+  "application_status": "changes_requested",
+  "application_version": 6
+ },
+ "errors": [
+  "console: Failed to load resource: the server responded with a status of 422 ()",
+  "console: Failed to load resource: the server responded with a status of 409 ()"
+ ]
+}

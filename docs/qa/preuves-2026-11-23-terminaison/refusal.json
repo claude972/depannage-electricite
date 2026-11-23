@@ -1,0 +1,35 @@
+{
+ "base": "https://domdepannage-recette-20261112-yfbh4tu4u-brafas-projects.vercel.app",
+ "at": "2026-11-23T01:09:26.793Z",
+ "refused": {
+  "before": {
+   "application_status": "changes_requested",
+   "submitted_at": "2026-11-22T02:28:08.700826+00:00"
+  },
+  "decisions": {
+   "status": 200,
+   "refused": false
+  },
+  "submitViaRoute": {
+   "status": 200
+  },
+  "after": {
+   "application_status": "submitted",
+   "submitted_at": "2026-11-23T01:09:36.813142+00:00"
+  },
+  "uiSaysRefused": false,
+  "submitButton": "absent sur cet écran",
+  "errors": []
+ },
+ "status": [
+  {
+   "http": 200,
+   "payment": "paid",
+   "total": 10850,
+   "hasSettlement": false,
+   "refunds": null,
+   "dispute": "none"
+  }
+ ],
+ "statusOtherArtisan": 404
+}

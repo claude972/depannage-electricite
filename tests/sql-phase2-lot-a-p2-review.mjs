@@ -146,7 +146,7 @@ test("E34 — an old approval cannot undo a later suspension; reactivation is ex
       await assert.rejects(asUser(db, otherAdmin, "select public.approve_artisan($1,true) v", [requester.id]), error => error.code === "42501");
       assert.equal((await post(actor, { action: "reinstate", expected_version: suspension.version })).status, 200);
       assert.equal((await dossier()).status, "approved");
-    }, {}, { users: [actor, otherAdmin], rpcAllowlist: new Set(["approve_artisan", "decide_artisan_application"]) });
+    }, {}, { users: [actor, otherAdmin], rpcAllowlist: new Set(["approve_artisan", "decide_artisan_application", "record_artisan_application_decision"]) });
   } finally {
     await db.close();
   }

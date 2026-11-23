@@ -1,0 +1,76 @@
+{
+ "base": "https://domdepannage-recette-20261112-yfbh4tu4u-brafas-projects.vercel.app",
+ "at": "2026-11-23T01:08:18.973Z",
+ "create": {
+  "status": 201,
+  "id": "b1d94958-6e46-4cf2-be6d-c39209b9bd9b",
+  "keys": [
+   "intervention"
+  ]
+ },
+ "accept": {
+  "by": "adm-artisan-ok",
+  "status": 200
+ },
+ "artisanNotificationsBefore": [],
+ "quote": {
+  "status": 200
+ },
+ "quoteRow": {
+  "id": "a4e8d395-faba-4894-a401-583fadb29532",
+  "status": "sent",
+  "total_cents": 32550
+ },
+ "approvalRow": {
+  "id": "594201e0-65ff-40b1-99d6-407c965f6260",
+  "status": "pending"
+ },
+ "rejectWithoutNote": {
+  "status": 422,
+  "error": "Un commentaire est obligatoire pour refuser."
+ },
+ "rejectByViewer": {
+  "status": 403,
+  "error": "Vous n’avez pas accès à cette action."
+ },
+ "reject": {
+  "status": 200
+ },
+ "artisanNotificationsAfter": [
+  {
+   "kind": "approval_decided",
+   "title": "Devis non approuvé par le client",
+   "body": "L’organisation cliente n’a pas approuvé le devis du dossier INT-B1D949.",
+   "payload": {
+    "subject": "quote_not_approved",
+    "quote_id": "a4e8d395-faba-4894-a401-583fadb29532",
+    "reference": "INT-B1D949"
+   },
+   "site_id": null,
+   "organization_id": null
+  }
+ ],
+ "noteLeak": false,
+ "dbRows": [
+  {
+   "to": "artisan",
+   "title": "Devis non approuvé par le client",
+   "dedupe": "approval:<id>:rejected:artisan"
+  }
+ ],
+ "quoteAfter": {
+  "status": "sent"
+ },
+ "uiHasLabel": true,
+ "uiSnippet": "Devis non approuvé par le client\nNon lue\nL’organisation cliente n’a pas approuvé le devis du dossier INT-B1D949.",
+ "otherArtisanSees": 0,
+ "cleanupCancel": {
+  "status": 200
+ },
+ "finalStatus": {
+  "status": "cancelled"
+ },
+ "errors": [
+  "console: Failed to load resource: the server responded with a status of 422 ()"
+ ]
+}

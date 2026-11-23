@@ -6,12 +6,14 @@ import assert from "node:assert/strict";
 import { createClient } from "@supabase/supabase-js";
 import { loadModule, fakeServerHelpers } from "./documents/harness";
 const id = (n: number) => `10000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
-function fixture(options: { role?: string; last?: unknown; status?: string } = {}) {
+function fixture(options: { role?: string; last?: unknown; status?: string; atomic?: unknown } = {}) {
   const calls: { table: string; method: string; body: unknown }[] = [];
   const db = createClient("https://example.supabase.co", "fake-publishable-key", { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }, global: { fetch: async (input, init) => {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url), table = url.pathname.split("/").at(-1)!;
     let body: unknown = null; try { body = JSON.parse(String(init?.body)); } catch {}
     calls.push({ table, method: init?.method ?? "GET", body });
+    // Without `atomic`, the database does not have the one-transaction command yet (PostgREST PGRST202).
+    if (table === "record_artisan_application_decision") return options.atomic === undefined ? Response.json({ code: "PGRST202", message: "Could not find the function" }, { status: 404 }) : options.atomic instanceof Response ? options.atomic : Response.json(options.atomic);
     if (table === "decide_artisan_application") return Response.json(null);
     if (table === "profiles") return Response.json({ role: options.role ?? "admin" });
     if (table === "artisan_profiles") return Response.json({ application_status: options.status ?? "changes_requested", application_version: 4 });
@@ -60,4 +62,33 @@ test("reopen: administrators only, only for a refused application, never through
   assert.equal((await fixture({ last: { application_decision: "request_changes", definitive: true }, status: "submitted" }).post({ action: "reopen", reason })).status, 409);
   const outsider = fixture({ role: "artisan", last: { application_decision: "request_changes", definitive: true } });
   assert.equal((await outsider.post({ action: "reopen", reason })).status, 403); assert.equal(logWrites(outsider).length, 0);
+});
+
+test("R-SRV-19: with the one-transaction command, the route writes nothing itself and reports what the database recorded", async () => {
+  const atomicCalls = (f: ReturnType<typeof fixture>) => f.calls.filter(c => c.table === "record_artisan_application_decision");
+  const f = fixture({ atomic: { success: true, reason_recorded: true } });
+  const r = await f.post({ action: "request_changes", definitive: true, reason: "Activité hors périmètre, candidature non retenue." });
+  assert.equal(r.status, 200); assert.deepEqual(await r.json(), { success: true, reason_recorded: true });
+  assert.equal(atomicCalls(f).length, 1);
+  const sent = atomicCalls(f)[0].body as Record<string, unknown>;
+  assert.deepEqual([sent.p_action, sent.p_reason, sent.p_definitive], ["request_changes", "Activité hors périmètre, candidature non retenue.", true]);
+  assert.equal(rpcCalls(f).length, 0, "no second decision command"); assert.equal(logWrites(f).length, 0, "no log write from the route");
+  // A positive decision without reason: no reason_recorded field, as before.
+  const g = fixture({ atomic: { success: true, reason_recorded: false } });
+  assert.deepEqual(await (await g.post({ action: "approve" })).json(), { success: true });
+  // A database refusal is never retried through the two-step path.
+  const refused = fixture({ atomic: Response.json({ code: "42501", message: "permission denied" }, { status: 403 }) });
+  const denied = await refused.post({ action: "suspend", reason: "Justificatifs non conformes au dossier." });
+  assert.notEqual(denied.status, 200); assert.equal(rpcCalls(refused).length, 0); assert.equal(logWrites(refused).length, 0);
+});
+
+test("R-SRV-22: the reason is counted in characters like the database, not in UTF-16 units", async () => {
+  // 5 emoji = 10 UTF-16 units but 5 characters: refused before any SQL command.
+  const short = fixture({ atomic: { success: true, reason_recorded: true } });
+  const r = await short.post({ action: "suspend", reason: "🔌⚡🔌⚡🔌" });
+  assert.equal(r.status, 422); assert.match((await r.json()).error, /au moins 10 caractères/);
+  assert.equal(short.calls.filter(c => c.table === "record_artisan_application_decision").length, 0);
+  // 300 emoji = 600 UTF-16 units but 300 characters: accepted.
+  const long = fixture({ atomic: { success: true, reason_recorded: true } });
+  assert.equal((await long.post({ action: "suspend", reason: "⚡".repeat(300) })).status, 200);
 });
