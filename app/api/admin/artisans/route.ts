@@ -8,7 +8,10 @@ const schema = z.object({
   action: z.enum(["approve", "request_changes", "suspend", "reinstate"]),
   expected_version: z.number().int().min(0).max(2147483646),
   // ADM-02: reason of the application-level decision, shared with the artisan and kept in the decision log.
-  reason: z.string().trim().min(10, "Le motif doit compter au moins 10 caractères : il est conservé et communiqué à l’artisan.").max(500, "Le motif ne peut pas dépasser 500 caractères.").regex(/^[^\u0000]*$/).optional(),
+  // Counted in characters (code points), like the database (char_length), not in UTF-16 units.
+  reason: z.string().trim().regex(/^[^\u0000]*$/)
+    .refine((value) => [...value].length >= 10, "Le motif doit compter au moins 10 caractères : il est conservé et communiqué à l’artisan.")
+    .refine((value) => [...value].length <= 500, "Le motif ne peut pas dépasser 500 caractères.").optional(),
   // ADM-02 (web): « request_changes » with `definitive` is a refusal. The dossier has no refused state:
   // it is sent back (changes_requested), the decision log says it is refused and the artisan cannot
   // submit it again through the application until an administrator reopens it (action « reopen »).

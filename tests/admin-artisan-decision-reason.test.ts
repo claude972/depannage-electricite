@@ -81,3 +81,14 @@ test("R-SRV-19: with the one-transaction command, the route writes nothing itsel
   const denied = await refused.post({ action: "suspend", reason: "Justificatifs non conformes au dossier." });
   assert.notEqual(denied.status, 200); assert.equal(rpcCalls(refused).length, 0); assert.equal(logWrites(refused).length, 0);
 });
+
+test("R-SRV-22: the reason is counted in characters like the database, not in UTF-16 units", async () => {
+  // 5 emoji = 10 UTF-16 units but 5 characters: refused before any SQL command.
+  const short = fixture({ atomic: { success: true, reason_recorded: true } });
+  const r = await short.post({ action: "suspend", reason: "🔌⚡🔌⚡🔌" });
+  assert.equal(r.status, 422); assert.match((await r.json()).error, /au moins 10 caractères/);
+  assert.equal(short.calls.filter(c => c.table === "record_artisan_application_decision").length, 0);
+  // 300 emoji = 600 UTF-16 units but 300 characters: accepted.
+  const long = fixture({ atomic: { success: true, reason_recorded: true } });
+  assert.equal((await long.post({ action: "suspend", reason: "⚡".repeat(300) })).status, 200);
+});
