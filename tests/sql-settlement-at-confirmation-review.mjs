@@ -102,5 +102,45 @@ try {
   eq((await q("select id from public.platform_ledger_entries")).length, 0, "un client ne lit aucune écriture");
   await as(null, null);
 
+  // ---- 7b. The manual catch-up survives the ledger conflict of section 6: the conflicting payment
+  // stays to reconcile (counted, audited) and every other payment is still settled in the same run.
+  const C = await paidCheckout("C", { confirm: false });
+  await q("alter table public.payments disable trigger payments_settlement_entry");
+  await confirm(C);
+  await q("alter table public.payments enable trigger payments_settlement_entry");
+  eq((await settled(C.payment)).length, 0, "paiement confirmé sans écriture (rattrapage attendu)");
+  run = await reconcile();
+  eq([run.settled_added, run.settlement_conflicts, run.remaining_unsettled], [1, 1, 1], "rattrapage : un réglé, un conflit compté, un restant");
+  eq([(await settled(C.payment)).length, (await settled(Z.payment)).length], [1, 0], "l’autre paiement est réglé ; le paiement en conflit reste à rapprocher");
+  eq(await one("select count(*)::integer v from public.platform_audit where action='settlement_entry_conflict' and target_id=$1", [Z.payment]), 1, "le conflit est journalisé avec le paiement");
+  eq((await report()).ledger.missing_settlement, 1, "le rapport signale toujours le paiement en conflit");
+
+  // ---- 8. Out-of-order provider events (Stripe gives no ordering guarantee).
+  const fail = (c, type, event) => one("select public.record_stripe_payment_failure($1,$2,$3,$4,$5,$6)v", [event, type, c.session, c.quote, c.amount, "eur"]);
+  const attempt = (c) => one("select status v from public.payment_attempts where session_id=$1", [c.session]);
+  const pay = (c) => one("select status v from public.payments where id=$1", [c.payment]);
+  // 8a. Asynchronous failure first, success afterwards: one settlement, written on the success only.
+  const A = await paidCheckout("A", { confirm: false });
+  eq(await fail(A, "checkout.session.async_payment_failed", "evt_fail_A"), true, "échec asynchrone appliqué");
+  eq([await pay(A), (await settled(A.payment)).length], ["failed", 0], "paiement en échec : aucune écriture");
+  eq(await confirm(A, "evt_ok_A"), true, "succès asynchrone reçu après l’échec");
+  eq([await pay(A), await attempt(A), (await settled(A.payment)).length], ["paid", "paid", 1], "réglé : une seule écriture");
+  // 8b. A late failure (replayed or new identifier) never downgrades nor writes.
+  eq(await fail(A, "checkout.session.async_payment_failed", "evt_fail_A"), false, "échec rejoué");
+  eq(await fail(A, "checkout.session.async_payment_failed", "evt_fail_A_late"), false, "nouvel échec tardif");
+  eq(await fail(A, "checkout.session.expired", "evt_exp_A_late"), false, "expiration tardive");
+  eq([await pay(A), await attempt(A), (await settled(A.payment)).length], ["paid", "paid", 1], "toujours réglé, tentative réglée, une écriture");
+  eq(await one("select count(*)::integer v from public.platform_ledger_entries where payment_id=$1 and direction='debit'", [A.payment]), 0, "aucune écriture inverse");
+  // 8c. An expired Checkout cannot be paid by a late completion: refused, nothing written.
+  const E = await paidCheckout("E", { confirm: false });
+  eq(await fail(E, "checkout.session.expired", "evt_exp_E"), true, "expiration appliquée");
+  eq(await one("select status v from public.platform_checkouts where id=$1", [E.checkout]), "expired", "session marquée expirée");
+  await assert.rejects(confirm(E, "evt_ok_E"), (e) => e.code === "P0001"); checks++;
+  eq([await pay(E), (await settled(E.payment)).length], ["failed", 0], "aucun règlement pour une session expirée");
+  eq(await one("select count(*)::integer v from public.stripe_events where id='evt_ok_E'"), 0, "événement refusé non consommé : Stripe le renverra");
+  // 8d. The manual reconciliation adds nothing to these payments.
+  await reconcile();
+  eq([(await settled(A.payment)).length, (await settled(E.payment)).length], [1, 0], "rapprochement manuel : ni doublon ni règlement d’une session expirée");
+
   console.log(`PASS: settlement entry written at payment confirmation, replay-safe and non-blocking (${checks} checks, isolated PostgreSQL, not live Supabase)`);
 } finally { await db.close(); }

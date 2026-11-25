@@ -61,7 +61,9 @@ export type FinanceReport = {
    *  withheld and confirmed. Null or absent = not determined (the raw totals are then shown). */
   commission_estimated_superseded?: { count: number; cents: number } | null;
 };
-export type ReconcileResult = { settled_added: number; commission_added: number; commission_bps: number | null; setting_version: number | null; remaining_unsettled: number };
+export type ReconcileResult = { settled_added: number; commission_added: number; commission_bps: number | null; setting_version: number | null; remaining_unsettled: number;
+  /** R-FIN-15: payments left unsettled because their session is already bound to another settlement entry. Absent before migration 20261125090000. */
+  settlement_conflicts?: number };
 
 export type RefundStatus = "requested" | "approved" | "rejected" | "cancelled" | "settled";
 export type RefundRequest = {
