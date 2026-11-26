@@ -1,0 +1,12 @@
+{
+ "amount_mismatch": 0,
+ "at_": "2026-11-25 20:07:33.295037+00",
+ "attempt_status_mismatch": 0,
+ "duplicate_sessions": 0,
+ "last_paid_at": "2026-11-22 15:23:46.323236+00",
+ "missing_settlement": 0,
+ "paid": 14,
+ "settled_at_confirmation": 0,
+ "settled_entries": 14,
+ "settlement_incidents": 0
+}

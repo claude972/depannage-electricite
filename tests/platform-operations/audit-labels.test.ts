@@ -7,3 +7,8 @@ test("FIN-06: a settlement entry that could not be written is named in the journ
   assert.equal(isSensitiveAction("settlement_entry_failed"), true);
   assert.equal(auditActionLabel("reconciliation_run").known, true);
 });
+
+test("R-FIN-15: a settlement left out by a session conflict is named in the journal and filtered as sensitive", () => {
+  assert.deepEqual(auditActionLabel("settlement_entry_conflict"), { label: "Règlement non inscrit : session déjà liée à une autre écriture", code: "settlement_entry_conflict", known: true });
+  assert.equal(isSensitiveAction("settlement_entry_conflict"), true);
+});

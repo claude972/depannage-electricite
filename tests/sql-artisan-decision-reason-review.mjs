@@ -69,6 +69,10 @@ try {
   // ---- 4. Replay of the same command: no second decision, no second entry.
   eq(await call("admin", [ids.artisan, "request_changes", d.v, command, REASON, true]), { success: true, reason_recorded: true }, "rejeu accepté");
   eq((await log()).length, 1, "rejeu : toujours une seule entrée");
+  // R-SRV-21 (migration 20261123100000): a replay with another reason or mark is refused, never « recorded ».
+  await deny(call("admin", [ids.artisan, "request_changes", d.v, command, "Autre motif saisi après coup, différent.", true]), "P0001");
+  await deny(call("admin", [ids.artisan, "request_changes", d.v, command, REASON, false]), "P0001");
+  eq((await log()).length, 1, "rejeu divergent : journal inchangé");
 
   // ---- 5. A stale version fails as a whole: no orphan log entry.
   await deny(call("admin", [ids.artisan, "suspend", d.v - 1, crypto.randomUUID(), REASON, false]), "P0001");
@@ -86,8 +90,13 @@ try {
 
   // ---- 7. A positive decision without reason stays possible and logs nothing.
   d = await dossier();
-  eq(await call("admin", [ids.artisan, "approve", d.v, crypto.randomUUID(), null, false]), { success: true, reason_recorded: false }, "approbation sans motif");
+  const silent = crypto.randomUUID();
+  eq(await call("admin", [ids.artisan, "approve", d.v, silent, null, false]), { success: true, reason_recorded: false }, "approbation sans motif");
   eq([(await dossier()).s, (await log()).length], ["approved", 1], "approuvé, journal inchangé");
+  // R-SRV-21: replaying it later with a reason never inserts a late, re-dated entry.
+  await deny(call("admin", [ids.artisan, "approve", d.v, silent, "Motif ajouté lors d’un rejeu tardif.", false]), "P0001");
+  eq(await call("admin", [ids.artisan, "approve", d.v, silent, null, false]), { success: true, reason_recorded: false }, "rejeu identique sans motif");
+  eq((await log()).length, 1, "aucune entrée tardive");
 
   console.log(`PASS: an application decision and its log entry are one transaction (${checks} checks, isolated PostgreSQL, not live Supabase)`);
 } finally { await db.close(); }

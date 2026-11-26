@@ -92,3 +92,12 @@ test("R-SRV-22: the reason is counted in characters like the database, not in UT
   const long = fixture({ atomic: { success: true, reason_recorded: true } });
   assert.equal((await long.post({ action: "suspend", reason: "⚡".repeat(300) })).status, 200);
 });
+
+test("R-SRV-21: a replay with another reason is a 409 that says so, never a 200", async () => {
+  for (const message of ["Command replayed with a different reason", "Command identity conflict"]) {
+    const f = fixture({ atomic: Response.json({ code: "P0001", message }, { status: 400 }) });
+    const r = await f.post({ action: "suspend", reason: "Justificatifs non conformes au dossier." });
+    assert.equal(r.status, 409); assert.match((await r.json()).error, /déjà été enregistrée avec un autre motif/);
+    assert.equal(rpcCalls(f).length, 0); assert.equal(logWrites(f).length, 0);
+  }
+});
