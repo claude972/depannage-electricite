@@ -53,7 +53,7 @@ try {
   });
   const link = async (c) => { await as(null, "service_role"); try { return await one("select public.record_stripe_checkout_link($1,false,$2,null)v", [c.checkout, refs(c)]); } finally { await as(null, null); } };
   const kinds = async (p) => (await q("select entry_kind from public.platform_ledger_entries where payment_id=$1 order by entry_kind", [p])).map((r) => r.entry_kind);
-  const reconcile = async () => { await as(ids.operator, "authenticated"); try { return await one("select public.platform_reconcile(100)v"); } finally { await as(null, null); } };
+  const reconcile = async (limit = 100) => { await as(ids.operator, "authenticated"); try { return await one("select public.platform_reconcile($1)v", [limit]); } finally { await as(null, null); } };
   const report = async () => { await as(ids.reader, "authenticated"); try { return await one("select public.platform_finance_report()v"); } finally { await as(null, null); } };
 
   const confirm = (c, event = "evt_paid_" + c.tag) => one("select public.confirm_stripe_payment($1,$2,$3,$4,$5,$6)v", [event, "checkout.session.completed", c.session, c.quote, c.amount, "eur"]);
@@ -114,6 +114,21 @@ try {
   eq([(await settled(C.payment)).length, (await settled(Z.payment)).length], [1, 0], "l’autre paiement est réglé ; le paiement en conflit reste à rapprocher");
   eq(await one("select count(*)::integer v from public.platform_audit where action='settlement_entry_conflict' and target_id=$1", [Z.payment]), 1, "le conflit est journalisé avec le paiement");
   eq((await report()).ledger.missing_settlement, 1, "le rapport signale toujours le paiement en conflit");
+
+  // ---- 7c. Old conflicts must not monopolise a bounded batch across repeated calls.
+  // With limit 1 the old Z conflict used to win every time; later valid payments never settled.
+  const B1 = await paidCheckout("batch_one", { confirm: false }), B2 = await paidCheckout("batch_two", { confirm: false });
+  await q("alter table public.payments disable trigger payments_settlement_entry");
+  await confirm(B1); await confirm(B2);
+  await q("update public.payments set paid_at=(select paid_at from public.payments where id=$1)+interval '1 second' where id in ($2,$3)", [Z.payment, B1.payment, B2.payment]);
+  await q("alter table public.payments enable trigger payments_settlement_entry");
+  run = await reconcile(1);
+  eq([run.settled_added, run.remaining_unsettled], [1, 2], "lot limité : un règlement valide avance malgré un conflit plus ancien");
+  run = await reconcile(1);
+  eq([run.settled_added, run.remaining_unsettled], [1, 1], "second lot : l’autre règlement valide avance");
+  eq([(await settled(B1.payment)).length, (await settled(B2.payment)).length, (await settled(Z.payment)).length], [1, 1, 0], "les deux règlements valides sont inscrits une fois ; le conflit reste visible");
+  run = await reconcile(1);
+  eq([run.settled_added, run.settlement_conflicts, run.remaining_unsettled], [0, 1, 1], "lot de conflits seulement : anomalie toujours comptée sans faux règlement");
 
   // ---- 8. Out-of-order provider events (Stripe gives no ordering guarantee).
   const fail = (c, type, event) => one("select public.record_stripe_payment_failure($1,$2,$3,$4,$5,$6)v", [event, type, c.session, c.quote, c.amount, "eur"]);
