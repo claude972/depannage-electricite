@@ -169,5 +169,9 @@ test("CLI-02 · galerie web de l’offre et suppression : contrat strict", () =>
   assert.equal(artisan.split("<OfferPhotoGallery ").length - 1, 2);
   const api = readFileSync("app/api/documents/route.ts", "utf8");
   const del = api.slice(api.indexOf("export async function DELETE"));
-  for (const rule of ["assertOrigin(request)", "doc.owner_id !== user.id", `db.rpc("set_mission_offer_photo"`, `job.data.status !== "requested" || job.data.artisan_id`, `.delete().eq("id", id).eq("owner_id", user.id)`, `.storage.from("intervention-documents").remove([doc.path])`]) assert.ok(del.includes(rule), rule);
+  for (const rule of ["assertOrigin(request)", `db.rpc("delete_request_photo", { p_document_id: id })`, `atomic.error?.code === "P0001"`, `.storage.from("intervention-documents").remove([path])`]) assert.ok(del.includes(rule), rule);
+  // R-SRV-25: the legacy two-step path is kept only behind PGRST202 and keeps its checks.
+  const legacy = api.slice(api.indexOf("async function legacyDeleteRequestPhoto"), api.indexOf("export async function DELETE"));
+  for (const rule of ["doc.owner_id !== userId", `db.rpc("set_mission_offer_photo"`, `job.data.status !== "requested" || job.data.artisan_id`, `.delete().eq("id", id).eq("owner_id", userId)`]) assert.ok(legacy.includes(rule), rule);
+  assert.ok(del.includes(`atomic.error?.code === "PGRST202"`));
 });
